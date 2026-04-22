@@ -1,0 +1,11 @@
+[agents]
+# The corpus is mostly local text/PDF work. This machine has 14 logical CPUs and 48 GB RAM,
+# so we can safely go above the default 6 without turning routine workflows into thread spam.
+max_threads = 10
+
+# Keep one delegation layer: the root session can spawn specialists directly,
+# but specialists cannot recursively fan out into more specialists.
+max_depth = 1
+
+# Corpus-wide jobs over many papers or long extracted texts may need more than the default 30 minutes.
+job_max_runtime_seconds = 2700

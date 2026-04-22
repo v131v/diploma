@@ -1,0 +1,1237 @@
+                                              XORing Elephants: Novel Erasure Codes for Big Data
+
+                                                         Maheswaran                       Megasthenis Asteris                Dimitris Papailiopoulos
+                                                        Sathiamoorthy                      University of Southern              University of Southern
+                                                      University of Southern                     California                          California
+                                                            California                      asteris@usc.edu                     papailio@usc.edu
+                                                     msathiam@usc.edu
+                                                   Alexandros G. Dimakis                    Ramkumar Vadali                         Scott Chen
+                                                      University of Southern                      Facebook                            Facebook
+                                                            California                 ramkumar.vadali@fb.com                       sc@fb.com
+                                                      dimakis@usc.edu
+
+
+
+
+arXiv:1301.3791v1 [cs.IT] 16 Jan 2013
+                                                                                            Dhruba Borthakur
+                                                                                                  Facebook
+                                                                                             dhruba@fb.com
+
+                                        ABSTRACT                                                           storage overhead of 200%, which reflects on the cluster
+                                        Distributed storage systems for large clusters typically use       costs. This overhead is becoming a major bottleneck
+                                        replication to provide reliability. Recently, erasure codes        as the amount of managed data grows faster than data
+                                        have been used to reduce the large storage overhead of three-      center infrastructure.
+                                        replicated systems. Reed-Solomon codes are the standard               For this reason, Facebook and many others are tran-
+                                        design choice and their high repair cost is often considered       sitioning to erasure coding techniques (typically, classi-
+                                        an unavoidable price to pay for high storage efficiency and        cal Reed-Solomon codes) to introduce redundancy while
+                                        high reliability.                                                  saving storage [4, 19], especially for data that is more
+                                           This paper shows how to overcome this limitation. We            archival in nature. In this paper we show that classical
+                                        present a novel family of erasure codes that are efficiently re-   codes are highly suboptimal for distributed MapReduce
+                                        pairable and offer higher reliability compared to Reed-Solomon     architectures. We introduce new erasure codes that ad-
+                                        codes. We show analytically that our codes are optimal on          dress the main challenges of distributed data reliability
+                                        a recently identified tradeoff between locality and minimum        and information theoretic bounds that show the opti-
+                                        distance.                                                          mality of our construction. We rely on measurements
+                                           We implement our new codes in Hadoop HDFS and com-              from a large Facebook production cluster (more than
+                                        pare to a currently deployed HDFS module that uses Reed-           3000 nodes, 30 PB of logical data storage) that uses
+                                        Solomon codes. Our modified HDFS implementation shows              Hadoop MapReduce for data analytics. Facebook re-
+                                        a reduction of approximately 2× on the repair disk I/O and         cently started deploying an open source HDFS Module
+                                        repair network traffic. The disadvantage of the new coding         called HDFS RAID ([2, 8]) that relies on Reed-Solomon
+                                        scheme is that it requires 14% more storage compared to            (RS) codes. In HDFS RAID, the replication factor of
+                                        Reed-Solomon codes, an overhead shown to be information            “cold” (i.e., rarely accessed) files is lowered to 1 and a
+                                        theoretically optimal to obtain locality. Because the new          new parity file is created, consisting of parity blocks.
+                                        codes repair failures faster, this provides higher reliability,       Using the parameters of Facebook clusters, the data
+                                        which is orders of magnitude higher compared to replica-           blocks of each large file are grouped in stripes of 10
+                                        tion.                                                              and for each such set, 4 parity blocks are created. This
+                                                                                                           system (called RS (10, 4)) can tolerate any 4 block fail-
+                                        1.   INTRODUCTION                                                  ures and has a storage overhead of only 40%. RS codes
+                                                                                                           are therefore significantly more robust and storage ef-
+                                           MapReduce architectures are becoming increasingly               ficient compared to replication. In fact, this storage
+                                        popular for big data management due to their high scal-            overhead is the minimal possible, for this level of re-
+                                        ability properties. At Facebook, large analytics clusters          liability [7]. Codes that achieve this optimal storage-
+                                        store petabytes of information and handle multiple ana-            reliability tradeoff are called Maximum Distance Sepa-
+                                        lytics jobs using Hadoop MapReduce. Standard imple-                rable (MDS) [31] and Reed-Solomon codes [27] form the
+                                        mentations rely on a distributed file system that pro-             most widely used MDS family.
+                                        vides reliability by exploiting triple block replication.             Classical erasure codes are suboptimal for distributed
+                                        The major disadvantage of replication is the very large
+
+
+                                                                                                       1
+environments because of the so-called Repair problem:                      110
+When a single node fails, typically one block is lost
+from each stripe that is stored in that node. RS codes                           88
+
+are usually repaired with the simple method that re-
+
+                                                                  Failed Nodes
+                                                                                 66
+quires transferring 10 blocks and recreating the original
+10 data blocks even if a single block is lost [28], hence                        44
+creating a 10× overhead in repair bandwidth and disk
+I/O.                                                                             22
+   Recently, information theoretic results established that
+it is possible to repair erasure codes with much less                                 Mon Tue Wed Thu Fri   Sat Sun Mon Tue Wed Thu Fri   Sat Sun Mon Tue Wed Thu Fri   Sat Sun Mon Tue Wed Thu Fri   Sat Sun Mon Tue Wed
+                                                                                      Dec 26                        Jan 2                         Jan 9                         Jan 16                        Jan 23
+network bandwidth compared to this naive method [6].
+There has been significant amount of very recent work
+on designing such efficiently repairable codes, see sec-          Figure 1: Number of failed nodes over a single
+tion 6 for an overview of this literature.                        month period in a 3000 node production cluster
+   Our Contributions: We introduce a new family of                of Facebook.
+erasure codes called Locally Repairable Codes (LRCs),
+that are efficiently repairable both in terms of network
+bandwidth and disk I/O. We analytically show that our             most repairs are delayed to avoid transient failures. A
+codes are information theoretically optimal in terms of           typical data node will be storing approximately 15 TB
+their locality, i.e., the number of other blocks needed           and the repair traffic with the current configuration is
+to repair single block failures. We present both ran-             estimated around 10 − 20% of the total average of 2
+domized and explicit LRC constructions starting from              PB/day cluster network traffic. As discussed, (10,4) RS
+generalized Reed-Solomon parities.                                encoded blocks require approximately 10× more net-
+   We also design and implement HDFS-Xorbas, a mod-               work repair overhead per bit compared to replicated
+ule that replaces Reed-Solomon codes with LRCs in                 blocks. We estimate that if 50% of the cluster was RS
+HDFS-RAID. We evaluate HDFS-Xorbas using experi-                  encoded, the repair network traffic would completely
+ments on Amazon EC2 and a cluster in Facebook. Note               saturate the cluster network links. Our goal is to de-
+that while LRCs are defined for any stripe and parity             sign more efficient coding schemes that would allow a
+size, our experimental evaluation is based on a RS(10,4)          large fraction of the data to be coded without facing this
+and its extension to a (10,6,5) LRC to compare with the           repair bottleneck. This would save petabytes of storage
+current production cluster.                                       overheads and significantly reduce cluster costs.
+   Our experiments show that Xorbas enables approxi-                 There are four additional reasons why efficiently re-
+mately a 2× reduction in disk I/O and repair network              pairable codes are becoming increasingly important in
+traffic compared to the Reed-Solomon code currently               coded storage systems. The first is the issue of degraded
+used in production. The disadvantage of the new code              reads. Transient errors with no permanent data loss
+is that it requires 14% more storage compared to RS, an           correspond to 90% of data center failure events [9, 19].
+overhead shown to be information theoretically optimal            During the period of a transient failure event, block
+for the obtained locality.                                        reads of a coded stripe will be degraded if the corre-
+   One interesting side benefit is that because Xorbas            sponding data blocks are unavailable. In this case, the
+repairs failures faster, this provides higher availability,       missing data block can be reconstructed by a repair pro-
+due to more efficient degraded reading performance.               cess, which is not aimed at fault tolerance but at higher
+Under a simple Markov model evaluation, Xorbas has                data availability. The only difference with standard re-
+2 more zeros in Mean Time to Data Loss (MTTDL)                    pair is that the reconstructed block does not have to be
+compared to RS (10, 4) and 5 more zeros compared to               written in disk. For this reason, efficient and fast repair
+3-replication.                                                    can significantly improve data availability.
+                                                                     The second is the problem of efficient node decom-
+                                                                  missioning. Hadoop offers the decommission feature to
+1.1   Importance of Repair                                        retire a faulty data node. Functional data has to be
+   At Facebook, large analytics clusters store petabytes          copied out of the node before decommission, a process
+of information and handle multiple MapReduce analyt-              that is complicated and time consuming. Fast repairs
+ics jobs. In a 3000 node production cluster storing ap-           allow to treat node decommissioning as a scheduled re-
+proximately 230 million blocks (each of size 256MB),              pair and start a MapReduce job to recreate the blocks
+only 8% of the data is currently RS encoded (‘RAIDed’).           without creating very large network traffic.
+Fig. 1 shows a recent trace of node failures in this pro-            The third reason is that repair influences the perfor-
+duction cluster. It is quite typical to have 20 or more           mance of other concurrent MapReduce jobs. Several
+node failures per day that trigger repair jobs, even when         researchers have observed that the main bottleneck in
+
+
+                                                              2
+MapReduce is the network [5]. As mentioned, repair                    A (k, n − k)-MDS code has the property that any k
+network traffic is currently consuming a non-negligible            out of the n coded blocks can be used to reconstruct the
+fraction of the cluster network bandwidth. This issue is           entire file. It is easy to prove that this is the best fault
+becoming more significant as the storage used is increas-          tolerance possible for this level of redundancy: any set
+ing disproportionately fast compared to network band-              of k blocks has an aggregate size of M and therefore no
+width in data centers. This increasing storage density             smaller set of blocks could possibly recover the file.
+trend emphasizes the importance of local repairs when                 Fault tolerance is captured by the metric of minimum
+coding is used.                                                    distance.
+   Finally, local repair would be a key in facilitating ge-          Definition 1 (Minimum Code Distance). The min-
+ographically distributed file systems across data centers.         imum distance d of a code of length n, is equal to the
+Geo-diversity has been identified as one of the key fu-            minimum number of erasures of coded blocks after which
+ture directions for improving latency and reliability [13].        the file cannot be retrieved.
+Traditionally, sites used to distribute data across data
+centers via replication. This, however, dramatically               MDS codes, as their name suggests, have the largest
+increases the total storage cost. Reed-Solomon codes               possible distance which is dMDS = n−k+1. For example
+across geographic locations at this scale would be com-            the minimum distance of a (10,4) RS is n − k + 1 = 5
+pletely impractical due to the high bandwidth require-             which means that five or more block erasures are needed
+ments across wide area networks. Our work makes local              to yield a data loss.
+repairs possible at a marginally higher storage overhead             The second metric we will be interested in is Block
+cost.                                                              Locality.
+   Replication is obviously the winner in optimizing the             Definition 2 (Block Locality). An (k, n − k)
+four issues discussed, but requires a very large storage           code has block locality r, when each coded block is a
+overhead. On the opposing tradeoff point, MDS codes                function of at most r other coded blocks of the code.
+have minimal storage overhead for a given reliability
+                                                                      Codes with block locality r have the property that,
+requirement, but suffer in repair and hence in all these
+                                                                   upon any single block erasure, fast repair of the lost
+implied issues. One way to view the contribution of this
+                                                                   coded block can be performed by computing a function
+paper is a new intermediate point on this tradeoff, that
+                                                                   on r existing blocks of the code. This concept was re-
+sacrifices some storage efficiency to gain in these other
+                                                                   cently and independently introduced in [10, 22, 24].
+metrics.
+                                                                      When we require small locality, each single coded
+   The remainder of this paper is organized as follows:
+                                                                   block should be repairable by using only a small subset
+We initially present our theoretical results, the con-
+                                                                   of existing coded blocks r << k, even when n, k grow.
+struction of Locally Repairable Codes and the infor-
+                                                                   The following fact shows that locality and good distance
+mation theoretic optimality results. We defer the more
+                                                                   are in conflict:
+technical proofs to the Appendix. Section 3 presents
+the HDFS-Xorbas architecture and Section 4 discusses                 Lemma 1. MDS codes with parameters (k, n−k) can-
+a Markov-based reliability analysis. Section 5 discusses           not have locality smaller than k.
+our experimental evaluation on Amazon EC2 and Face-                Lemma 1 implies that MDS codes have the worst possi-
+book’s cluster. We finally survey related work in Sec-             ble locality since any k blocks suffice to reconstruct the
+tion 6 and conclude in Section 7.                                  entire file, not just a single block. This is exactly the
+                                                                   cost of optimal fault tolerance.
+2.   THEORETICAL CONTRIBUTIONS                                        The natural question is what is the best locality pos-
+                                                                   sible if we settled for “almost MDS” code distance. We
+   Maximum distance separable (MDS) codes are of-
+                                                                   answer this question and construct the first family of
+ten used in various applications in communications and
+                                                                   near-MDS codes with non-trivial locality. We provide a
+storage systems [31]. A (k, n − k)-MDS code1 of rate
+                                                                   randomized and explicit family of codes that have log-
+R = nk takes a file of size M , splits it in k equally sized
+                                                                   arithmic locality on all coded blocks and distance that
+blocks, and then encodes it in n coded blocks each of size
+M                                                                  is asymptotically equal to that of an MDS code. We
+ k . Here we assume that our file has size exactly equal           call such codes (k, n − k, r) Locally Repairable Codes
+to k data blocks to simplify the presentation; larger files
+                                                                   (LRCs) and present their construction in the following
+are separated into stripes of k data blocks and each
+                                                                   section.
+stripe is coded separately.
+                                                                      Theorem 1. There exist (k, n−k, r) Locally Repairable
+1
+ In classical coding theory literature, codes are denoted by       codes with logarithmic block locality r = log(k) and dis-
+(n, k) where n is the number of data plus parity blocks,
+                                                                   tance dLRC = n − (1 + δk ) k + 1. Hence, any subset
+classically called blocklength. A (10,4) Reed-Solomon code
+would be classically denoted by RS (n=14,k=10). RS codes           of k (1 + δk ) coded blocks can be used to reconstruct the
+form the most well-known family of MDS codes.
+                                                                                       1
+                                                                   file, where δk = log(k) − k1 .
+
+
+                                                               3
+       Observe that if we fix the code rate R = nk of an LRC                                                               (or degraded read while unavailable) it can be recon-
+     and let k grow, then its distance dLRC is almost that of                                                              structed by
+     a (k, n − k)-MDS code; hence the following corollary.
+                                                                                                                                X3 = c−1
+                                                                                                                                      3 (S1 − c1 X1 − c2 X2 − c4 X4 − c5 X5 ).          (1)
+       Corollary 1. For fixed code rate R = nk , the dis-                                                                  The multiplicative inverse of the field element c3 ex-
+     tance of LRCs is asymptotically equal to that of (k, n −                                                              ists as long as c3 6= 0 which is the requirement we will
+     k)-MDS codes                                                                                                          enforce for all the local parity coefficients. It turns out
+                                                       dLRC                                                                that the coefficients ci can be selected to guarantee that
+                                              lim                      = 1.
+                                          k→∞ dMDS                                                                         all the linear equations will be linearly independent. In
+                                                                                                                           the Appendix we present a randomized and a deter-
+     LRCs are constructed on top of MDS codes (and the                                                                     ministic algorithm to construct such coefficients. We
+     most common choice will be a Reed-Solomon code).                                                                      emphasize that the complexity of the deterministic al-
+        The MDS encoded blocks are grouped in logarith-                                                                    gorithm is exponential in the code parameters (n, k) and
+     mic sized sets and then are combined together to ob-                                                                  therefore useful only for small code constructions.
+     tain parity blocks of logarithmic degree. We prove that                                                                   The disadvantage of adding these local parities is the
+     LRCs have the optimal distance for that specific local-                                                               extra storage requirement. While the original RS code
+     ity, due to an information theoretic tradeoff that we                                                                 was storing 14 blocks for every 10, the three local par-
+     establish. Our locality-distance tradeoff is universal in                                                             ities increase the storage overhead to 17/10. There is
+     the sense that it covers linear or nonlinear codes and is                                                             one additional optimization that we can perform: We
+     a generalization of recent result of Gopalan et al. [10]                                                              show that the coefficients c1 , c2 , . . . c10 can be chosen so
+     which established a similar bound for linear codes. Our                                                               that the local parities satisfy an additional alignment
+     proof technique is based on building an information flow                                                              equation S1 + S2 + S3 = 0. We can therefore not store
+     graph gadget, similar to the work of Dimakis et al.[6,                                                                the local parity S3 and instead consider it an implied
+     7]. Our analysis can be found in the Appendix.                                                                        parity. Note that to obtain this in the figure, we set
+     2.1         LRC implemented in Xorbas                                                                                 c05 = c06 = 1.
+                                                                                                                               When a single block failure happens in a RS parity,
+        We now describe the explicit (10, 6, 5) LRC code we                                                                the implied parity can be reconstructed and used to
+     implemented in HDFS-Xorbas. For each stripe, we start                                                                 repair that failure. For example, if P2 is lost, it can
+     with 10 data blocks X1 , X2 , . . . , X10 and use a (10, 4)                                                           be recovered by reading 5 blocks P1 , P3 , P4 , S1 , S2 and
+     Reed-Solomon over a binary extension field F2m to con-                                                                solving the equation
+     struct 4 parity blocks P1 , P2 , . . . , P4 . This is the code
+     currently used in production clusters in Facebook that                                                                     P2 = (c02 )−1 (−S1 − S2 − c01 P1 − c03 P3 − c04 P4 ).   (2)
+     can tolerate any 4 block failures due to the RS pari-                                                                    In our theoretical analysis we show how to find non-
+     ties. The basic idea of LRCs is very simple: we make                                                                  zero coefficients ci (that must depend on the parities Pi
+     repair efficient by adding additional local parities. This                                                            but are not data dependent) for the alignment condi-
+     is shown in figure 2.                                                                                                 tion to hold. We also show that for the Reed-Solomon
+          5 file blocks                            5 file blocks                  4 RS parity blocks                       code implemented in HDFS RAID, choosing ci = 1∀i
+X1     X2        X3     X4     X5       X6     X7         X8     X9     X10      P1          P2      P3     P4             and therefore performing simple XOR operations is suf-
+     c1     c2    c3    c4     c5             c6     c7    c8     c9     c10           c�1    c�2     c�3    c�4           ficient. We further prove that this code has the largest
+                                                                                                                           possible distance (d = 5) for this given locality r = 5
+                 S1      local parity block               S2      local parity block         S3     implied parity block
+                      c�5                                      c�6
+                                                                                                                           and blocklength n = 16.
+
+                                                                                                                           3.    SYSTEM DESCRIPTION
+                                                                                                                              HDFS-RAID is an open source module that imple-
+     Figure 2: Locally repairable code implemented                                                                         ments RS encoding and decoding over Apache Hadoop [2].
+     in HDFS-Xorbas.             The four parity blocks                                                                    It provides a Distributed Raid File system (DRFS) that
+     P1 , P2 , P3 , P4 are constructed with a standard RS                                                                  runs above HDFS. Files stored in DRFS are divided into
+     code and the local parities provide efficient re-                                                                     stripes, i.e., groups of several blocks. For each stripe, a
+     pair in the case of single block failures. The main                                                                   number of parity blocks are calculated and stored as a
+     theoretical challenge is to choose the coefficients                                                                   separate parity file corresponding to the original file.
+     ci to maximize the fault tolerance of the code.                                                                       HDFS-RAID is implemented in Java (approximately
+                                                                                                                           12,000 lines of code) and is currently used in produc-
+        By adding the local parity S1 = c1 X1 +c2 X2 +c3 X3 +                                                              tion by several organizations, including Facebook.
+     c4 X5 , a single block failure can be repaired by access-                                                                The module consists of several components, among
+     ing only 5 other blocks. For example, if block X3 is lost                                                             which RaidNode and BlockFixer are the most relevant
+
+
+                                                                                                                       4
+here:                                                              Once the RaidNode detects a file which is suitable
+                                                                for RAIDing (according to parameters set in a config-
+   • The RaidNode is a daemon responsible for the cre-
+                                                                uration file) it launches the encoder for the file. The
+     ation and maintenance of parity files for all data
+                                                                encoder initially divides the file into stripes of 10 blocks
+     files stored in the DRFS. One node in the cluster
+                                                                and calculates 4 RS parity blocks. Depending on the
+     is generally designated to run the RaidNode. The
+                                                                size of the file, the last stripe may contain fewer than
+     daemon periodically scans the HDFS file system
+                                                                10 blocks. Incomplete stripes are considered as “zero-
+     and decides whether a file is to be RAIDed or not,
+                                                                padded“ full-stripes as far as the parity calculation is
+     based on its size and age. In large clusters, RAID-
+                                                                concerned
+     ing is done in a distributed manner by assigning
+                                                                   HDFS-Xorbas computes two extra parities for a total
+     MapReduce jobs to nodes across the cluster. Af-
+                                                                of 16 blocks per stripe (10 data blocks, 4 RS parities and
+     ter encoding, the RaidNode lowers the replication
+                                                                2 Local XOR parities), as shown in Fig. 2. Similar to
+     level of RAIDed files to one.
+                                                                the calculation of the RS parities, Xorbas calculates all
+   • The BlockFixer is a separate process that runs at          parity blocks in a distributed manner through MapRe-
+     the RaidNode and periodically checks for lost or           duce encoder jobs. All blocks are spread across the
+     corrupted blocks among the RAIDed files. When              cluster according to Hadoop’s configured block place-
+     blocks are tagged as lost or corrupted, the Block-         ment policy. The default policy randomly places blocks
+     Fixer rebuilds them using the surviving blocks of          at DataNodes, avoiding collocating blocks of the same
+     the stripe, again, by dispatching repair MapRe-            stripe.
+     duce (MR) jobs. Note that these are not typical
+     MR jobs. Implemented under the MR framework,               3.1.2   Decoding & Repair
+     repair-jobs exploit its parallelization and schedul-          RaidNode starts a decoding process when corrupt
+     ing properties, and can run along regular jobs un-         files are detected. Xorbas uses two decoders: the light-
+     der a single control mechanism.                            decoder aimed at single block failures per stripe, and the
+                                                                heavy-decoder, employed when the light-decoder fails.
+Both RaidNode and BlockFixer rely on an underlying
+                                                                   When the BlockFixer detects a missing (or corrupted)
+component: ErasureCode. ErasureCode implements the
+                                                                block, it determines the 5 blocks required for the re-
+erasure encoding/decoding functionality. In Facebook’s
+                                                                construction according to the structure of the LRC.
+HDFS-RAID, an RS (10, 4) erasure code is implemented
+                                                                A special MapReduce is dispatched to attempt light-
+through ErasureCode (4 parity blocks are created for
+                                                                decoding: a single map task opens parallel streams to
+every 10 data blocks).
+                                                                the nodes containing the required blocks, downloads
+3.1     HDFS-Xorbas                                             them, and performs a simple XOR. In the presence of
+                                                                multiple failures, the 5 required blocks may not be avail-
+   Our system, HDFS-Xorbas (or simply Xorbas), is
+                                                                able. In that case the light-decoder fails and the heavy
+a modification of HDFS-RAID that incorporates Lo-
+                                                                decoder is initiated. The heavy decoder operates in the
+cally Repairable Codes (LRC). To distinguish it from
+                                                                same way as in Reed-Solomon: streams to all the blocks
+the HDFS-RAID implementing RS codes, we refer to
+                                                                of the stripe are opened and decoding is equivalent to
+the latter as HDFS-RS. In Xorbas, the ErasureCode
+                                                                solving a system of linear equations. The RS linear
+class has been extended to implement LRC on top of
+                                                                system has a Vandermonde structure [31] which allows
+traditional RS codes. The RaidNode and BlockFixer
+                                                                small CPU utilization. The recovered block is finally
+classes were also subject to modifications in order to
+                                                                sent and stored to a Datanode according to the clus-
+take advantage of the new coding scheme.
+                                                                ter’s block placement policy.
+   HDFS-Xorbas is designed for deployment in a large-
+                                                                   In the currently deployed HDFS-RS implementation,
+scale Hadoop data warehouse, such as Facebook’s clus-
+                                                                even when a single block is corrupt, the BlockFixer
+ters. For that reason, our system provides backwards
+                                                                opens streams to all 13 other blocks of the stripe (which
+compatibility: Xorbas understands both LRC and RS
+                                                                could be reduced to 10 with a more efficient implemen-
+codes and can incrementally modify RS encoded files
+                                                                tation). The benefit of Xorbas should therefore be clear:
+into LRCs by adding only local XOR parities. To pro-
+                                                                for all the single block failures and also many double
+vide this integration with HDFS-RS, the specific LRCs
+                                                                block failures (as long as the two missing blocks belong
+we use are designed as extension codes of the (10,4)
+                                                                to different local XORs), the network and disk I/O over-
+Reed-Solomon codes used at Facebook. First, a file is
+                                                                heads will be significantly smaller.
+coded using RS code and then a small number of ad-
+ditional local parity blocks are created to provide local
+repairs.                                                        4.   RELIABILITY ANALYSIS
+                                                                  In this section, we provide a reliability analysis by es-
+3.1.1    Encoding                                               timating the mean-time to data loss (MTTDL) using a
+
+
+                                                            5
+standard Markov model. We use the above metric and                 of a single stripe (MTTDLstripe ). Then, we normalize
+model to compare RS codes and LRCs to replication.                 the previous with the total number of stripes to get the
+There are two main factors that affect the MTTDL: i)               MTTDL of the system, which is calculated as
+the number of block failures that we can tolerate before                                      MTTDLstripe
+losing data and ii) the speed of block repairs. It should                          MTTDL =                 .            (3)
+                                                                                                 C/nB
+be clear that the MTTDL increases as the resiliency
+to failures increases and the time of block repairs de-               Next, we explain how to compute the MTTDL of a
+creases. In the following, we explore the interplay of             stripe, for which we use a standard Markov model. The
+these factors and their effect on the MTTDL.                       number of lost blocks at each time are used to denote
+   When comparing the various schemes, replication of-             the different states of the Markov chain. The failure and
+fers the fastest repair possible at the cost of low failure        repair rates correspond to the forward and backward
+resiliency. On the other hand, RS codes and LRCs can               rates between the states. When we employ 3-way repli-
+tolerate more failures, while requiring comparatively              cation, data loss occurs posterior to 3 block erasures.
+higher repair times, with the LRC requiring less re-               For both the (10, 4)-RS and (10, 6, 5)-LRC schemes, 5
+pair time than RS. In [9], the authors report values               block erasures lead to data loss. Hence, the Markov
+from Google clusters (cells) and show that, for their pa-          chains for the above storage scenarios will have a total
+rameters, a (9, 4)-RS code has approximately six orders            of 3, 5, and 5 states, respectively. In Fig. 3, we show the
+of magnitude higher reliability than 3-way replication.            corresponding Markov chain for the (10, 4)-RS and the
+Similarly here, we see how coding outperforms replica-             (10, 6, 5)-LRC. We note that although the chains have
+tion in terms of the reliability metric of interest.               the same number of states, the transition probabilities
+   Along with [9], there exists significant work towards           will be different, depending on the coding scheme.
+analyzing the reliability of replication, RAID storage [32],          We continue by calculating the transition rates. Inter-
+and erasure codes [11]. The main body of the above                 failure times are assumed to be exponentially distributed.
+literature considers standard Markov models to analyt-             The same goes for the repair (backward) times. In gen-
+ically derive the MTTDL for the various storage settings           eral, the repair times may not exhibit an exponential
+considered. Consistent with the literature, we employ a            behavior, however, such an assumption simplifies our
+similar approach to evaluate the reliability in our com-           analysis. When there are i blocks remaining in a stripe
+parisons. The values obtained here may not be mean-                (i.e., when the state is n−i), the rate at which a block is
+ingful in isolation but are useful for comparing the var-          lost will be λi = iλ because the i blocks are distributed
+ious schemes (see also [12]).                                      into different nodes and each node fails independently at
+   In our analysis, the total cluster data is denoted by           rate λ. The rate at which a block is repaired depends on
+C and S denotes the stripe size. We set the number of              how many blocks need to be downloaded for the repair,
+disk nodes to be N = 3000, while the total data stored             the block size, and the download rate γ. For example,
+is set to be C = 30PB. The mean time to failure of a               for the 3-replication scheme, single block repairs require
+disk node is set at 4 years (= 1/λ), and the block size            downloading one block, hence we assume ρi = γ/B, for
+is B = 256MB (the default value at Facebook’s ware-                i = 1, 2. For the coded schemes, we additionally con-
+houses). Based on Facebook’s cluster measurements,                 sider the effect of using heavy or light decoders. For
+we limit the cross-rack communication to γ = 1Gbps                 example in the LRC, if two blocks are lost from the
+for repairs. This limit is imposed to model the real               same stripe, we determine the probabilities for invoking
+cross-rack communication bandwidth limitations of the              light or heavy decoder and thus compute the expected
+Facebook cluster. In our case, the cross-rack communi-             number of blocks to be downloaded. We skip a detailed
+cation is generated due to the fact that all coded blocks          derivation due to lack of space. For a similar treatment,
+of a stripe are placed in different racks to provide higher        see [9]. The stripe MTTDL equals the average time it
+fault tolerance. This means that when repairing a sin-             takes to go from state 0 to the “data loss state”. Under
+gle block, all downloaded blocks that participate in its           the above assumptions and transition rates, we calcu-
+repair are communicated across different racks.                    late the MTTDL of the stripe from which the MTTDL
+   Under 3-way replication, each stripe consists of three          of the system can be calculated using eqn 3.
+blocks corresponding to the three replicas, and thus the              The MTTDL values that we calculated for replica-
+total number of stripes in the system is C/nB where                tion, HDFS-RS, and Xorbas, under the Markov model
+n = 3. When RS codes or LRC is employed, the stripe                considered, are shown in Table 1. We observe that
+size varies according to the code parameters k and n−k.            the higher repair speed of LRC compensates for the
+For comparison purposes, we consider equal data stripe             additional storage in terms of reliability. This serves
+size k = 10. Thus, the number of stripes is C/nB,                  Xorbas LRC (10,6,5) two more zeros of reliability com-
+where n = 14 for (10, 4) RS and n = 16 for (10, 6, 5)-             pared to a (10,4) Reed-Solomon code. The reliability of
+LRC. For the above values, we compute the MTTDL                    the 3-replication is substantially lower than both coded
+                                                                   schemes, similar to what has been observed in related
+
+
+                                                               6
+            λ0        λ1       λ2        λ3        λ4
+                                                                   time of the first repair job and the ending time of the
+                                                                   last repair job.
+        0         1        2         3        4         5
+
+                                                                   5.2   Amazon EC2
+            ρ1        ρ2       ρ3        ρ4
+                                                                      On EC2, we created two Hadoop clusters, one run-
+                                                                   ning HDFS-RS and the other HDFS-Xorbas. Each clus-
+Figure 3: The Markov model used to calculate
+                                                                   ter consisted of 51 instances of type m1.small, which
+the MTTDLstripe of (10, 4) RS and (10, 6, 5)
+                                                                   corresponds to a 32-bit machine with 1.7 GB mem-
+LRC.
+                                                                   ory, 1 compute unit and 160 GB of storage, running
+                        Storage     Repair      MTTDL              Ubuntu/Linux-2.6.32. One instance in each cluster served
+        Scheme         overhead     traffic       (days)           as a master, hosting Hadoop’s NameNode, JobTracker
+     3-replication        2x          1x      2.3079E + 10         and RaidNode daemons, while the remaining 50 in-
+      RS (10, 4)         0.4x        10x      3.3118E + 13         stances served as slaves for HDFS and MapReduce, each
+     LRC (10, 6, 5)      0.6x         5x      1.2180E + 15         hosting a DataNode and a TaskTracker daemon, thereby
+                                                                   forming a Hadoop cluster of total capacity roughly equal
+Table 1:         Comparison summary of the three                   to 7.4 TB. Unfortunately, no information is provided by
+schemes.         MTTDL assumes independent node                    EC2 on the topology of the cluster.
+failures.                                                             The clusters were initially loaded with the same amount
+                                                                   of logical data. Then a common pattern of failure events
+                                                                   was triggered manually in both clusters to study the dy-
+studies [9].
+                                                                   namics of data recovery. The objective was to measure
+   Another interesting metric is data availability. Avail-
+                                                                   key properties such as the number of HDFS Bytes Read
+ability is the fraction of time that data is available for
+                                                                   and the real Network Traffic generated by the repairs.
+use. Note that in the case of 3-replication, if one block is
+                                                                      All files used were of size 640 MB. With block size
+lost, then one of the other copies of the block is immedi-
+                                                                   configured to 64 MB, each file yields a single stripe
+ately available. On the contrary, for either RS or LRC,
+                                                                   with 14 and 16 full size blocks in HDFS-RS and HDFS-
+a job requesting a lost block must wait for the comple-
+                                                                   Xorbas respectively. We used a block size of 64 MB,
+tion of the repair job. Since LRCs complete these jobs
+                                                                   and all our files were of size 640 MB. Therefore, each
+faster, they will have higher availability due to these
+                                                                   file yields a single stripe with 14 and 16 full size blocks in
+faster degraded reads. A detailed study of availability
+                                                                   HDFS-RS and HDFS-Xorbas respectively. This choice
+tradeoffs of coded storage systems remains an interest-
+                                                                   is representative of the majority of stripes in a produc-
+ing future research direction.
+                                                                   tion Hadoop cluster: extremely large files are split into
+                                                                   many stripes, so in total only a small fraction of the
+5.     EVALUATION                                                  stripes will have a smaller size. In addition, it allows us
+  In this section, we provide details on a series of ex-           to better predict the total amount of data that needs
+periments we performed to evaluate the performance of              to be read in order to reconstruct missing blocks and
+HDFS-Xorbas in two environments: Amazon’s Elastic                  hence interpret our experimental results. Finally, since
+Compute Cloud (EC2) [1] and a test cluster in Face-                block repair depends only on blocks of the same stripe,
+book.                                                              using larger files that would yield more than one stripe
+                                                                   would not affect our results. An experiment involving
+5.1     Evaluation Metrics                                         arbitrary file sizes, is discussed in Section 5.3.
+  We rely primarily on the following metrics to evaluate              During the course of a single experiment, once all files
+HDFS-Xorbas against HDFS-RS: HDFS Bytes Read,                      were RAIDed, a total of eight failure events were trig-
+Network Traffic, and Repair Duration. HDFS Bytes                   gered in each cluster. A failure event consists of the
+Read corresponds to the total amount of data read by               termination of one or more DataNodes. In our failure
+the jobs initiated for repair. It is obtained by aggregat-         pattern, the first four failure events consisted of single
+ing partial measurements collected from the statistics-            DataNodes terminations, the next two were termina-
+reports of the jobs spawned following a failure event.             tions of triplets of DataNodes and finally two termi-
+Network Traffic represents the total amount of data                nations of pairs of DataNodes. Upon a failure event,
+communicated from nodes in the cluster (measured in                MapReduce repair jobs are spawned by the RaidNode
+GB). Since the cluster does not handle any external                to restore missing blocks. Sufficient time was provided
+traffic, Network Traffic is equal to the amount of data            for both clusters to complete the repair process, allow-
+moving into nodes. It is measured using Amazon’s AWS               ing measurements corresponding to distinct events to
+Cloudwatch monitoring tools. Repair Duration is sim-               be isolated. For example, events are distinct in Fig. 4.
+ply calculated as the time interval between the starting           Note that the Datanodes selected for termination stored
+
+                                                               7
+                         150                                                                                              300                                                                                               60
+                                 HDFS−RS                                                                                          HDFS−RS                                                                                          HDFS−RS
+                                 HDFS−Xorbas                                                                                      HDFS−Xorbas                                                                                      HDFS−Xorbas
+
+
+
+
+                                                                                               Network Out Traffic (GB)
+                                                                                                                          250                                                                                               50
+
+
+
+
+  HDFS Bytes Read (GB)                                                                                                                                                                          Repair Duration (Minutes)
+                         100                                                                                              200                                                                                               40
+
+
+                                                                                                                          150                                                                                               30
+
+
+                          50                                                                                              100                                                                                               20
+
+
+                                                                                                                           50                                                                                               10
+
+
+                           0                                                                                                0                                                                                                0
+                               1( 62)   1( 71)   1( 71)   1( 64) 3(182) 3(209) 2(138) 2(145)                                    1( 62)   1( 71)   1( 71)   1( 64) 3(182) 3(209) 2(138) 2(145)                                    1( 62)   1( 71)   1( 71)   1( 64) 3(182) 3(209) 2(138) 2(145)
+                          Failure events − # of lost DataNodes (Lost Blocks)                                               Failure events − # of lost DataNodes (Lost Blocks)                                               Failure events − # of lost DataNodes (Lost Blocks)
+
+ (a) HDFS Bytes Read per failure event. (b) Network Out Traffic per failure event. (c) Repair duration per failure event.
+
+Figure 4: The metrics measured during the 200 file experiment. Network-in is similar to Network-out
+and so it is not displayed here. During the course of the experiment, we simulated eight failure events
+and the x-axis gives details of the number of DataNodes terminated during each failure event and
+the number of blocks lost are displayed in parentheses.
+
+roughly the same number of blocks for both clusters.
+The objective was to compare the two systems for the                                                                                                                  Fig. 4b depicts the network traffic produced by Block-
+repair cost per block lost. However, since Xorbas has                                                                                                              Fixer jobs during the entire repair procedure. In par-
+an additional storage overhead, a random failure event                                                                                                             ticular, it shows the outgoing network traffic produced
+would in expectation, lead to loss of 14.3% more blocks                                                                                                            in the cluster, aggregated across instances. Incoming
+in Xorbas compared to RS. In any case, results can be                                                                                                              network traffic is similar since the cluster only commu-
+adjusted to take this into account, without significantly                                                                                                          nicates information internally. In Fig. 5a, we present the
+affecting the gains observed in our experiments.                                                                                                                   Network Traffic plotted continuously during the course
+   In total, three experiments were performed on the                                                                                                               of the 200 file experiment, with a 5-minute resolution.
+above setup, successively increasing the number of files                                                                                                           The sequence of failure events is clearly visible. Through-
+stored (50, 100, and 200 files), in order to understand                                                                                                            out our experiments, we consistently observed that net-
+the impact of the amount of data stored on system per-                                                                                                             work traffic was roughly equal to twice the number of
+formance. Fig. 4 depicts the measurement from the last                                                                                                             bytes read. Therefore, gains in the number of HDFS
+case, while the other two produce similar results. The                                                                                                             bytes read translate to network traffic gains, as ex-
+measurements of all the experiments are combined in                                                                                                                pected.
+Fig. 6, plotting HDFS Bytes Read, Network Traffic
+and Repair Duration versus the number of blocks lost,
+for all three experiments carried out in EC2. We also
+                                                                                                                                                                    5.2.3          Repair Time
+plot the linear least squares fitting curve for these mea-                                                                                                            Fig. 4c depicts the total duration of the recovery pro-
+surements.                                                                                                                                                         cedure i.e., the interval from the launch time of the first
+                                                                                                                                                                   block fixing job to the termination of the last one. Com-
+5.2.1                              HDFS Bytes Read                                                                                                                 bining measurements from all the experiments, Fig. 6c
+   Fig. 4a depicts the total number of HDFS bytes read                                                                                                             shows the repair duration versus the number of blocks
+by the BlockFixer jobs initiated during each failure event.                                                                                                        repaired. These figures show that Xorbas finishes 25%
+The bar plots show that HDFS-Xorbas reads 41%−52%                                                                                                                  to 45% faster than HDFS-RS.
+the amount of data that RS reads to reconstruct the                                                                                                                   The fact that the traffic peaks of the two systems are
+same number of lost blocks. These measurements are                                                                                                                 different is an indication that the available bandwidth
+consistent with the theoretically expected values, given                                                                                                           was not fully saturated in these experiments. However,
+that more than one blocks per stripe are occasionally                                                                                                              it is consistently reported that the network is typically
+lost (note that 12.14/5 = 41%). Fig. 6a shows that the                                                                                                             the bottleneck for large-scale MapReduce tasks [5, 14,
+number of HDFS bytes read is linearly dependent on                                                                                                                 15]. Similar behavior is observed in the Facebook pro-
+the number of blocks lost, as expected. The slopes give                                                                                                            duction cluster at large-scale repairs. This is because
+us the average number of HDFS bytes read per block for                                                                                                             hundreds of machines can share a single top-level switch
+Xorbas and HDFS-RS. The average number of blocks                                                                                                                   which becomes saturated. Therefore, since LRC trans-
+read per lost block are estimated to be 11.5 and 5.8,                                                                                                              fers significantly less data, we expect network saturation
+showing the 2× benefit of HDFS-Xorbas.                                                                                                                             to further delay RS repairs in larger scale and hence give
+                                                                                                                                                                   higher recovery time gains of LRC over RS.
+5.2.2                              Network Traffic                                                                                                                    From the CPU Utilization plots we conclude that
+
+
+                                                                                                                                                            8
+                                   Work l oad c ompl e ti on ti me (∼ 20% of re q ui re d bl ock s l ost)                               All Blocks   ∼ 20% of blocks missing
+                         130                                                  Al l bl ock s avai l abl e                                  Avail.        RS        Xorbas
+                                                                              20% mi ssi ng - Xorbas
+                                                                              20% mi ssi ng - RS                 Total Bytes Read        30 GB       43.88 GB    74.06 GB
+                         120
+                                                                                                                 Avg Job Ex. Time        83 min       92 min      106 min
+                         110
+                                               +2 7. 47%
+                                                                                                                       Table 2: Repair impact on workload.
+
+
+   Ti me i n mi nute s
+                         100
+                                               +1 1. 20%
+                          90
+                                                                                                                5.3    Facebook’s cluster
+                          80
+                                                                                                                   In addition to the series of controlled experiments
+                          70
+                                                                                                                performed over EC2, we performed one more experi-
+                          60                                                                                    ment on Facebook’s test cluster. This test cluster con-
+                          50
+                                                                                                                sisted of 35 nodes configured with a total capacity of
+                                                                                                                370 TB. Instead of placing files of pre-determined sizes
+                          40
+                               1   2       3       4        5           6    7       8        9       10        as we did in EC2, we utilized the existing set of files in
+                                                                J obs
+                                                                                                                the cluster: 3, 262 files, totaling to approximately 2.7
+                                                                                                                TB of logical data. The block size used was 256 MB
+Figure 7: Completion times of 10 WordCount                                                                      (same as in Facebook’s production clusters). Roughly
+jobs: encountering no block missing, and ∼ 20%                                                                  94% of the files consisted of 3 blocks and the remaining
+of blocks missing on the two clusters. Dotted                                                                   of 10 blocks, leading to an average 3.4 blocks per file.
+lines depict average job completion times.
+                                                                                                                               Blocks   HDFS GB read        Repair
+                                                                                                                                Lost    Total /block       Duration
+HDFS RS and Xorbas have very similar CPU require-                                                                     RS        369     486.6  1.318        26 min
+ments and this does not seem to influence the repair                                                                  Xorbas    563     330.8   0.58        19 min
+times.
+                                                                                                                Table 3: Experiment on Facebook’s Cluster Re-
+                                                                                                                sults.
+5.2.4                          Repair under Workload
+                                                                For our experiment, HDFS-RS was deployed on the
+   To demonstrate the impact of repair performance on
+                                                             cluster and upon completion of data RAIDing, a ran-
+the cluster’s workload, we simulate block losses in a
+                                                             dom DataNode was terminated. HDFS Bytes Read and
+cluster executing other tasks. We created two clusters,
+                                                             the Repair Duration measurements were collected. Un-
+15 slave nodes each. The submitted artificial workload
+                                                             fortunately, we did not have access to Network Traf-
+consists of word-count jobs running on five identical
+                                                             fic measurements. The experiment was repeated, de-
+3GB text files. Each job comprises several tasks enough
+                                                             ploying HDFS-Xorbas on the same set-up. Results are
+to occupy all computational slots, while Hadoop’s FairSched-
+                                                             shown in Table 3. Note that in this experiment, HDFS-
+uler allocates tasks to TaskTrackers so that computa-
+                                                             Xorbas stored 27% more than HDFS-RS (ideally, the
+tional time is fairly shared among jobs. Fig. 7 depicts
+                                                             overhead should be 13%), due to the small size of the
+the execution time of each job under two scenarios: i)
+                                                             majority of the files stored in the cluster. As noted be-
+all blocks are available upon request, and ii) almost 20%
+                                                             fore, files typically stored in HDFS are large (and small
+of the required blocks are missing. Unavailable blocks
+                                                             files are typically archived into large HAR files). Fur-
+must be reconstructed to be accessed, incurring a de-
+                                                             ther, it may be emphasized that the particular dataset
+lay in the job completion which is much smaller in the
+                                                             used for this experiment is by no means representative
+case of HDFS-Xorbas. In the conducted experiments
+                                                             of the dataset stored in Facebook’s production clusters.
+the additional delay due to missing blocks is more than
+                                                                In this experiment, the number of blocks lost in the
+doubled (from 9 minutes for LRC to 23 minutes for RS).
+                                                             second run, exceed those of the first run by more than
+   We note that the benefits depend critically on how
+                                                             the storage overhead introduced by HDFS-Xorbas. How-
+the Hadoop FairScheduler is configured. If concurrent
+                                                             ever, we still observe benefits in the amount of data read
+jobs are blocked but the scheduler still allocates slots
+                                                             and repair duration, and the gains are even more clearer
+to them, delays can significantly increase. Further, jobs
+                                                             when normalizing by the number of blocks lost.
+that need to read blocks may fail if repair times exceed
+a threshold. In these experiments we set the scheduling
+configuration options in the way most favorable to RS.       6. RELATED WORK
+Finally, as previously discussed, we expect that LRCs           Optimizing code designs for efficient repair is a topic
+will be even faster than RS in larger-scale experiments      that has recently attracted significant attention due to
+due to network saturation.                                   its relevance to distributed systems. There is a substan-
+
+
+                                                                                                            9
+                                  60                                                                                                 25                                                                                                            80
+                                          HDFS−RS                                                                                                    HDFS−RS                                                                                                                        HDFS−RS
+                                          HDFS−Xorbas                                                                                                HDFS−Xorbas                                                                                   70                               HDFS−Xorbas
+
+
+
+
+       Network Out Traffic (GB)                                                                                                                                                                                         CPUUtilization (Percent)
+                                  50
+
+
+
+
+                                                                                                            Disk Bytes Read (GB)
+                                                                                                                                     20
+                                                                                                                                                                                                                                                   60
+                                  40
+                                                                                                                                                                                                                                                   50
+                                                                                                                                     15
+
+                                  30                                                                                                                                                                                                               40
+
+                                                                                                                                     10
+                                                                                                                                                                                                                                                   30
+                                  20
+                                                                                                                                                                                                                                                   20
+                                                                                                                                            5
+                                  10
+                                                                                                                                                                                                                                                   10
+
+                                   0                                                                                                 0                                                                                                              0
+                                  22:20   23:10   00:00   00:50    01:40   02:30   03:20    04:10   05:00                           22:20            23:10   00:00   00:50    01:40   02:30   03:20   04:10   05:00                                22:20 23:10 00:00 00:50 01:40 02:30 03:20 04:10 05:00
+                                                                   Time                                                                                                        Time                                                                                                                 Time
+
+                                          (a) Cluster network traffic.                                                                          (b) Cluster Disk Bytes Read.                                               (c) Cluster average CPU utilization.
+
+ Figure 5: Measurements in time from the two EC2 clusters during the sequence of failing events.
+
+
+                           160                                                                                                              350                                                                                                                                60
+                                          HDFS−Xorbas                                                                                                 HDFS−Xorbas                                                                                                                    HDFS−Xorbas
+                                                                                                                                                                                                                                                                               55
+                           140            HDFS−RS                                                                                           300       HDFS−RS                                                                                                                        HDFS−RS
+
+
+
+
+  HDFS Bytes Read (GB)                                                                                           Network Out Traffic (GB)                                                                                                          Repair Duration (Minutes)
+                                                                                                                                                                                                                                                                               50
+                           120
+                                                                                                                                            250                                                                                                                                45
+                           100
+                                                                                                                                                                                                                                                                               40
+                                                                                                                                            200
+                                  80                                                                                                                                                                                                                                           35
+                                                                                                                                            150
+                                                                                                                                                                                                                                                                               30
+                                  60
+                                                                                                                                            100                                                                                                                                25
+                                  40
+                                                                                                                                                                                                                                                                               20
+                                  20                                                                                                         50
+                                                                                                                                                                                                                                                                               15
+
+                                   0                                                                                                            0                                                                                                                              10
+                                    0             50         100           150             200        250                                        0           50              100        150           200         250                                                            0        50       100      150        200   250
+                                                       Number of blocks lost                                                                                         Number of blocks lost                                                                                                     Number of blocks lost
+
+(a) HDFS Bytes Read versus blocks lost                                                                                                                 (b) Network-Out Traffic                                                     (c) Repair Duration versus blocks lost
+
+Figure 6: Measurement points of failure events versus the total number of blocks lost in the corre-
+sponding events. Measurements are from all three experiments.
+
+tial volume of work and we only try to give a high-level                                                                                                                              of [6]. The code constructions are separated into exact
+overview here. The interested reader can refer to [7]                                                                                                                                 codes for low rates k/n ≤ 1/2 and high rates k/n > 1/2.
+and references therein.                                                                                                                                                               For rates below 1/2 (i.e. storage overheads above 2)
+   The first important distinction in the literature is be-                                                                                                                           beautiful combinatorial constructions of exact regen-
+tween functional and exact repair. Functional repair                                                                                                                                  erating codes were recently discovered [26, 29]. Since
+means that when a block is lost, a different block is                                                                                                                                 replication has a storage overhead of three, for our ap-
+created that maintains the (n, k) fault tolerance of the                                                                                                                              plications storage overheads around 1.4−1.8 are of most
+code. The main problem with functional repair is that                                                                                                                                 interest, which ruled out the use of low rate exact re-
+when a systematic block is lost, it will be replaced with                                                                                                                             generating codes.
+a parity block. While global fault tolerance to n − k                                                                                                                                    For high-rate exact repair, our understanding is cur-
+erasures remains, reading a single block would now re-                                                                                                                                rently incomplete. The problem of existence of such
+quire access to k blocks. While this could be useful                                                                                                                                  codes remained open until two groups independently [3]
+for archival systems with rare reads, it is not practical                                                                                                                             used Interference Alignment, an asymptotic technique
+for our workloads. Therefore, we are interested only                                                                                                                                  developed for wireless information theory, to show the
+in codes with exact repair so that we can maintain the                                                                                                                                existence of exact regenerating codes at rates above 1/2.
+code systematic.                                                                                                                                                                      Unfortunately this construction is only of theoretical
+   Dimakis et al. [6] showed that it is possible to re-                                                                                                                               interest since it requires exponential field size and per-
+pair codes with network traffic smaller than the naive                                                                                                                                forms well only in the asymptotic regime. Explicit high-
+scheme that reads and transfers k blocks. The first re-                                                                                                                               rate regenerating codes are a topic of active research but
+generating codes [6] provided only functional repair and                                                                                                                              no practical construction is currently known to us. A
+the existence of exact regenerating codes matching the                                                                                                                                second related issue is that many of these codes reduce
+information theoretic bounds remained open.                                                                                                                                           the repair network traffic but at a cost of higher disk
+   A substantial volume of work (e.g. [7, 25, 30] and ref-                                                                                                                            I/O. It is not currently known if this high disk I/O is a
+erences therein) subsequently showed that exact repair                                                                                                                                fundamental requirement or if practical codes with both
+is possible, matching the information theoretic bound                                                                                                                                 small disk I/O and repair traffic exist.
+
+
+                                                                                                                                                                              10
+   Another family of codes optimized for repair has fo-            [4] B. Calder, J. Wang, A. Ogus, N. Nilakantan,
+cused on relaxing the MDS requirement to improve on                    A. Skjolsvold, S. McKelvie, Y. Xu, S. Srivastav,
+repair disk I/O and network bandwidth (e.g. [17, 20,                   J. Wu, H. Simitci, et al. Windows azure storage:
+10]). The metric used in these constructions is locality,              A highly available cloud storage service with
+the number of blocks that need to be read to recon-                    strong consistency. In Proceedings of the
+struct a lost block. The codes we introduce are optimal                Twenty-Third ACM Symposium on Operating
+in terms of locality and match the bound shown in [10].                Systems Principles, pages 143–157, 2011.
+In our recent prior work [23] we generalized this bound            [5] M. Chowdhury, M. Zaharia, J. Ma, M. I. Jordan,
+and showed that it is information theoretic (i.e. holds                and I. Stoica. Managing data transfers in
+also for vector linear and non-linear codes). We note                  computer clusters with orchestra. In
+that optimal locality does not necessarily mean optimal                SIGCOMM-Computer Communication Review,
+disk I/O or optimal network repair traffic and the fun-                pages 98–109, 2011.
+damental connections of these quantities remain open.              [6] A. Dimakis, P. Godfrey, Y. Wu, M. Wainwright,
+   The main theoretical innovation of this paper is a                  and K. Ramchandran. Network coding for
+novel code construction with optimal locality that relies              distributed storage systems. IEEE Transactions
+on Reed-Solomon global parities. We show how the                       on Information Theory, pages 4539–4551, 2010.
+concept of implied parities can save storage and show              [7] A. Dimakis, K. Ramchandran, Y. Wu, and
+how to explicitly achieve parity alignment if the global               C. Suh. A survey on network codes for distributed
+parities are Reed-Solomon.                                             storage. Proceedings of the IEEE, 99(3):476–489,
+                                                                       2011.
+7.   CONCLUSIONS                                                   [8] B. Fan, W. Tantisiriroj, L. Xiao, and G. Gibson.
+   Modern storage systems are transitioning to erasure                 Diskreduce: Raid for data-intensive scalable
+coding. We introduced a new family of codes called                     computing. In Proceedings of the 4th Annual
+Locally Repairable Codes (LRCs) that have marginally                   Workshop on Petascale Data Storage, pages 6–10.
+suboptimal storage but significantly smaller repair disk               ACM, 2009.
+I/O and network bandwidth requirements. In our im-                 [9] D. Ford, F. Labelle, F. Popovici, M. Stokely,
+plementation, we observed 2× disk I/O and network                      V. Truong, L. Barroso, C. Grimes, and
+reduction for the cost of 14% more storage, a price that               S. Quinlan. Availability in globally distributed
+seems reasonable for many scenarios.                                   storage systems. In Proceedings of the 9th
+   One related area where we believe locally repairable                USENIX conference on Operating systems design
+codes can have a significant impact is purely archival                 and implementation, pages 1–7, 2010.
+clusters. In this case we can deploy large LRCs (i.e.,            [10] P. Gopalan, C. Huang, H. Simitci, and
+stipe sizes of 50 or 100 blocks) that can simultaneously               S. Yekhanin. On the locality of codeword symbols.
+offer high fault tolerance and small storage overhead.                 CoRR, abs/1106.3625, 2011.
+This would be impractical if Reed-Solomon codes are               [11] K. Greenan. Reliability and power-efficiency in
+used since the repair traffic grows linearly in the stripe             erasure-coded storage systems. PhD thesis,
+size. Local repairs would further allow spinning disks                 University of California, Santa Cruz, December
+down [21] since very few are required for single block                 2009.
+repairs.                                                          [12] K. Greenan, J. Plank, and J. Wylie. Mean time to
+   In conclusion, we believe that LRCs create a new op-                meaningless: MTTDL, Markov models, and
+erating point that will be practically relevant in large-              storage system reliability. In HotStorage, 2010.
+scale storage systems, especially when the network band-          [13] A. Greenberg, J. Hamilton, D. A. Maltz, and
+width is the main performance bottleneck.                              P. Patel. The cost of a cloud: Research problems
+                                                                       in data center networks. Computer
+8.   REFERENCES                                                        Communications Review (CCR), pages 68–73,
+                                                                       2009.
+ [1] Amazon EC2. http://aws.amazon.com/ec2/.                      [14] A. Greenberg, J. R. Hamilton, N. Jain,
+ [2] HDFS-RAID wiki.                                                   S. Kandula, C. Kim, P. Lahiri, D. A. Maltz,
+     http://wiki.apache.org/hadoop/HDFS-RAID.                          P. Patel, and S. Sengupta. VL2: A scalable and
+ [3] V. Cadambe, S. Jafar, H. Maleki,                                  flexible data center network. SIGCOMM Comput.
+     K. Ramchandran, and C. Suh. Asymptotic                            Commun. Rev., 39:51–62, Aug. 2009.
+     interference alignment for optimal repair of mds             [15] C. Guo, H. Wu, K. Tan, L. Shi, Y. Zhang, and
+     codes in distributed storage. Submitted to IEEE                   S. Lu. DCell: a scalable and fault-tolerant
+     Transactions on Information Theory, Sep. 2011                     network structure for data centers. SIGCOMM
+     (consolidated paper of arXiv:1004.4299 and                        Comput. Commun. Rev., 38:75–86, August 2008.
+     arXiv:1004.4663).
+
+
+                                                             11
+[16] T. Ho, M. Médard, R. Koetter, D. Karger,                        Necessity and code constructions. Information
+     M. Effros, J. Shi, and B. Leong. A random linear                 Theory, IEEE Transactions on, 58(4):2134–2158,
+     network coding approach to multicast. IEEE                       2012.
+     Transactions on Information Theory, pages                   [30] I. Tamo, Z. Wang, and J. Bruck. MDS array
+     4413–4430, October 2006.                                         codes with optimal rebuilding. CoRR,
+[17] C. Huang, M. Chen, and J. Li. Pyramid codes:                     abs/1103.3737, 2011.
+     Flexible schemes to trade space for access                  [31] S. B. Wicker and V. K. Bhargava. Reed-solomon
+     efficiency in reliable data storage systems. NCA,                codes and their applications. In IEEE Press, 1994.
+     2007.                                                       [32] Q. Xin, E. Miller, T. Schwarz, D. Long,
+[18] S. Jaggi, P. Sanders, P. A. Chou, M. Effros,                     S. Brandt, and W. Litwin. Reliability mechanisms
+     S. Egner, K. Jain, and L. Tolhuizen. Polynomial                  for very large storage systems. In MSST, pages
+     time algorithms for multicast network code                       146–156. IEEE, 2003.
+     construction. Information Theory, IEEE
+     Transactions on, 51(6):1973–1982, 2005.                     APPENDIX
+[19] O. Khan, R. Burns, J. Plank, W. Pierce, and
+     C. Huang. Rethinking erasure codes for cloud file           A. DISTANCE AND LOCALITY THROUGH
+     systems: Minimizing I/O for recovery and                       ENTROPY
+     degraded reads. In FAST 2012.                                 In the following, we use a characterization of the code
+[20] O. Khan, R. Burns, J. S. Plank, and C. Huang. In            distance d of a length n code that is based on the en-
+     search of I/O-optimal recovery from disk failures.          tropy function. This characterization is universal in the
+     In HotStorage ’11: 3rd Workshop on Hot Topics               sense that it covers any linear or nonlinear code designs.
+     in Storage and File Systems, Portland, June 2011.             Let x be a file of size M that we wish to split and
+     USENIX.                                                     store with redundancy nk in n blocks, where each block
+[21] D. Narayanan, A. Donnelly, and A. Rowstron.                 has size M k .  Without loss of generality, we assume
+     Write off-loading: Practical power management                                                                             4
+     for enterprise storage. ACM Transactions on                 that the file is split in k blocks of the same size x =
+     Storage (TOS), 4(3):10, 2008.                               [X1 . . . Xk ] ∈ F1×k , where F is the finite field over which
+[22] F. Oggier and A. Datta. Self-repairing                      all operations are performed. The entropy of each file
+     homomorphic codes for distributed storage                   block is H(Xi ) = M      k , for all i ∈ [k], where [n] =
+     systems. In INFOCOM, 2011 Proceedings IEEE,                 {1, . . . , n}.2 Then, we define an encoding (generator)
+     pages 1215 –1223, april 2011.                               map G : F1×k 7→ F1×n that takes as input the k file
+[23] D. Papailiopoulos and A. G. Dimakis. Locally                blocks and outputs n coded blocks G(x) = y = [Y1 . . . Yn ],
+     repairable codes. In ISIT 2012.                             where H(Yi ) = M    k , for all i ∈ [n]. The encoding func-
+[24] D. Papailiopoulos, J. Luo, A. Dimakis, C. Huang,            tion G defines a (k, n − k) code C over the vector space
+     and J. Li. Simple regenerating codes: Network               F1×n . We can calculate the effective rate of the code as
+     coding for cloud storage. Arxiv preprint                    the ratio of the entropy of the file blocks to the sum of
+     arXiv:1109.0264, 2011.                                      the entropies of the n coded blocks
+[25] K. Rashmi, N. Shah, and P. Kumar. Optimal                                          H(X1 , . . . , Xk )  k
+                                                                                  R=     Pn                 = .               (4)
+     exact-regenerating codes for distributed storage at                                                     n
+                                                                                           i=1 H(Yi )
+     the msr and mbr points via a product-matrix
+     construction. Information Theory, IEEE                        The distance d of the code C is equal to the mini-
+     Transactions on, 57(8):5227 –5239, aug. 2011.               mum number of erasures of blocks in y after which the
+[26] K. Rashmi, N. Shah, and P. Kumar. Optimal                   entropy of the remaining blocks is strictly less than M
+     exact-regenerating codes for distributed storage at               d=           min            |E| = n − max |S|,         (5)
+     the msr and mbr points via a product-matrix                            H({Y1 ,...,Yn }\E)<M             H(S)<M
+
+     construction. Information Theory, IEEE                      where E ∈ 2{Y1 ,...,Yn } is a block erasure pattern set and
+     Transactions on, 57(8):5227–5239, 2011.                     2{Y1 ,...,Yn } denotes the power set of {Y1 , . . . , Yn }, i.e.,
+[27] I. Reed and G. Solomon. Polynomial codes over               the set that consists of all subset of {Y1 , . . . , Yn }. Hence,
+     certain finite fields. In Journal of the SIAM, 1960.        for a code C of length n and distance d, any n − d + 1
+[28] R. Rodrigues and B. Liskov. High availability in            coded blocks can reconstruct the file, i.e., have joint
+     dhts: Erasure coding vs. replication. Peer-to-Peer          entropy at least equal to M . It follows that when d is
+     Systems IV, pages 226–239, 2005.                            given, n − d is the maximum number of coded variables
+[29] N. Shah, K. Rashmi, P. Kumar, and                           that have entropy less than M .
+     K. Ramchandran. Interference alignment in
+                                                                 2
+     regenerating codes for distributed storage:                  Equivalently, each block can be considered as a random
+                                                                 variable that has entropy M
+                                                                                           k
+                                                                                             .
+
+
+                                                            12
+   The locality r of a code can also be defined in terms of             Theorem 2. For a code C of length n, where each
+coded block entropies. When a coded block Yi , i ∈ [n],               coded block has entropy M
+                                                                                              k and locality r, the minimum
+has locality r, then it is a function of r other coded                distance is bounded as
+variables Yi = fi (YR(i) ), where R(i) indexes the set of                                       
+                                                                                                k
+r blocks Yj , j ∈ R(i), that can reconstruct Yi , and                                  d≤n−        − k + 2.              (6)
+                                                                                                r
+fi is some function (linear or nonlinear) on these r
+coded blocks. Hence, the entropy of Yi conditioned                    Proof: Our proof follows the same steps as the one in
+on its repair group R(i) is identically equal to zero                 [10]. We start by building the set S in steps and denote
+H(Yi |fi (YR(i) )) = 0, for i ∈ [n]. This functional depen-           the collection of coded blocks at each step as Si . The
+dency of Yi on the blocks in R(i) is fundamentally the                algorithm that builds the set is in Fig. 8. The goal is
+only code structure that we assume in our derivations.3               to lower bound the cardinality of S, which results in an
+This generality is key to providing universal informa-                upper bound on code distance d, since d ≤ n − |S|. At
+tion theoretic bounds on the code distance of (k, n − k)              each step we denote the difference in cardinality of Si
+linear, or nonlinear, codes that have locality r. Our fol-            ans Si−1 and the difference in entropy as si = |Si | −
+lowing bounds can be considered as generalizations of                 |Si−1 | and hi = H(Si ) − H(Si−1 ), respectively.
+the Singleton Bound on the code distance when locality
+is taken into account.                                                 step
+                                                                         1    Set S0 = ∅ and i = 1
+                                                                         2    WHILE H(Si−1 ) < M
+B.   INFORMATION THEORETIC LIMITS OF                                     3       Pick a coded block Yj ∈/ Si−1
+     LOCALITY AND DISTANCE                                               4       IF H(Si−1 ∪ {YΓ(j) }) < M
+   We consider (k, n − k) codes that have block local-                   5          set Si = Si−1 ∪ YΓ(j)
+ity r. We find a lower bound on the distance by lower                    6       ELSE IF H(Si−1 ∪ {YΓ(j) }) ≥ M
+bounding the largest set S of coded blocks whose en-                     7          pick Ys ⊂ YΓ(j) s.t. H(Ys ∪ Si−1 ) < M
+tropy is less than M , i.e., a set that cannot reconstruct               8          set Si = Si−1 ∪ Ys
+the file. Effectively, we solve the following optimization               9       i=i+1
+problem that needs to be performed over all possible
+codes C and yields a best-case minimum distance
+                                                                         Figure 8: The algorithm that builds set S.
+     min max |S| s.t.: H(S) < M, S ∈ 2{Y1 ,...,Yn } .
+       C   S                                                             At each step (depending on the possibility that two
+We are able to provide a bound by considering a single                (r + 1)-groups overlap) the difference in cardinalities si
+property: each block is a member of a repair group of                 is bounded as 1 ≤ si ≤ r + 1, that is si = r + 1 − p,
+size r + 1.                                                           where {YΓ(j) } ∩ Si−1 = p. Now there exist two possi-
+                                                                      ble cases. First, the case where the last step set Sl is
+   Definition 3. For a code C of length n and locality                generated by line 5. For this case we can also bound
+r, a coded block Yi along with the blocks that can gener-             the entropy as hi ≤ (si − 1) M             k
+                                                                                                      k ⇔ si ≥ M hi + 1 which
+ate it, YR(i) , form a repair group Γ(i) = {i, R(i)}, for             comes from the fact that, at least one coded variable
+all i ∈ [n]. We refer to these repair groups, as (r + 1)-             in {YΓ(j) } is a function of variables in Si−1 ∪ YR(j) .
+groups.                                                                                                             Pl
+                                                                      Now, we can bound the cardinality |Sl | = i=1 si ≥
+                                                                      Pl      khi
+                                                                                                k
+                                                                                                   Pl
+It is easy to check that the joint entropy of the blocks in              i=1 M + 1      = l+ M        i=1 hi . We now have to
+                                                                                     Pl
+a single (r + 1)-group is at most as much as the entropy              bound l and       i=1 hi . First, observe that since l is
+of r file blocks                                                      our “last step,” this means that the aggregate entropy
+                                                                  in Sl should be less than the file size, i.e., it should
+ H YΓ(i) = H Yi , YR(i) = H YR(i) + H Yi |YR(i)
+                                                                      have a value M − c · M    k , for 0 < c ≤ 1. If c > 1
+                             X               M
+             = H YR(i) ≤           H(Yj ) = r ,                       then we could collect another variable in that set. On
+                                               k                      the other hand, if c = 0, then the coded blocks in
+                             j∈R(i)
+                                                                      Sl would have been   Plsufficient to reconstruct the file.
+for all i ∈ [n]. To determine the upper bound on min-                 Hence, M − M   k ≤     i=1 hi < M . We shall now lower
+imum distance of C, we construct the maximum set of                   bound l. The smallest l0 ≤ l (i.e., the fastest) upon
+coded blocks S that has entropy less than M . We use                  which Sl0 reaches an aggregate entropy that is greater
+this set to derive the following theorem.                             than, or equal to M , can be found in the following way:
+                                                                      if we could only collect (r + 1)-groups of entropy r M k ,
+3
+  In the following, we consider codes with uniform locality,          without “entropy losses” between these groups, i.e., if
+i.e., (k, n−k) codes where all encoded blocks have locality r.        there were no further dependencies than the ones dic-
+These codes are referred to as non-canonical codes in [10].           tated by locality, then we would stop just before Sl0
+
+
+                                                                 13
+                                            Pl0
+reached an entropy       of
+                             M , that is      i=1 hl < M ⇔
+                                                     0                             is “locality aware” by incorporating an appropriate de-
+l0 r M            0     k                0
+     k <M ⇔ l < r . However, l is an integer, hence
+                                                                                   pendency subgraph that accounts for the existence of
+l0 = kr − 1. We apply the above to bound the cardi-                                repair groups of size (r + 1). The specifications of this
+                                                                               network, i.e., the number and degree of blocks, the edge-
+nality |Sl | ≥ k − 1 + l0 ≥ k − 1 + kr − 1 = k + kr − 2,
+                                                                                 capacities, and the cut-set bound are all determined by
+in which case we obtain d ≤ n − kr − k + 2.
+     We move to the second case where we reach line 6 of                           the code parameters k, n − k, r, d. For coding parame-
+the building algorithm: the entropy of the file can be                             ters that do not violate the distance bound in Theorem
+covered only by collecting (r + 1) groups. This depends                            2, the minimum s − t cut of such a flow graph is at
+on the remainder of the division of M by r M       k . Posterior                   least M . The multicast capacity of the induced net-
+to collecting the (r + 1)-groups, we are left with some                            work is achievable using random linear network codes.
+entropy that needs to be covered by at most r − 1 ad-                              This achievability scheme corresponds to a scalar linear
+ditional blocks not in Sl0 . The entropy k  not  covered    by                  code with parameters k, n − k, r, d.
+                                                       M
+the set Sl0 is M − l0 r M      =  M  −        −  1  r     = M   −
+k M        M
+                            k              r           k
+         +r    . To cover    that we need   an  additional  num-                                                                                                               ∞
+   r   k     k      l            m                          
+                      M −l0 r M
+ber of blocks s ≥          M
+                               k
+                                   = k −l0 r = k − kr − 1 r.
+                           k                                                                                                              ..                               .. ∞
+                                                                                                                                                                            .
+Hence, our final set Sl has size                                                                               ..
+                                                                                                                                           .                                  ∞
+                                                                                                            .                                           Xi : i-th file block (source)
+                                                      k                                                                                   ..
+|Sl | + s − 1 = l(r + 1) + s − 1 ≥ l0 (r + 1) + k −      −1 −1
+
+
+                                                                         k data sources
+                                                                                                                                           .                 ∞             r        ∞
+
+
+
+                                                                                                                         n coded blocks
+                                                      r
+                                                                                          ..                   ..
+                                              
+        k                           k                 k
+=
+        r
+           − 1 (r + 1) + k − r
+                                    r
+                                         −1 −1=
+                                                      r
+                                                         + k − 2.
+                                                                                           .            ..
+                                                                                                                .
+                                                                                                                                           ..              (r+1)-group flow-bottleneck
+
+                                                                                                         .                                  .                ∞             1        ∞
+Again, due to the fact that
+                          the distance is bounded by
+n − |S| we have d ≤ n − kr − k + 2.                  2                                                          ..
+                                                                                                                                          ..
+                                                                                                                                                                    coded block
+                                                                                                                 .
+   From the above proof we obtain the following corol-                                                                                     .
+
+lary.                                                                                                                �                          �                     ..
+                                                                                                                           n                                           .
+                                                                                                                                                    DCs
+  Corollary 2. In terms of the code distance, non-                                                                       n−d+1
+                                                                                                                                                          DCi : i-th Data Collector (sink)
+overlapping (r + 1)-groups are optimal.
+    In [10], it was proven that (k, n − k) linear codes have                       Figure 9: The G(k, n − k, r, d) information flow
+minimum
+k          code distance that is bounded as d ≤ n − k −                          graph.
+  r   +2.  As  we see from our distance-locality bound, the
+limit of linear codes is information theoretic optimal,                              In Fig. 9, we show the general structure of an infor-
+i.e., linear codes suffice to achieve it. Indeed, in the                           mation flow graph. We refer to this directed graph as
+following we show that the distance bound is tight and                             G(k, n − k, r, d) with vertex set
+we present randomized and explicit codes that achieve                                                         
+it.4                                                                                     V = {Xi ; i ∈ [k]}, Γin       out
+                                                                                                                  j , Γj ; j ∈ [n] ,
+                                                                                               in out
+                                                                                                Yj , Yj ; j ∈ [n] , {DCl ; ∀l ∈ [T ]} .
+C.    ACHIEVABILITY OF THE BOUND                                                   The directed edge set is implied by the following edge
+   In this section, we show that the bound of Theorem                              capacity function
+2 is achievable using a random linear network coding                                                                                n          h
+                                                                                                                                                    n
+                                                                                                                                                       io
+                                                                                                        ∞,(v, u) ∈ {Xi ; i ∈ [k]}, Γin    ; j ∈ r+1
+(RLNC) approach as the one presented in [16] Our proof                                                
+                                                                                                      
+                                                                                                            n             h     io n  j             o
+                                                                                                                               n
+                                                                                                      
+uses a variant of the information flow graph that was                                                      ∪    Γout ; j ∈ r+1       , Yjin ; j ∈ [n]
+                                                                                                      
+                                                                                                      
+                                                                                                             n j
+                                                                                                      
+                                                                                                                              o                   
+introduced in [6]. We show that a distance d is feasible                                  ce (v, u) =      ∪    Yjout j ∈ [n] , {DCl ; l ∈ [T ]} ,
+                                                                                                      
+if a cut-set bound on this new flow graph is sufficiently
+                                                                                                                   n              o n                o
+                                                                                                        M
+                                                                                                      
+                                                                                                          ,(v, u) ∈     Yjin j ∈ [n] , Yjout j ∈ [n]      ,
+                                                                                                      
+                                                                                                      
+                                                                                                       k
+                                                                                                      
+large for multicast sessions to run on it.
+                                                                                                      
+                                                                                                        0, otherwise.
+   In the same manner as [6], the information flow graph
+represents a network where the k input blocks are de-                              The vertices {Xi ; i ∈ [k]} correspond to the k file blocks
+picted as sources, the n coded blocks are represented                              and Yjout ; j ∈ [n] correspond to the coded blocks. The
+as intermediate nodes of the network, and the sinks of                             edge capacity between the in- and out- Yi vertices cor-
+the network are nodes that need to decode the k file                               responds to the entropy of a single coded block. When,
+blocks. The innovation of the new flow graph is that it                            r + 1 blocks are elements of a group, then their “joint
+4                                                                                  flow,” or entropy, cannot exceed r M   k . To enforce this
+ In our following achievability proof of the above infor-
+mation theoretic bound we assume that (r + 1)|n and we                             entropy constraint, we bottleneck the in-flow of each
+consider non-overlapping repair groups. This means that                            group by a node that restricts it to be at most r M  k . For
+Γ(i) ≡ Γ(j) for all i, j ∈ Γ(i).                                                   a group Γ(i), we add node Γin   i that receives flow by the
+
+
+                                                                    14
+sources and is connected with an edge of capacity r M  k                Lemma 3. For a network with E edges, k sources,
+to a new node Γout  i . The latter connects to the r + 1             and T destinations, where η links transmit linear combi-
+blocks of the i-th group. The file blocks travel along               nation of inputs, the
+                                                                                         probability
+                                                                                               η     of success of the RLNC
+the edges of this graph towards the sinks, which we call                                     T
+                                                                     scheme is at least 1 − q . Moreover, using the algo-
+Data Collectors (DCs). A DC needs to connect to as
+                                                                     rithm in [18], a deterministic linear code over F can be
+many coded blocks as such that it can reconstruct the
+                                                                     found in time O (ET k(k + T )).
+file. This is equivalent to requiring s − t cuts between
+the file blocks and the DCs that are at least equal to               The number of edges in our network is E = n(k+2r+3)   +
+M , i.e., the file size. We should note that when we are                                                            r+1
+                                                                     (n − d + 1) k+d nk e−1 hence we can calculate the com-
+considering a specific group, we know that any block                                  r
+                                                                     plexity order of the deterministic
+                                                                                                       algorithm, which is
+within that group can be repaired from the remaining r                                       
+                                                                     ET k(k + T ) = O T 3 k 2 = O k 2 8nH2 ( (r+1)R ) , where
+                                                                                                                r
+
+blocks. When a block is lost, the functional dependence
+among the blocks in an (r + 1)-group allow a newcomer                H2 (·) is the binary entropy function. The above and
+block to compute a function on the remaining r blocks                Lemma 3 give us the following existence theorem
+and reconstruct what was lost.
+                                                                        Theorem 4. There exists a linear code over F with
+   Observe that if the distance of the code is d, then
+                      n                                              locality r and length   n, such that (r + 1)|n, that has
+there are T = n−d+1        DCs, each with in-degree n −
+                                                                     distance d = n − kr − k + 2, if |F| = q > k+d nk e−1 =
+d + 1, whose incident vertices originate from n − d + 1                                                               r
+                                                                           nH2 ( (r+1)R
+                                                                                    r
+                                                                                        )
+blocks. The cut-set bound of this network is defined                 O 2                    . Moreover, we can construct explicit
+by the set of minimum cuts between the file blocks and                                                                       
+                                                                     codes over F, with |F| = q, in time O k 2 8nH2 ( (r+1)R ) .
+                                                                                                                          r
+
+each of the DCs. A source-DC cut in G(k, n − k, r, d)
+determines the amount of flow that travels from the file
+blocks to the DCs. When d is consistent with the bound               Observe that by setting r = log(k), we obtain Theo-
+of Theorem 2, the minimum of all the s − t cuts is at                rem 1. Moreover, we would like to note that if for each
+least as much as the file size M . The following lemma               (r + 1)-group we “deleted” a coded block, then the re-
+states that if d is consistent with the bound of Theorem             maining code would be a (k, n0 − k)-MDS code, where
+2, then the minimum of all the cuts is at least as much                         n
+                                                                     n0 = n − r+1  , assuming no repair group overlaps. This
+as the file size M .                                                 means that LRCs are constructed on top of MDS codes
+                                                                     by adding r-degree parity coded blocks. A general con-
+   Lemma 2. The minimum source-DC      cut in G(k, n −             struction that operated over small fields and could be
+k, r, d) is at least M , when d ≤ n − kr − k + 2.
+                                                                     constructed in time polynomial in the number of DCs
+Proof : Omitted due to lack of space.                    2           is an interesting open problem.
+Lemma 2 verifies that for given n, k, r, and a valid dis-
+tance d according to Theorem 2, the information flow                 D.    AN EXPLICIT LRC USING REED-
+graph is consistent with the bound: the DCs have enough                    SOLOMON PARITIES
+entropy to decode all file blocks, when the minimum cut                 We design a (10, 6, 5)-LRC based on Reed-Solomon
+is more than M . The above results imply that the flow               Codes and Interference Alignment. We use as a basis for
+graph G(k, n − k, r, d) captures both the blocks locality            that a (10, 4)-RS code defined over a binary extension
+and the DC requirements. Then, a successful multi-                   field F2m . We concentrate on these specific instances of
+cast session on G(k, n − k, r, d) is equivalent to all DCs           RS codes since these are the ones that are implemented
+decoding the file.                                                   in practice and in particular in the HDFS RAID com-
+   Theorem 3. If a multicast session on G(k, n−k, r, d)              ponent of Hadoop. We continue introducing a general
+is feasible, then there exist a (k, n − k) code C of locality        framework for the desing of (k, n − k) Reed-Solomon
+r and distance d .                                                   Codes.
+                                                                        The k × n (Vandermonde type) parity-check matrix
+   Hence, the random linear network coding (RLNC)                    of a (k, n − k)-RS code defined over an extended binary
+scheme of Ho et al. [16] achieves the cut-set bound                  field F2m , of order q = 2m , is given by [H]i,j = ai−1    j−1 ,
+of Gr (k, n − k, r, d), i.e., there exist capacity achieving         where a0 , a1 , . . . , an−1 are n distinct elements of the
+network codes, which implies that there exist codes that             field F2m . The order of the field has to be q ≥ n. The
+achieve the distance bound of Theorem 2. Instead of the              n−1 coefficients a0 , a1 , . . . , an−1 are n distinct elements
+RLNC scheme, we could use the deterministic construc-                of the field F2m . We can select α to be a generator el-
+tion algorithm of Jaggi et al. [18] to construct explicit            ement of the cyclic multiplicative group defined over
+capacity achieving linear codes for multicast networks.              F2m . Hence, let α be a primitive element of the field
+Using that scheme, we could obtain in time polynomial                F2m . Then, [H]i,j = α(i−1)(j−1) , for i ∈ [k], j ∈ [n].
+in T explicit (k, n − k) codes of locality r.                        The above parity check matrix defines a (k, n − k)-RS
+
+
+                                                                15
+                                                                                                             P10
+code. It is a well-known fact, that due to its determi-            {6, . . . , 10}\i, from the XOR parity j=6 gj . However,
+nant structure, any (n − k) × (n − k) submatrix of H               it is not straightforward how to repair the last 4 coded
+has a nonzero determinant, hence, is full-rank. This,              blocks, i.e., the parity blocks of the systematic code rep-
+in terms, means that a (k, n − k)-RS defined using the             resentation. At this point we make use of Interference
+parity check matrix H is an MDS code, i.e., has optimal            Alignment. Specifically, we observe the following: since
+minimum distance d = n − k + 1. We refer to the k × n              the all-ones vector of length n is in the span of the rows
+generator matrix of this code as G.                                of the parity check matrix H, then it has to be orthog-
+  Based on a (14, 10)-RS generator matrix, we will in-             onal to the generator matrix G, i.e., G1T = 0k×1 due
+troduce 2 simple parities on the first 5 and second 5              to the fundamental property GHT = 0k×(n−k) . This
+                                                                                                       P14
+coded blocks of the RS code. This, will yield the gen-             means that G1T = 0k×1 ⇔ i=1 gi = 0k×1 and any
+erator matrix of our LRC                                           columns of GLRC between the 11-th and 14-th are also
+                      "                #
+                           X5     10
+                                  X                                a function of 5 other columns.    P For    example,
+                                                                                                                    P for Y11
+             GLRC = G         gi     gi ,           (7)            observe that we have g11 =
+                                                                                                         5
+                                                                                                                  +
+                                                                                                                        10
+                                                                                                             gi         i=6 gi +
+                            i=1     i=6                                                       P        i=1
+                                                                                                  5
+where gi denotes the i-th column of G, for i ∈ [14].               g12 +g13 +g14 , where          i=1 gi is the first XOR parity
+                                                                         P           
+We would like to note that even if GLRC is not in sys-             and
+                                                                                10
+                                                                                i=6 gi is the second and “−”s become “+”s due
+tematic form, i.e., the first 10 blocks are not the ini-           to the binary extended field. In the same manner as
+tial file blocks, we can easily convert it into one. To            g11 , all other columns can be repaired using 5 columns
+do so we need to apply a full-rank transformation on               of GLRC . Hence all coded blocks have locality 5.
+the rows of GLRC in the following way: AGLRC =                         It should be clear that the distance of our code is at
+A [G:,1:10 G:,11:15 ] = [I10 AG:,11:15 ], where A = G−1
+                                                     :,1:10        least equal to its (14, 10)-RS precode, that is, d ≥ 5.
+and G:,i:j is a submatrix of G that consists of columns            We prove that d = 5 is the maximum distance possible
+with indices from i to j. This transformation renders              for a length 16 code has block locality 5. Let all codes
+our code systematic, while retaining its distance and lo-          of locality r = 5 and length n = 16 for M = 10. Then,
+cality properties. We proceed to the main result of this           there exist 6-groups associated with the n coded blocks
+section.                                                           of the code. Let, YΓ(i) be the set of 6 coded blocks in
+                                                                   the repair group of i ∈ [16]. Then, H(YΓ(i) ) ≤ 5, for
+  Theorem 5. The code C of length 16 defined by GLRC
+                                                                   all i ∈ [16]. Moreover, observe that due to the fact that
+has locality 5 for all coded blocks and optimal distance
+                                                                   5 6 |16 there have to exist at least two distinct overlap-
+d = 5.
+                                                                   ping groups YΓ(i1 ) and YΓ(i2 ) , i1 , i2 ∈ [16], such that
+   Proof: We first prove that all coded blocks of GLRC              YΓ(i1 ) ∩ YΓ(i2 ) ≥ 1. Hence, although the cardinality
+have locality 5. Instead of considering block locality, we         of YΓ(i1 ) ∪ YΓ(i2 ) is 11 its joint entropy is bounded as
+can equivalently consider the locality of the columns of           H(YΓ(i1 ) , YΓ(i2 ) ) = H(YR(i1 ) ) + H(YR(i2 ) |YR(i1 ) ) < 10,
+GLRC , without loss of generality. First let i ∈ [5]. Then,        i.e., at least one additional coded block has to be in-
+                                                   P5
+gi can be reconstructed from the XOR parity j=1 gj                 cluded to reach an aggregate entropy of M = 10. There-
+if the 4 other columns gi , j ∈ {6, . . . , 10}\i, are sub-        fore, any code of length n = 16 and locality 5 can have
+tracted from it. The same goes for i ∈ {6, . . . , 10},            distance at most 5, i.e., d = 5 is optimal for the given
+i.e., gi can be reconstructed by subtracting gj , for j ∈          locality.                                                     2
+
+
+
+
+                                                              16
+

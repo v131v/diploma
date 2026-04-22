@@ -1,0 +1,864 @@
+                           Identifying Hot and Cold Data
+                             in Main-Memory Databases
+                                 Justin J. Levandoski 1 , Per-Åke Larson 2 , Radu Stoica 3
+                                                         1,2
+                                                            Microsoft Research
+                                           3
+                                               École Polytechnique Fédérale de Lausanne
+          1                                                    2                                                      3
+              justin.levandoski@microsoft.com,                     palarson@microsoft.com,                                radu.stoica@epfl.ch
+
+                                                                                                      200
+   Abstract— Main memories are becoming sufficiently large that
+
+
+
+
+                                                                                 Price (1000s of $)
+                                                                                                                      RAM
+most OLTP databases can be stored entirely in main memory,                                            150
+                                                                                                                      2TB Flash (high)
+but this may not be the best solution. OLTP workloads typically                                       100             2TB Flash (low)
+exhibit skewed access patterns where some records are hot
+(frequently accessed) but many records are cold (infrequently                                         50
+or never accessed). It is more economical to store the coldest                                         0
+records on secondary storage such as flash. As a first step                                                 16   64       128   256      512 1024 2048
+towards managing cold data in databases optimized for main-                                                            System Memory (GB)
+memory we investigate how to efficiently identify hot and cold
+data. We propose to log record accesses – possibly only a sample        Fig. 1. Cost of DRAM for various memory sizes of Dell PowerEdge Blade
+                                                                        vs. low-end Flash SSD (Intel DC S3700) and high-end SSD (Intel 910).
+to reduce overhead – and perform offline analysis to estimate
+record access frequencies. We present four estimation algorithms
+based on exponential smoothing and experimentally evaluate              A. Motivation
+their efficiency and accuracy. We find that exponential smoothing          Our work is motivated by the need to manage cold data in a
+produces very accurate estimates, leading to higher hit rates           main-memory optimized OLTP database engine, code named
+than the best caching techniques. Our most efficient algorithm
+is able to analyze a log of 1B accesses in sub-second time on a
+                                                                        Hekaton, being developed at Microsoft (details in Section II-
+workstation-class machine.                                              A). Three main considerations drive our research:
+                                                                           (1) Skew in OLTP workloads. Real-life transactional work-
+                      I. I NTRODUCTION                                  loads typically exhibit considerable access skew. For example,
+   Database systems have traditionally been designed under              package tracking workloads for companies such as UPS or
+the assumption that data is disk resident and paged in and out          FedEx exhibit time-correlated skew. Records for a new
+of memory as needed. However, the drop in memory prices                 package are frequently updated until delivery, then used for
+over the past 30 years is invalidating this assumption. Several         analysis for some time, and after that accessed again only on
+database engines have emerged that optimize for the case                rare occasions. Another example is the natural skew found on
+when most data fits in memory [1], [2], [3], [4], [5], [6]. This        large e-commerce sites such as Amazon, where some items are
+architectural change necessitates a rethink of all layers of the        much more popular than others. Such preferences may change
+system, from concurrency control [7] and access methods [8],            over time but typically not very rapidly.
+[9] to query processing [10].                                              (2) Economics. It is significantly cheaper to store cold
+   In OLTP workloads record accesses tend to be skewed.                 data on secondary storage rather than in DRAM. Figure 1
+Some records are “hot” and accessed frequently (the work-               plots the current price of DRAM for various server memory
+ing set), others are “cold” and accessed infrequently, while            configurations along with the price for a high and low-end
+“lukewarm” records lie somewhere in between. Clearly, good              2TB flash SSD (plotted as constant). High-density server class
+performance depends on the hot records residing in memory.              DRAM comes at a large premium, making flash an attractive
+Cold records can be moved to cheaper external storage such              medium for cold data. In fact, using current prices Gray’s n-
+as flash with little effect on overall system performance.              minute rule [11] says that a 200 byte record should remain in
+   The work reported here arose from the need to manage                 memory if it is accessed at least every 60 minutes (Appendix E
+cold data in an OLTP engine optimized for main-memory. The              contains our derivation). “Cold” by any definition is longer
+problem is to efficiently and accurately identify cold records          than 60 minutes.
+that can be migrated to secondary storage. We propose to                   (3) Overhead of caching. Caching is a tried-and-true tech-
+perform classification offline using logged record accesses,            nique for identifying hot data [12], [13], [14], [15]. So why
+possibly using only a sample. Our best classification algorithm         not simply use caching? The main reason is the high overhead
+is very fast: it can accurately identify the hot records among          of caching in a database system optimized for main memory.
+1M records in sub-second time from a log of 1B record                   (a) CPU overhead. Main memory databases are designed
+accesses on a workstation-class machine. Because it is so fast,         for speed with very short critical paths and the overhead of
+the algorithm can be run frequently, say, once per hour or more         maintaining the data structure needed for caching on every
+if the workload so warrants.                                            record access is high. We implemented a simple LRU queue
+(doubly-linked list) in our prototype system and encountered             concludes this paper.
+a 25% overhead for updating the LRU queue on every record
+access (lookup in a hash index). The queue was not even                                       II. P RELIMINARIES
+thread-safe, so this is the minimal overhead possible. Better               Our problem is to efficiently identify the K hottest records,
+caching polices such as LRU-2 or ARC would impose an even                i.e., most frequently accessed, among a large set of records.
+higher overhead, possibly costing as much as the record access           The access frequency (heat) of each record is estimated from
+itself. (b) Space overhead. Hekaton, like several other main-            a sequence of record access observations. The K records with
+memory systems [1], [5], does not use page-based storage                 the highest estimated access frequency are classified as hot
+structures for efficiency reasons; there are only records. Our           and stored in main memory, while the remaining records are
+goal is to identify cold data on a record basis, not a page basis.       kept on secondary “cold” storage. The value of K can be
+On a system storing many millions of records, reserving an               determined by a variety of metrics, e.g., working set size or
+extra 16 bytes per record for an LRU queue adds up to a                  available memory. Data moved to cold storage is still available
+significant memory overhead.                                             to the database engine, albeit at a higher access cost. The more
+                                                                         accurately access frequencies can be estimated, the higher the
+B. Our Contributions                                                     hit rate in main memory or, conversely, the fewer expensive
+   We propose a technique for identifying hot and cold data,             trips to the cold store.
+where hot records remain in memory while cold records are                   The rest of this section covers preliminary details. We begin
+candidates for migration to secondary storage. We propose                by providing context for this work by discussing Hekaton,
+to sample record accesses during normal system runtime, and              a memory-optimized OLTP engine being developed at Mi-
+record the accesses on a consolidated log. A transaction copies          crosoft. We then outline Siberia, the cold data management
+its record access information into large (shared) buffers that           framework we are prototyping for Hekaton. We then discuss
+are flushed asynchronously only when full; the transaction               logging as a technique for storing record access observations.
+does not wait for log flushes. Sampling and logging accesses             Next we describe exponential smoothing, our technique for es-
+reduces overhead on the system’s critical path. It also allows           timating record access frequencies. Finally, we cover sampling
+us to move classification to a separate machine (or CPU core)            as a method to reduce system overhead for logging accesses.
+if necessary. Estimated record access frequencies are then
+computed from the logged accesses, and the records with the              A. The Hekaton Memory-Optimized OLTP Engine
+highest estimated frequency form the hot set.                               Microsoft is developing a memory-optimized database en-
+   The core of our technique is a set of novel algorithms for            gine, code named Hekaton, targeted for OLTP workloads.
+estimating access frequencies using exponential smoothing.               Hekaton will be described in more detail elsewhere so we
+We first explore a naive forward algorithm that scans the log            provide only a brief summary of its characteristics here.
+from beginning to end (i.e., past to present) and calculates                The Hekaton engine is integrated into SQL Server; it is not
+record access frequencies along the way. We then propose a               a separate database system. A user can declare a table to be
+backward algorithm that scans the log in reverse (i.e., present          memory-optimized which means that it will be stored in main
+to past) and calculates upper and lower bounds for each                  memory and managed by Hekaton. Hekaton has a “record-
+record’s access frequency estimate. Experiments show that the            centric” data organization, it does not organize records by page
+backward algorithm is both faster and more space efficient               (and is oblivious to OS memory pages). A Hekaton table can
+than the forward algorithm. We also show how to parallelize              have several indexes and two index types are available: hash
+the forward and backward algorithms to speed up estimation               indexes and ordered indexes. Records are always accessed
+dramatically. A recent paper described management of cold                via an index lookup or range scan. Hekaton tables are fully
+data in the HyPer main-memory database [16]; we provide a                durable and transactional, though non-durable tables are also
+detailed comparison with this work in Section VI.                        supported.
+   An experimental evaluation finds that our approach results               Hekaton tables can be queried and updated in the same way
+in a higher hit rate than both LRU-k [14] and ARC [15] (two              as regular tables. A query can reference both Hekaton tables
+well-known caching techniques). The experiments also reveal              and regular tables and a single transaction can update both
+that our algorithms are efficient, with the backward parallel al-        types of tables. Furthermore, a T-SQL stored procedure that
+gorithm reaching sub-second times to perform classification on           references only Hekaton tables can be compiled into native
+a log of 1B record accesses. We also provide a mathematical              machine code. Using compiled stored procedures is by far the
+analysis showing that exponential smoothing estimates access             fastest way to query and modify data in Hekaton tables.
+frequencies much more accurately than LRU-k.                                Hekaton is designed for high levels of concurrency but it
+   The rest of this paper is organized as follows. Section II            does not rely on partitioning to achieve this; any thread can
+provides preliminary information and the overall architecture            access any row in a table without acquiring latches or locks.
+of our framework. Our classification algorithms are presented            The engine uses latch-free (lock-free) data structures to avoid
+in Section III, while Section IV discusses how to parallelize            physical interference among threads and a new optimistic,
+them. Section V provides an experimental evaluation. Sec-                multi-version concurrency control technique to avoid interfer-
+tion VI provides a survey of related work. Finally, Section VII          ence among transactions [7].
+
+                                                                     2
+                                                                                                           0.40
+B. Siberia: A Cold Data Management Framework
+
+
+
+
+                                                                                   Std error of estimate
+                                                                                                           0.35
+   The initial release of Hekaton will require its tables to                                               0.30
+                                                                                                           0.25
+fit entirely in memory, but this will not be sufficient going                                                                                   LRU-2
+                                                                                                           0.20
+forward. The goal of our project, called Project Siberia, is                                                                                    Exp Smo
+                                                                                                           0.15
+to enable Hekaton to automatically migrate cold records to                                                 0.10
+cheaper secondary storage while still providing access to such                                             0.05
+records completely transparently. Siberia consists of four main                                            0.00
+components, each of which address a unique challenge for                                                          0   0.1          0.2
+                                                                                                                            Access frequency
+                                                                                                                                               0.3        0.4
+
+managing cold data in a main-memory system:
+                                                                          Fig. 2.    Standard error of estimated access frequency for LRU-2 and
+   • Cold data classification: efficiently and non-intrusively            exponential smoothing with α = 0.05.
+      identify hot and cold data in a main-memory optimized
+      database environment (the topic of this paper).                     D. Exponential Smoothing
+   • Cold data storage: evaluation of cold storage device op-                We use exponential smoothing to estimate record access
+      tions and techniques for organizing data on cold storage.           frequencies. Exponential smoothing calculates an access fre-
+   • Cold data access and migration mechanisms: mecha-                    quency estimate for a record r as
+      nisms for efficiently migrating, reading, and updating data
+      on cold storage that dovetail with Hekaton’s optimistic                                 estr (tn ) = α ∗ xtn + (1 − α) ∗ estr (tn−1 )                     (1)
+      multi-version concurrency control scheme [7]                        where, tn represents the current time slice, xtn represents
+   • Cold storage access reduction: reducing unnecessary
+                                                                          the observation value at time tn . In our framework xtn is
+      accesses to cold storage for both point and range lookups           1 if an access for r was observed during tn and 0 otherwise.
+      by maintaining compact and accurate in-memory access                estr (tn−1 ) is the estimate from the previous time slice tn−1 .
+      filters.                                                            The variable α is a decay factor that determines the weight
+This paper focuses solely on classifying cold and hot data.               given to new observations and how quickly to decay old
+Solutions to the other challenges are outside the scope of this           estimates. α is typically set in the range 0.01 to 0.05 – higher
+paper and will be presented in future work.                               values give more weight to newer observations.
+                                                                             We chose exponential smoothing because of its simplicity
+C. Logging and Offline Analysis                                           and high accuracy. The accuracy of an estimator is often mea-
+    Access frequencies can be estimated inline or offline. By             sured by its standard error, that is, the standard deviation of the
+inline we mean that an estimate of each record’s access                   probability distribution of the estimated quantity. For a record
+frequency or rank order is maintained in memory and updated               with true access frequency p, it canp   be shown that the standard
+on every record access. Caching policies such as LRU-k,                   error for exponential smoothing is αp(1 − p)/(2 − α) [17].
+MRU, or ARC are forced to follow this approach because                    Appendix D derives the complete distribution of estimates
+eviction decisions must be made online. In the offline approach           computed by LRU-k from which the standard error can be
+record access data is written to a log (separate from the                 computed. Figure 2 plots the standard error for LRU-2 and
+transactional log) for later offline analysis. We chose the offline       exponentially smoothing with α = 0.05. Exponential smooth-
+approach for several reasons. First, as mentioned earlier, the            ing is significantly more accurate than LRU-2.
+overhead of even the simplest caching scheme is very high.                   Poor accuracy causes records to be misclassified which
+Second, the offline approach is generic and requires minimum              reduces the in-memory hit rate and system performance. In
+changes to the database engine. Third, logging imposes very               Section V, we experimentally compare the hit rates obtained
+little overhead during normal operation. Finally, it allows               by exponential smoothing as well as the LRU-2 [14] and
+flexibility in when, where, and how to analyze the log and                ARC [15] caching techniques. Our experiments show that
+estimate access frequencies. For instance, the analysis can be            exponential smoothing is clearly more accurate that LRU-2
+done on a separate machine, thus reducing overhead on the                 and ARC and achieves a hit rate close to a fictional perfect
+system running the transactional workloads.                               classifier (a classifier that knows the true frequencies).
+    In our logging scheme, we associate each record access with
+a discrete time slice, denoted [tn , tn+1 ] (the subsequent time          E. Sampling
+slice begins at tn+1 and ends at tn+2 , and so on). Time is                  Logging every record access produces the most accurate
+measured by record accesses, that is, the clock “ticks” on every          estimates but the overhead may degrade system performance.
+record access. In the rest of this paper, we identify a time              Therefore, we consider logging only a sample to reduce system
+slice using its beginning timestamp (e.g., tn represents slice            overhead. To implement sampling, we have each worker thread
+[tn , tn+1 ]). A time slice represents a discrete period when             flip a biased coin before starting a new query (where bias
+a record access was observed, so conceptually our log stores              correlates with sample rate). The thread records its accesses
+(RecordID, TimeSlice) pairs. Physically, the log stores a list            in log buffers (or not) based on the outcome of the coin flip.
+of record ids in access order delineated by time markers that             In Section V, we report experimental results showing that
+represent time slice boundaries.                                          sampling 10% of the accesses reduces the accuracy by only
+
+                                                                      3
+                                                                                            R2         R4                          R2
+2.5%, which we consider a tolerable trade-off for reducing log                       log
+                                                                                                  R3
+                                                                                                                             log        R3 R4
+                                                                                                                      tn-4
+buffer writes by 90%.                                                         tn                            R5                                    Kth lower
+                                                                                                                 R6                         R5
+                                                                                th
+                                                                               K lower                                                           R6
+             III. C LASSIFICATION A LGORITHMS                                              R1
+
+   We now describe algorithms for classifying records as hot
+and cold. The input and output of the algorithms is exactly the                      (a) At time slice tn                     (b) At time slice tn−4
+same but they differ in how the result is computed. They all
+take as input (1) a log L that stores record access observation                                 Fig. 3.     Backward classification example
+(as discussed in Section II-C), (2) a parameter K signifying
+                                                                         set, resulting in a memory footprint proportional to the number
+the number of records to classify as “hot”. They all employ
+                                                                         of hot records instead of the total number of records.
+exponential smoothing (Section II-D) to estimate record access
+                                                                            1) Bounding Access Frequency Estimates: While reading
+frequency. The algorithms report the “hot” record set as the K
+                                                                         the log in reverse and encountering an access to a record r at
+record with the highest estimated access frequency. The rest
+                                                                         time slice tn , the backward algorithm incrementally updates a
+of the records are “cold”.
+                                                                         running backwards estimate estb as
+   We first briefly present a naive forward algorithm that scans
+the log from a beginning time period tb to an end time                               estbr (tn ) = α(1 − α)(te −tn ) + estbr (tlast )                         (3)
+period te (where tb < te ). We then present a novel backward
+algorithm that reads the log in reverse, starting from te , and          where estbr (tlast ) represents the backward estimate calculated
+attempts to preemptively stop its scan before reaching tb while          when record r was last encountered in the log at time slice
+still ensuring correct classification.                                   tlast (where tlast > tn since we are scanning in reverse). This
+                                                                         recursive equation can be derived easily from the non-recursive
+A. Forward Algorithm                                                     (unrolled) version of the formula for exponential smoothing.
+  The forward algorithm simply scans the log forward from a              Using the backward estimate, we can compute an upper bound
+beginning time slice tb (we assume tb = 0). Upon encounter-              for a record r’s actual estimate value at time slice tn as
+ing an access to record r at time slice tn , it updates r’s cur-                      upEstr (tn ) = estbr (tn ) + (1 − α)te −tn +1                           (4)
+rent access frequency estimate estr (tn ) using the exponential
+smoothing equation                                                       In this equation, te represents the end time slice in the log.
+                                                                         The value produced by this equation represents the largest
+       estr (tn ) = α + estr (tprev ) ∗ (1 − α)(tn −tprev )   (2)        access frequency estimate value r can have, assuming that we
+where tprev represents the time slice when r was last observed,          encounter it at every time slice moving backward in the log.
+while estr (tprev ) represents the previous estimate for r at            Likewise, the lower bound on r’s estimated value is
+that time. To avoid updating the estimate for every record                            loEstr (tn ) = estbr (tn ) + (1 − α)te −tb +1                           (5)
+at every time slice (as implied by Equation 1), Equation 2
+decays the previous estimate using the value (1 − α)(tn −tprev ) .       This lower bound is the lowest estimate value r can have,
+The exponent (tn − tprev ) allows the estimate to “catch up”             assuming we will not encounter it again while scanning
+by decaying the previous estimate across time slices when r              backward. As the backward classification approach continues
+was not observed in the log (i.e., when value xtn = 0 in                 processing more record accesses, the upper and lower bounds
+Equation 1). Once the forward algorithm finishes its scan, it            converge toward an exact estimate. The promise of this ap-
+ranks each record by its estimated frequency and returns the             proach, however, is that a complete scan of the log may not
+K records with highest estimates as the hot set.                         be necessary to provide a correct classification. Rather, the
+   This forward algorithm has two primary drawbacks: it                  algorithm can preempt its backward scan at some point and
+requires a scan of the entire log and it requires storage                provide a classification using the (inexact) bound values.
+proportional to the number of unique record ids in the access               2) Backward Classification Optimizations: In order to pro-
+log. In the next section, we propose an algorithm that addresses         vide an intuition and outline for the backward classification
+these two drawbacks.                                                     approach, Figure 3(a) gives an example of upper and lower
+                                                                         bounds for six records (R1 through R6 ) after scanning the
+B. Backward Algorithm                                                    log back to time slice tn . Assuming K = 3, five records (R2
+  We would like to avoid scanning the entire log from be-                through R6 ) are in contention to be in the hot set, since their
+ginning to end in order to improve classification performance.           upper bounds lie above the kth lower bound defined by R3 .
+In this vein, we propose a backward algorithm that attempts                 We use the kth lower bound to provide two important op-
+to preempt the computation early. The core idea is to scan               timizations that reduce processing costs. (1) We drop records
+the log in reverse and derive successively tighter upper and             with upper bound values that are less than the kth lower bound
+lower bounds on the estimates for the records encountered.               (e.g., record R1 in the example). By definition, such records
+Occasionally, the algorithm performs classification using these          cannot be part of the hot set. (2) We translate the value of the
+bounds to hopefully terminate the scan early. The algorithm              kth lower bound to a time slice in the log named the accept
+only stores estimates for records still in contention for the hot        threshold. The accept threshold represents the time slice in
+
+                                                                     4
+Algorithm 1 Backward classification algorithm                                                is then used to define the accept threshold value acceptT hresh
+ 1: Function BackwardClassify(AccessLog L, HotDataSize K)                                    (Line 5), defined by Equation 6.
+ 2: Hash Table H ← initialize hash table
+ 3: Read back in L to fill H with K unique records with calculated bounds                       After the initialization phase completes, the algorithm scans
+ 4: kthLower ← RecStats r ∈ H with smallest r.loEst value                                    the log in reverse reading the next rid. If rid does not exist in
+ 5: acceptT hresh ← ⌊te − log(1−α) kthLower⌋
+ 6: while not at beginning of L do                                                           the hash table and the current time slice (L.curT ime) is less
+ 7:    rid ← read next record id from L in reverse                                           (older) than acceptT hresh, we discard rid and read the next
+ 8:    RecStats r ← H.get(rid)
+ 9:    if r is null then                                                                     record (Line 11). Otherwise, we initialize a new RecStats
+10:        /* disregard new record ids read after acceptT hresh time slice */                object for the record (Line 12). Next, the algorithm updates
+11:        if L.curT ime ≤ acceptT hresh then goto line 6
+12:        else initialize new r                                                             the backward estimate and upper and lower bound values using
+13:    end if                                                                                Equations 3 through 5, respectively, and the RecStats object
+14:    update r.estb using Equation 3
+15:    H.put(rid,r)                                                                          is put back into the hash table (Line 14-15).
+16:    /* begin filter step - inactivate all records that cannot be in hot set*/                When the algorithm reaches the end of a time slice in log L,
+17:    if end of time slice has been reached then
+18:        ∀r ∈ H update r.upEst and r.loEst using Equations 4 and 5                         it commences a filter step that attempts to deactivate records
+19:        kthLower ← find value of kth lower bound value in H                               that are out of contention for the hot set and terminate early.
+20:        ∀r ∈ H with r.upEst ≤ kthLower, remove r from H
+21:        if num records ∈ H is K then goto line 25                                         The filter step begins by adjusting the upper and lower bounds
+22:        acceptT hresh ← ⌊te − log(1−α) kthLower⌋                                          (Equations 3 through 5) of all active records in H as of the
+23:    end if
+24: end while                                                                                current time slice of the scan defined by L.curT ime (Line 18).
+25: return record ids in H with r.active = true                                              This step adjusts the distance between upper and lower bounds
+                                                                                             to be uniform between all active records. Next, the algorithm
+                                                                                             finds the current kth lower bound value and removes from the
+the log where we can instantly discard any new record ids                                    hash table H all records with upper bounds lower than the new
+observed at or beyond the threshold, since we can guarantee                                  kth lower bound (Lines 19- 20). Removing records allows us
+that these records will have an upper bound less than the kth                                to shrink the hash table size, reducing space overhead and
+lower bound. The accept threshold is computed as                                             allowing for more efficient filter operations in the future. (We
+                                                                                             discuss the correctness of removing records in Appendix A.) If
+        T hreshold = te − ⌊log(1−α) kthLowerBound⌋                                 (6)       the number of records in H equals K, the algorithm ends and
+                                                                                             reports the current set of active records as the hot set (Line 21).
+where te is the log’s end time slice. Since the accept threshold                             Otherwise, the filter step ends by calculating a new accept
+allows the algorithm to instantly disregard records with no                                  threshold based on the new kth threshold (Line 22). This
+chance of making the hot set, it greatly limits the memory                                   adjustment moves the accept threshold closer to the current
+requirements of the hash table used by the algorithm. As                                     scan point in the log. That is, since the kth threshold is greater
+we will see in our experiments (Section V), this optimization                                than or equal to the last kth threshold, the new accept threshold
+allows the memory requirements of the algorithm to stay close                                is guaranteed to be greater than or equal to the last accept
+to optimal (i.e., close to the hot set size).                                                threshold. In the worst case, the algorithm ends when a scan
+   Another primary advantage of the backward strategy is its                                 reaches the beginning of the log. At this point, all calculated
+ability to end scanning early while still providing a correct                                access frequency estimates are exact (i.e., upper and lower
+classification. As a concrete example, Figure 3(b) depicts our                               bounds are the same), thus the algorithm is guaranteed to find
+running example after reading back four time slices in the                                   K hot records.
+log to tn−4 . At this point, the bounds have tightened leading
+to less overlap between records. Here, the kth lower bound is                                               IV. PARALLEL C LASSIFICATION
+defined by R4 , and only three records are in contention for the
+hot set (R2 , R3 , and R4 . At this point, we can stop scanning                                 We now turn to a discussion of how to parallelize the classi-
+the log and report a correct hot set classification, since no                                fication task. In this section, we first discuss a parallel version
+other records have upper bounds that cross the kth threshold.                                of the forward classification algorithm. We then discuss how
+   3) Algorithm Description: Algorithm 1 (BackwardClassify)                                  to parallelize the backward classification approach.
+provides the pseudo-code for the backward algorithm. First,
+                                                                                             A. Parallel Forward Algorithm
+BackwardClassify creates a hash table H to store running
+estimates for each record it processes (Line 1). Table H                                        Record id partitioning. One way to parallelize the forward
+maps a record id rid to a structure RecStats containing three                                algorithm presented in Section III-A is to split the log into
+fields: (a) backEst, the running backward access frequency                                   n pieces (hash) partitioned by record id. To perform classi-
+estimate (Equation 3), (b) loEst, a record’s lower-bound                                     fication, we assign a worker thread to each partition. Each
+access frequency estimate (Equation 5), and (c) upEst, a                                     thread uses the serial forward algorithm (Section III-A) to
+record’s upper-bound access frequency estimate (Equation 4).                                 calculate access frequencies for its set of records. After each
+The algorithm scans backward in the log to fill H with an                                    thread finishes, a final step finds the hot set by retrieving the
+initial set of K unique records and then finds kthLower, the                                 K records with highest access frequency estimates across all
+value of the k th lower bound (Line 4). The value of kthLower                                partitions.
+
+                                                                                         5
+                                  tp                                                Algorithm 2 Backward parallel classification
+tB                                                                       tE          1: Function BackParController(HotDataSize K, NumParts n)
+                                                                                     2: /* Phase I: Initialization */
+                                                                                                                                            th
+                                                                                     3: Request from each worker (1) knlb: lower bound of K
+                                                                                                                                          n    record, (2) up: num
+                                                                                        records with upper bounds above knlb, (3) low: num records with lower bound
+       Fig. 4.   Exponential smoothing broken up on time boundary                       above knlb.
+                                                                                     4: /* Phase II: Threshold search */
+                                                                                     5: Q ← median knlb reported from Phase I
+   Time slice partitioning. Another parallelization approach                         6: tlow ← total low count from all workers
+is to use a single log but partition the workload by time slices.                    7: tup ← total up count from all workers
+                                                                                     8: if tlow < K then decrease Q
+To illustrate the intuition behind this approach, we unroll                          9: else increase Q
+the recursive exponential smoothing estimate function from                          10: issue ReportCounts(Q) command to workers, get new tlow and tup values
+                                                                                    11: if |tup − tlow| > 0 then issue T ightenBounds command to workers
+Equation 2 obtaining                                                                12: repeat steps 8- 11 until tlow = K and |tup − tlow| = 0
+                                                                                    13: /* Phase III: Finalization */
+                          tn
+                          X                                                         14: List S ← record ids from all workers with upper bound estimates above Q
+         estr (tn ) = α          xtn−i (1 − α)i−1 + (1 − α)tn            (7)        15: return S
+                                                                                    16:
+                          i=tb                                                      17: Function BackParWorker(LogPartition L, ControllerCommand C)
+                                                                                    18: if C = Initialization then
+   Here, tb represents the beginning time slice in the log, tn                      19:     read back in L far enough to find knlb, low, and up
+is the current time slice, while xtn−i represents an observed                       20:     return knlb, lower, and upper to controller
+                                                                                    21: else if C = ReportCounts(Q) then
+value at time slice tn−i (0 or 1 in our case). Figure 4 depicts                     22:     perform new counts for low and up given Q
+a hypothetical log broken into two segment delineated by                            23:     return new low and up values to controller
+time slices tp . Under each segment is the summation from                           24: else if C = TightenBounds then
+                                                                                    25:     read back in L to tighten upper and lower bounds for all records
+Equation 7 representing the segment’s “contribution” to the                         26: else if C = Finalize(Q) then
+                                                                                    27:     return record ids with upper bounds above Q to controller
+access frequency estimate value. The circled term and arrow                         28: end if
+in the figure highlight that only a single term in the summation
+of the last segment relies on the estimate value calculated from
+the previous segment. This property is true for n segments as
+well: only a single term in the summation for each of the                           When logging an access during runtime, the system uses a
+n segments relies on the estimate calculated in the previous                        hash function to direct the write to the appropriate log stream.
+segment so the bulk of the calculation for each segment can                            In this approach, a single controller thread manages a set
+be done in parallel.                                                                of worker threads each assigned to a single log partition. The
+   The forward parallel algorithm splits the log into n parti-                      controller uses the workers to perform a distributed search
+tions on time slice boundaries, where each partition contains                       for a hot set. The worker threads are responsible for reading
+consecutive time slices and the number of time slices in                            back in their logs and maintaining backward estimates, upper
+each partition is roughly equal. We assign a worker thread                          bounds, and lower bounds using Equations 3 through 5 in the
+to each partition, whose job is to scan its log partition                           same way as the serial backward algorithm. The controller
+forward and calculate partial access frequency estimates for                        thread, meanwhile, issues commands to the workers asking
+the records it encounters (using the serial forward algorithm                       for upper and lower bound counts around a given threshold
+from Section III-A). Each thread stores its estimate values in                      and also instructs the workers how far to read back in their
+a separate hash table.1 At the end of this process, we have                         logs. Algorithm 2 provides the psuedo-code for both controller
+n hash tables populated with the partial estimate values from                       and workers outlining the backward-parallel approach. This
+each log segment. For ease of presentation, we assume hash                          algorithm works in three main phases, namely initialization,
+table H[n] covers the tail of the log, H[n − 1] covers the                          threshold search, and finalization.
+partition directly before partition n, and so forth. We then                           1) Phase I: Initialization: The goal of the initialization
+apply an aggregation step that computes final estimates for                         phase (Line 3) is to have each worker thread report to the
+each record using the partial estimates in the n hash tables.                       controller an initial set of statistics to determine the “quality”
+The K records with highest complete estimate values are then                        of the records contained in each worker’s log. In a perfect
+returned as the hot set.                                                            world, each worker will hold K     n records that contribute to the
+                                                                                    hot set. This is rarely, if ever, the case. Since the controller has
+B. Parallel Backward Algorithm
+                                                                                    no a priori information about the records in the log, it requests
+   We now discuss a parallelization strategy for the backward                       that each worker read back in its log partitions far enough to
+approach. Unlike the forward approach, we want to avoid                             find (a) knth, the lower-bound estimate of the partition’s K
+                                                                                                                                                      th
+                                                                                                                                                    n
+partitioning the workload by time, since the point of backward                      hottest record, (b) low a count of the number of records that
+classification is not to scan back to the beginning time slice                      have lower bounds above or equal to knth, and (c) up, a count
+in the log. Therefore, our parallel backward classification                         of the number of records with upper bounds above knth. To
+approach assumes the log is partitioned into n pieces by record                     report accurate counts, each worker must read back far enough
+id. Our partitioning strategy creates n separate log streams.                       to ensure it has read all records that can possibly have upper
+ 1 For presentation clarity we use n separate hash tables to store estimates.       bound estimates greater than the knth threshold. We ensure
+We can also use a shared hash table.                                                that this happens by translating the value knth to a time slice
+
+                                                                                6
+t in the log using Equation 6 (the equation used to defined                command in order to converge the total count resolution. This
+accept threshold in serial backward classification algorithm).             search process continues until the tlow count is K, and the
+All records read before reaching t will have upper bounds                  absolute difference between tup and tlow is equal to zero.
+above knth.                                                                   As an example of how this process works, we can return to
+   Figure 5(a) provides a graphical example of this initializa-            the example data in Figure 5(a), assuming K = 9. The search
+tion phase for three worker threads and K value of 9. In this              phase begins with the controller picking an initial threshold
+example, worker w1 reports a knth estimate of 0.7, a low                   value of 0.7 (the median knth value from the initialization
+count of 3 and an up count of 6. For worker w2 , knth is 0.6,              phase). After issuing the command ReportCounts(0.7), assume
+low is 3, and up is 7, meanwhile for w4 , knth is 0.8, low is              that tup = 21 and tlow = 11. At this point, the difference
+3 and up is 8. This data serves as a running example for the               between tup and tlow is above zero, so the controller issues
+rest of this section to describe the algorithm.                            a TightenBounds command. The controller next sets Q to 0.8
+   2) Phase II: Threshold Search: The goal of the threshold                (the next highest knth value reported during initialization),
+search phase (Lines 5- 12) is to search for a common threshold             since tlow is currently greater than K. After issuing the com-
+across all log partitions guaranteed to yield a final hot set size         mand ReportCounts(0.8). Assume tlow = 6 and tup = 7.
+of K. The basic idea of this phase is to use the knth threshold            Since tlow value is now less than K, the controller sets Q
+values, up, and low counts reported in the initialization phase            to 0.75 (the average of the previous and current Q values).
+as a search space for finding a threshold that will yield the              Figure 5(b) provides an example of the data after the controller
+correct hot set. We know that such a threshold value must exist            issues the command ReportCounts(0.75), where worker w1
+between the highest and lowest knth threshold values reported              returns up and low counts of 3, w2 returns up and low counts
+from the workers in the initialization phase (Appendix B pro-              of 2, and w3 returns up and low counts of 4. At this point,
+vides an intuitive explanation).                                           tlow = 9 and the absolute difference between tlow and tup
+   During this phase, the controller communicates with the                 is zero, and the search process ends.
+workers using two commands:                                                   3) Phase III: Finalization: In this phase (Line 14), the
+   • TightenBounds: this command requests that each worker                 controller threads sends the worker a final threshold value Q.
+      read back in its log partition further in order to tighten the       Each worker then reports to the controller all record ids in its
+      upper and lower bound estimates for its records. Scanning            log partition with upper bound values above Q. The controller
+      further back in the log guarantees that the upper and lower          then returns the union of these record ids as the hot set.
+      bounds for all records will converge and reduce overlap
+      between records. This means the gap between up and                                         V. E XPERIMENTS
+      low counts will converge, giving the controller a better                In this section, we experimentally evaluate the hit rate ob-
+      resolution of the number of records in contention for the            tained by the exponential smoothing estimation method as well
+      hot set.                                                             as the performance of our algorithms. All experiments were
+   • ReportCounts(Q): this command asks each worker to re-                 implemented in C/C++ and run on an Intel Core2 8400 at 3Ghz
+      port their up and low counts for a given threshold Q. The            with 16GB of RAM running Windows 7. The input in our
+      controller uses this information to test how many records            experiments consists of 1B accesses for 1M records generated
+      are in contention for the hot set at a given threshold value.        using two distributions: (1) Zipf with parameter s = 1 and
+   To perform the search, the controller first picks the me-               (2) TPC-E using the TPC-E non-uniform distribution. For the
+dian threshold value Q reported from the initialization phase              exponential smoothing method, we set the time slice size to
+and issues a ReportCounts(Q) command to each worker. The                   10,000 accesses, while the default hot data set size is 10% of
+workers then return their low and up counts. The total low                 the number of records.
+count from all workers tlow represents the lower bound count                  Our experimental evaluation is organized as follows. In Sec-
+for records in contention to be in the hot set at threshold Q.             tion V-A, we compare the hit rate obtained using the exponen-
+Likewise, the total up count tup represents the upper bound                tial smoothing approach to that of a fictional perfect estimator,
+count for records in contention for the hot set. If tlow is                as well as two well-known caching techniques, LRU-2 and
+below K (i.e., too few records are in contention), the controller          ARC. In Section V-B, we evaluate the effect of sampling on
+reduces Q in order to yield more records. On the other hand,               the hit rate. Finally, Section V-C studies the performance and
+if tlow is above K, it increases Q. Initially, choosing a new              space overhead of our classification algorithms.
+value for Q involves taking the next step (greater or less)
+in the list of threshold values generated in the initialization            A. Hit Rate Comparison
+phase. After such a move causes the tlow count to become                      In this section, we experimentally evaluate the hit rate ob-
+too low (or too high), the search makes incremental half-steps             tained by exponential smoothing (abbr. ES). This experiment
+(like binary search) between the current Q and previous Q                  feeds the 1B record accesses to the classifier, whose job is
+value. After finding a new Q, the controller issues another                to rank order records according to their estimated access fre-
+ReportCounts(Q) command and receives new tlow and tup                      quency and identify the top K% of the records as the hot
+counts. If at any point, the absolute difference between tlow              set. We then count the number of accesses to “hot” records
+and the total tup is greater than zero, it issues a TightenBounds          (out of the 1B) that the classifier would produce for varying
+
+                                                                       7
+                                                           Controller                                                                                      Controller
+                                                                                                                                                        ReportCounts(0.75)
+                                     knth: 0.7           knth: 0.6               knth: 0.8
+                                   up: 6 low: 3        up: 7 low: 3            up: 8 low: 3                       up: 3 low: 3                           up: 2 low: 2        up: 4 low: 4
+                                        w1                    w2                        w3                                                 w1                   w2                 w3
+
+
+                                                                        .08                                0.75
+                              .07
+                                                     .06
+
+
+                                                      (a) Initialization                                     (b) Controller issuing command ReportCounts(0.75)
+                                                                              Fig. 5.    Backward parallel classification example
+                                      ES                ES (10%)         LRU2                                                                    ES               ES (10%)         LRU2
+                                      LRU2 (10%)        ARC              ARC (10%)                                                               LRU2 (10%)       ARC              ARC (10%)
+                              18                                                                                                           30
+
+
+
+
+       Loss in Hit Rate (%)                                                                                         Loss in Hit Rate (%)
+                              16
+                                                                                                                                           25
+                              14
+                              12                                                                                                           20
+                              10
+                                                                                                                                           15
+                               8
+                               6                                                                                                           10
+                               4
+                                                                                                                                           5
+                               2
+                               0                                                                                                           0
+                                    0.10 0.20 0.40 0.80 1.60 3.10 6.30 12.5025.0050.00                                                          0.10 0.20 0.40 0.80 1.60 3.10 6.30 12.5025.0050.00
+                                      Hot Data Size (% of Database Size)                                                                          Hot Data Size (% of Database Size)
+                                           Fig. 6.   Loss in hit rate (Zipf)                                                                          Fig. 7.   Loss in hit rate (TPC)
+
+                                                                                                           B. Effect of Sampling
+hot data sizes. We compare ES to a fictional perfect classifier                                               As mentioned in Section II-E, sampling is very attractive to
+(abbr. Perfect) that knows exact access frequencies and thus                                               our framework as it reduces the overhead of logging record
+identifies the hot set with exact precision.                                                               accesses. Sampling can also be applied to LRU-2 and ARC
+   We also compare ES with two well-known cache replace-                                                   to reduce their overhead. We implement sampling as follows.
+ment techniques: (1) LRU-2 [14], which ranks records based                                                 On a hit in the cache – presumably the most common case –
+on the distance between the last two accesses to the record.                                               we randomly choose, with a probability equal to the sampling
+(2) ARC [15], a method that manages its cache using two                                                    rate, whether to update the LRU-2 or ARC queues. On a miss
+queues, one for “recency” (i.e., recently requested single-access                                          we don’t have a choice: the record has to be brought in and
+items) and the other for “frequency” (i.e., recently requested                                             the queues updated.
+items with multiple accesses). ARC adaptively adjusts the size                                                The gray dashed lines in Figures 6 and 7 plot the results for
+of each queue to react to workload characteristics.                                                        each method when sampling 10% of the total accesses (i.e.,
+   The dark solid lines in Figure 6 plot the loss in hit rate                                              dropping 90% of the accesses) when compared to the Perfect
+caused by each method for varying hot data sizes using the                                                 classifier. LRU-2 exhibits a roughly 3x accuracy degradation
+Zipf distribution. Loss in hit rate is the difference between                                              for both data sets when sampling is a applied. ARC is more
+the hit rate for each tested method and the Perfect classifier.                                            oblivious to sampling with a consistent 1.75x drop in accuracy.
+ES is consistently the most accurate, maintaining a loss in hit                                            However, ES is still more accurate when accesses are sampled,
+rate below 1% for all hot data sizes. LRU-2 remains fairly                                                 showing at most a 3.2 percentage point loss in hit rate.
+accurate for small hot set sizes, but exhibits a hit rate loss                                                Focusing on ES, for smaller hot data sizes (less than 1%
+as high as 7.8% for larger hot set sizes. ARC produces a                                                   of the the database size), sampling does not have a noticeable
+consistent 2% loss in hit rate, outperforming LRU-2 for most                                               effect on accuracy. However, for larger hot data sizes, sampling
+hot data sizes, a result that is consistent with the original ARC                                          decreases the accuracy of ES. A likely explanation is that for
+experiments [15].                                                                                          both the Zipf and TPC-E distributions, most of the accesses
+   Figure 7 provides the loss in hit rate when using accesses                                              are skewed toward a small number of records. Sampling does
+following the TPC-E distribution. Again, the ES approach con-                                              not noticeably affect frequency estimations for these records.
+sistently tracks the Perfect classifier, maintaining a loss in                                             However, for records with fewer accesses, sampling reduces
+hit rate well below 1%. ARC and LRU-2 are considerably                                                     the accuracy of the estimates, thus causing errors in the rank
+less accurate, reaching a loss in hit rate of 6.5% and 8.5%,                                               ordering used for classification. While sampling clearly re-
+respectively. These experiments show that ES is consistently                                               duces the hit rate, we believe the loss is still manageable.
+accurate and motivate our use of exponential smoothing.                                                    For instance, a sample rate of 10% introduces only a roughly
+
+                                                                                                       8
+                                                                                                                           Fwd-P           Fwd    Back-P   Back   Min
+2.5% drop in hit rate compared with logging and analyzing all
+                                                                                                                          1.6
+accesses. We see this as a tolerable trade-off for eliminating                                                                     8.00          8.00      8.00     8.00
+                                                                                                               Millions
+
+
+
+
+                                                                                     Maximum Hash Table Size
+                                                                                                                          1.4
+90% of logging activity.                                                                                                  1.2
+                                                                                                                           1
+C. Performance                                                                                                            0.8
+
+   In this section, we study the performance of the classifica-                                                           0.6
+                                                                                                                          0.4
+tion algorithms presented in Sections III and IV. All experi-
+                                                                                                                          0.2
+ments report the time necessary for each algorithm to perform
+                                                                                                                           0
+classification on a log of 1B accesses. We use eight threads                                                                         0.1           10        40         80
+
+for the parallel algorithms.                                                                                                      Hot Data Size (% of Total Data)
+   1) Varying Hot Data Set Sizes: Figures 8(a) and 8(b) plot                                                                    Fig. 9.     Space overhead (Zipf)
+the performance of the forward (abbr. Fwd), forward parallel
+(abbr. Fwd-P), backward (abbr. Back), and backward parallel               backward algorithms start to see an overwhelming amount of
+(abbr. Back-P) classification algorithms using both the Zipf              overlap between upper and lower bounds and thus are unable
+and TPC-E data sets. The run time of each algorithm remains               to quickly delineate a threshold to determine the hot set. For
+relatively stable as the hot set size increases, with Back-P              time slice sizes of 1M accesses, early termination is even more
+demonstrating the best performance. For the Zipf experiments,             difficult for these algorithms.
+the run time for Back-P increases from 0.03 seconds to 4.7                   Figure 8(d) reports the classification times for the TPC-
+seconds as the hot set size increases from 0.1% to 80% of the             E dataset. The results are similar in nature to the Zipf ex-
+data size. The run time for the serial Back increase from 0.03            periments. However, classification times across the board are
+seconds to 14 seconds. The run time for the Fwd algorithm                 slightly higher for reasons similar to those discussed in Sec-
+remains relatively stable around 205 seconds for most hot                 tion V-C.1.
+set sizes, while the Fwd-P algorithm finishes in around 46                   3) Space Overhead: Figures 9 and 10 depict the space used
+seconds. The results for the TPC-E data reveal similar results            by each algorithm for varying hot data sizes. We measure
+but the run times for all algorithms are slightly higher across           space overhead as the maximum number of entries that each
+the board. This is caused by less skew in the TPC-E data.                 algorithm stores in its hash table. The Min bar in the graph
+   2) Varying Accesses per Time Slice: Figures 8(c) and 8(d)              represents the minimum number of entries possible for each
+plot the performance of each algorithm as the number of ac-               hot set size (i.e., the number of records in the hot set).
+cesses per time slice increase from ten to 1M. In the extreme                The Fwd algorithm has space overhead equivalent to the
+case of 1M accesses per slice (i.e., the total number of records          number of unique record in the access log (in our case 1M).
+in our experiments), it is likely that all records will have nearly       The Fwd-P requires the most space of all algorithms, requiring
+the same access frequency estimates, since there is a greater             roughly 6.7M entries for the TPC workload and 8M entries
+chance that an access for each record will be present in each             for the Zipf workload. The reason is that a record id may be
+time slice. While we do not expect such a scenario in real life           present in several log partitions, meaning each worker thread
+(i.e., time slice sizes should be set to a fraction of the total          will store its own statistics for that record. The Back algorithm
+data size in practice), we test these extreme cases to explore            uses the accept threshold to only keep records in its hash
+the boundaries of our classification algorithms.                          table that are in contention for the hot set. As we can see, this
+   Figure 8(c) depicts the results for the Zipf data set. The             optimization allows the space overhead of Back to stay close to
+classification time for Fwd slowly decreases as the number                the optimal Min overhead. Meanwhile, the Back-P algorithm
+of time slices decrease. We believe this trend is mostly due              also tracks the Min overhead fairly closely. It requires space
+to increased redundancy within a time slice: since a record’s             overhead slightly more than that used by Back, since some
+estimate is only updated once per time slice, subsequent ac-              worker threads will maintain local statistics for records that
+cesses for the same record in the same slice will not trigger             end up not making it into the hot set. Overall, the backward
+an update. Back and Back-P demonstrate superior performance               variants of the algorithms are clearly superior in terms of space
+for smaller time slices, but show a steep performance decline             requirements.
+for the larger time slices. For time slices that contain between
+ten and 10K accesses, the classification times for the Back-P             D. Discussion
+algorithm remain in the sub-second range going from 0.039                    Our experiments show the relative strengths of our classi-
+seconds to 0.96 seconds, while times for the Back algorithm               fication framework. We now briefly summarize two scenarios
+increase from 0.031 seconds to 8.03 seconds in this range.                where this approach is not applicable. (1) Detecting rapid
+   For small time slice sizes, both algorithms are able to ter-           access fluctuations. Our framework is not designed to de-
+minate early but, for larger time slices, the performance of              tect rapid, short-lived changes in access patterns. We aim to
+both backward algorithms degrades. In this case, many records             observe access patterns over a longer period (on our log) to
+have overlapping upper and lower bounds due to the greater                ensure that infrequently accessed records are sufficiently cold
+chance that most records will have an access within each                  and are likely to remain cold. (2) Use with very low sample
+time slice. At 100K (i.e., the size of the hot set size), the             rates. If sampling rates are very low (e.g., possibly due to a
+
+                                                                      9
+                                                                                                                                                                                                                                                      Fwd      Fwd-P        Back   Back-P                                          Fwd      Fwd-P        Back   Back-P
+                                   Fwd          Fwd-P                                   Back           Back-P                                                 Fwd          Fwd-P          Back        Back-P
+                                                                                                                                                                                                                                                300                                                                          300
+
+
+
+
+                                                                                                                                                                                                                    Classification Time (sec)                                                    Classification Time (sec)
+                             300                                                                                                                        300
+
+
+
+
+ Classification Time (sec)
+                                                                                                                            Classification Time (sec)
+                                                                                                                                                                                                                                                250                                                                          250
+                             250                                                                                                                        250
+
+                                                                                                                                                                                                                                                200                                                                          200
+                             200                                                                                                                        200
+
+                             150                                                                                                                        150                                                                                     150                                                                          150
+
+                             100                                                                                                                        100                                                                                     100                                                                          100
+
+                             50                                                                                                                         50                                                                                      50                                                                           50
+
+                              0                                                                                                                          0                                                                                       0                                                                            0
+                                   0.1      1                             10           20      40         50    80                                            0.1      1      10          20     40    50      80                                     10      100      1K    10K   100K     1M                                     10      100      1K    10K   100K     1M
+                                         Hot Data Size (% of Total Data)                                                                                            Hot Data Size (% of Total Data)                                                        Num Accesses per Time Slice                                                  Num Accesses per Time Slice
+
+                                                               (a) Zipf                                                                                                     (b) TPC                                                                                 (c) Zipf                                                                     (d) TPC
+Fig. 8. Performance of classification algorithms. Figures (a) and (b) plot performance for varying hot set sizes. Figures (c) and (d) plot performance for
+varying number of accesses per time slice.
+
+                                                                                       Fwd-P              Fwd         Back-P                                  Back           Min
+                                                                                                                                                                                                                                                 frequency estimates in order to potentially terminate early.
+                                                                                      1.6
+                                                                                                6.72                 6.72                                     6.72                 6.72                                                          This gives the techniques a flavor of “top-k” query processing
+                                                                           Millions
+
+
+
+
+                                                Maximum Hash Table Size
+                                                                                      1.4
+                                                                                      1.2                                                                                                                                                        (see [24] for an extensive survey). The problem we study in
+                                                                                       1                                                                                                                                                         this paper is not equivalent to top-k processing, since our envi-
+                                                                                      0.8                                                                                                                                                        ronment differs in two fundamental ways: (1) Top-k process-
+                                                                                      0.6                                                                                                                                                        ing ranks objects by scoring tuples using a monotonic function
+                                                                                      0.4
+                                                                                                                                                                                                                                                 applied to one or more of the tuple’s attributes. The problem
+                                                                                      0.2
+                                                                                       0
+                                                                                                                                                                                                                                                 we study deals with efficiently estimating access frequencies
+                                                                                                    0.1                10                                       40                   80                                                          based on logged record accesses. (2) To run efficiently, all
+                                                                                                    Hot Data Size (% of Total Data)                                                                                                              top-k techniques assume sorted access to at least a single
+                                                                                            Fig. 10.           Space overhead (TPC)                                                                                                              attribute used to score the tuple [24]. Our proposed algorithms
+                                                                                                                                                                                                                                                 scan accesses as they were logged, and do not assume any
+high load on the system), the accuracy of our estimates may                                                                                                                                                                                      preprocessing or sort order.
+drop outside of a reliable threshold. This is true of any es-
+timation technique including well-known caching approaches.
+However, we find that a 10% sampling rate provides estimates                                                                                                                                                                                        Cold data in main-memory databases. The HyPer system
+that are accurate enough while sufficiently reducing access                                                                                                                                                                                      is a main-memory hybrid OLTP and OLAP system [2]. HyPer
+logging on the system’s critical path.                                                                                                                                                                                                           achieves latch-freedom for OLTP workloads by partitioning ta-
+                                                                                                                                                                                                                                                 bles. Partitions are further broken into “chunks” that are stored
+                                                                                               VI. R ELATED W ORK                                                                                                                                in a decomposed storage model in “attribute vectors” with each
+   Main memory OLTP engines. There has been much work                                                                                                                                                                                            attribute vector stored on a different virtual memory (VM)
+recently exploring OLTP engine architectures optimized for                                                                                                                                                                                       page. This approach enables VM page snapshoting for OLAP
+main-memory access [1], [3], [4], [5], [6]. Research prototypes                                                                                                                                                                                  functionality. HyPer has a cold-data management scheme [16]
+in this space include H-Store [18], [5], HYRISE [1], and                                                                                                                                                                                         capable of identifying cold transactional data, separating it
+HyPer [2]. Commercial main-memory systems are currently                                                                                                                                                                                          from the hot data, and compressing it in a read-optimized
+available such as IBM’s solidDB [3], Oracle’s TimesTen [4],                                                                                                                                                                                      format for OLAP queries.
+and VoltDB [6]. VoltDB assumes that the entire database fits in
+memory, completely dropping the concept of secondary stor-                                                                                                                                                                                          HyPer’s cold data classification scheme differs from ours in
+age. We diverge from this “memory-only” philosophy by con-                                                                                                                                                                                       several dimensions. (1) Classification granularity. HyPer per-
+sidering a scenario where a main-memory optimized engine                                                                                                                                                                                         forms cold/hot data classification at the VM page level, which
+may migrate cold data to secondary storage and investigate                                                                                                                                                                                       is the granularity of its data organization. Our method clas-
+how to identify hot and cold data.                                                                                                                                                                                                               sifies data at the record level due to Hekaton’s record-centric
+   Caching. One straightforward solution is to apply caching                                                                                                                                                                                     organization. (2) Classification method. HyPer’s classification
+where hot records are those inside the cache while other records                                                                                                                                                                                 technique piggybacks on the CPUs memory management unit
+are cold. Caching has been an active area of research for over                                                                                                                                                                                   setting of dirty page flags used for VM page frame relocation.
+40 years and many caching algorithms have been proposed,                                                                                                                                                                                         Since HyPer pins pages in memory, it is able to read and reset
+for example, LRU [12], LRU-k [14], ARC [15], 2Q [13],                                                                                                                                                                                            dirty flags to help classify cold and hot pages. We propose
+and others [19], [20], [21], [22], [23]. However, caching has                                                                                                                                                                                    logging a sample of record accesses and classifying cold data
+significant drawbacks for our particular problem. The overhead                                                                                                                                                                                   offline based on the algorithms proposed in this paper. (3) Pur-
+is high both in space and time: a minimum of 25% in CPU                                                                                                                                                                                          pose. HyPer’s technique aims primarily at reducing copy-on-
+time and 16 bytes per record. We also found that exponen-                                                                                                                                                                                        write overhead (caused by VM page snapshots) and reducing
+tial smoothing estimates access frequencies accurately which                                                                                                                                                                                     the memory footprint for data still accessed by OLAP queries.
+results in a higher hit rate than the best caching techniques.                                                                                                                                                                                   Our technique aims at maximizing main-memory hit-rate and
+   “Top-k” processing. The backward algorithms we propose                                                                                                                                                                                        assumes that cold data on secondary storage is infrequently
+create upper and lower bounds thresholds on record access                                                                                                                                                                                        (or never) accessed.
+
+                                                                                                                                                                                                                    10
+                          VII. C ONCLUSION                                           [21] D. Lee et al, “LRFU: a spectrum of policies that subsumes the least
+                                                                                          recently used and least frequently used policies,” Computers, IEEE
+   This paper takes a first step toward realizing cold-data man-                          Transactions on, vol. 50, no. 12, pp. 1352–1361, dec 2001.
+                                                                                     [22] J. T. Robinson and M. V. Devarakonda, “Data Cache Management Using
+agement in main-memory databases by studying how to effi-                                 Frequency-Based Replacement,” in SIGMETRICS, 1990, pp. 134–142.
+ciently identify hot and cold data. We proposed a framework                          [23] Y. Zhou and J. F. Philbin, “The Multi-Queue Replacement Algorithm
+that logs a sample of record accesses, a strategy that introduces                         for Second Level Buffer Caches,” in USENIX, 2001, pp. 91–104.
+minimal system overhead. We use exponential smoothing as a                           [24] I. F. Ilyas, G. Beskales, and M. A. Soliman, “A survey of top-k query
+                                                                                          processing techniques in relational database systems,” ACM Comput.
+method to estimate record access frequencies, and show both                               Surv., vol. 40, no. 4, 2008.
+theoretically and experimentally that it is more accurate than
+LRU-2 and ARC, two well-known caching techniques. We                                                               A PPENDIX
+proposed a suite of four classification algorithms that effi-                        A. Hash Record Removal in Backward Algorithm
+ciently identify hot and cold records based on logged record
+                                                                                        We provide an intuitive argument for why it is safe to
+accesses. Through experimental evaluation, we found that the
+                                                                                     remove a record r from the hash table during the filter step
+backward algorithms are very time and space efficient. Specifi-
+                                                                                     in the backward algorithm (Section III-B). First, r cannot
+cally, these algorithms are capable of sub-second classification
+                                                                                     possibly be in the final hot set, since its upper bound access
+times on a log of 1B accesses and provide close to optimal
+                                                                                     frequency estimate is less than the value representing the kth
+space efficiency.
+                                                                                     lower bound (abbr. q). Second, we can safely discard the
+                                                                                     statistics for r since it will never be added back to the hash
+                             R EFERENCES
+                                                                                     table. If we encounter r while reading further back in the log
+ [1] M. Grund, J. Krüger, H. Plattner, A. Zeier, P. Cudre-Mauroux, and              at time slice tn , the largest upper bound it can possible have at
+     S. Madden, “HYRISE - A Main Memory Hybrid Storage Engine,” in                   tn is a value that falls below q. That is, it cannot be higher than
+     VLDB, 2012.
+ [2] A. Kemper and T. Neumann, “HyPer: A Hybrid OLTP & OLAP Main
+                                                                                     its upper bound value that caused it to be removed from the
+     Memory Database System Based on Virtual Memory Snapshots,” in                   hash table in the first place. Thus, by definition of the accept
+     ICDE, 2011, pp. 195–206.                                                        threshold (Equation 6), tn must be less than than the accept
+ [3] “IBM solidDB, information available at http://www.ibm.com/.”                    threshold defined by q, otherwise r’s upper bound would be
+ [4] “Oracle TimesTen In-Memory Database, information available at
+     http://www.oracle.com.”                                                         above q, which contradicts our reason for removing it from the
+ [5] M. Stonebraker et al, “The End of an Architectural Era (Its Time for a          hash table in the first place. Since tn is less than the accept
+     Complete Rewrite),” in VLDB, 2007.                                              threshold, r will never be added back to the hash table in the
+ [6] “VoltDB, information available at http://www.voltdb.com/.”
+ [7] P.-Å. Larson, S. Blanas, C. Diaconu, C. Freedman, J. M. Patel, and             future. For the two reasons just described, removing r from
+     M. Zwilling, “High-Performance Concurrency Control Mechanisms for               the hash table is safe, i.e., we are not removing a record that
+     Main-Memory Databases,” in VLDB, 2012.                                          could possibly be in the hot set.
+ [8] I. Pandis, P. Tozun, R. Johnson, and A. Ailamaki, “PLP: Page Latch-free
+     Shared-everything OLTP,” in VLDB, 2011.
+                                                                                     B. Threshold Search Convergence
+ [9] J. Sewall, J. Chhugani, C. Kim, N. Satish, and P. Dubey, “PALM: Parallel
+     Architecture-Friendly Latch-Free Modifications to B+ Trees on Many-                Using Figure 5(a) as an example, we now show that a
+     Core Processors,” in VLDB, 2011.
+[10] S. Blanas, Y. Li, and J. M. Patel, “Design and Evaluation of Main
+                                                                                     threshold between 0.6 (the lowest knth value reported in ini-
+     Memory Hash Join Algorithms for Multi-Core CPUs,” in SIGMOD,                    tialization) and 0.8 (the highest knth value reported during
+     2011, pp. 37–48.                                                                initialization) will yield a correct hot set, assuming K =
+[11] J. Gray and F. Putzolu, “The 5 Minute Rule for Trading Memory for               9. With a threshold of 0.6, worker w2 will retrieve at least
+     Disk Accesses and the 10 Byte Rule for Trading Memory for CPU
+     Time,” in SIGMOD, 1987.                                                         three records (since its low count is three). Since the other
+[12] P. J. Denning, “The Working Set Model for Program Behaviour,”                   workers have knth values greater than 0.6, we are guaranteed
+     Commun. ACM, vol. 11, no. 5, pp. 323–333, 1968.                                 to retrieve at least nine records in total (our target). However, at
+[13] T. Johnson and D. Shasha, “2Q: A Low Overhead High Performance
+     Buffer Management Replacement Algorithm,” in VLDB, 1994, pp. 439–               a threshold value of 0.6, workers w1 and w3 will likely have
+     450.                                                                            lower bound counts greater than three, meaning a threshold
+[14] E. J. O’Neil, P. E. O’Neil, and G. Weikum, “The LRU-K Page Replace-             of 0.6 may be too conservative. Meanwhile, at a threshold of
+     ment Algorithm For Database Disk Buffering,” in SIGMOD, 1993, pp.
+     297–306.                                                                        0.8, there may be too few records, since w3 is the only worker
+[15] N. Megiddo and D. S. Modha, “ARC: A Self-Tuning, Low Overhead                   guaranteed to return three records at this threshold (i.e., has a
+     Replacement Cache,” in FAST, 2003.                                              low count of three). Therefore, a ”sweet spot” must exist in
+[16] F. Funke, A. Kemper, and T. Neumann, “Compacting Transactional Data
+     in Hybrid OLTP & OLAP Databases,” PVLDB, vol. 5, no. 11, pp. 1424–
+                                                                                     between thresholds of 0.6 and 0.8 that produces a hot set size
+     1435, 2012.                                                                     of exactly K records.
+[17] J. R. Movellan, “A Quickie on Exponential Smoothing, available at
+     http://mplab.ucsd.edu/tutorials/ExpSmoothing.pdf.”                              C. TightenBounds Details
+[18] R. Kallman et al, “H-store: A HighPerformance, Distributed Main
+     Memory Transaction Processing System,” in VLDB, 2011.                             In this section, we discuss how to define the distance each
+[19] S. Bansal and D. S. Modha, “CAR: Clock with Adaptive Replacement,”              worker must read back after receiving a TightenBounds com-
+     in FAST, 2004, pp. 187–200.                                                     mand from the controller. While executing a ReportCounts(Q)
+[20] S. Jiang and X. Zhang, “LIRS: An Efficient Low Inter-reference Recency
+     Set Replacement Policy to Improve Buffer Cache Performance,” in                 command, we require that each worker keep track of a min-
+     SIGMETRICS, 2002, pp. 31–42.                                                    imum overlap value. This value is the minimum difference
+
+                                                                                11
+                     0.20
+                     0.18                                                                    The LRU-k policy amounts to estimating the probability p
+                     0.16                                                                    by p̂ = (k − 1)/n, that is, the fraction of red balls in the
+
+
+
+       Probability
+                     0.14
+                                                                       LRU-2
+                                                                                             sequence of n balls. The estimate takes only the discrete values
+                     0.12
+                                                                       LRU-3                 1, (k−1)/k, (k−1)/(k+1), (k−1)/(k+1), .... The probability
+                     0.10
+                     0.08                                              LRU-4                 distribution of the estimate computed by LRU-k is then
+                     0.06                                                                                               
+                                                                                                        k−1         n − 1 k−1
+                     0.04                                                                     Pk (p̂ =        )=           p    (1−p)n−k+1 n ≥ k−1 (9)
+                     0.02                                                                                 n         k−2
+                     0.00
+                            0      0.2       0.4       0.6       0.8           1             The formulas for the special cases k = 2, k = 3, and k = 4
+                                   Estimated access frequency                                are much simpler as shown below. For example, the LRU-2
+ Fig. 11.            Probability distribution of access frequency estimate (p = 0.2).        estimate follows a geometric distribution.
+
+between the given threshold Q and the upper bound esti-                                      P2 (p̂ = 1/n) = p(1 − p)n−1                      n = 1, 2, 3, ...
+mate value closest to but greater than Q. During the Tight-                                  P3 (p̂ = 2/n) = (n − 1)p2 (1 − p)n−2         n = 2, 3, 4, ...
+enBounds process, we require that each worker read back far                                                  (n − 1)(n − 2) 3
+enough to tighten its bounds within this minimum overlap                                     P4 (p̂ = 3/n) =                 p (1 − p)n−3 n = 3, 4, 5, ...
+                                                                                                                    2
+value. The intuition behind this requirement is that if bounds
+are shrunk to the minimum overlap range, the overall overlap                                    Figure 11 plots the distribution of the access frequency
+between records across partitions should be sufficiently small                               estimated by LRU-2, LRU-3, and LRU-4. The true access
+and shrink the tlow and tup counts to a sufficient level.                                    frequency is p = 0.2. As expected the variance of the estimate
+   Given a minimum overlap value of M , how far must a                                       is reduced as k increases but, in general, it remains quite high.
+worker read back in its log partition to tighten estimate bounds
+within M ? The goal is to translate M to a time slice in the log.                            E. N-Minute Rule Calculation
+Recall from Equations 3 through 5 that we calculate the upper                                  SSD and DRAM hardware trends can be translated into an
+bound by adding a value U = (1−α)te −tn +1 to the estbr value                                updated version of the n-minute rule introduced by Gray and
+(from Equation 3). Likewise, we calculate the lower bound by                                 Putzolu [11]. The n-minute rule is defined as:
+adding the value U = (1 − α)te −tb +1 to estbr . Since U is the
+variable term (due to its reliance in tn ), we want to shrink U                                                 SSDP rice             1
+                                                                                                 BEInterval =             ×                                (10)
+such that U ≤ M . In other words, we want (1 − α)te −tn +1 ≤                                                      IO/s      ItemSize × RAM P rice
+M . Solving for tn gives us the time slice defined as: tn =
+                                                                                             The equation shows that data should be cached if it is accessed
+te + 1 − log(1−α) M .
+                                                                                             more often than once per break-even interval (BEInterval),
+D. Distribution of LRU-k Estimates                                                           otherwise it is more economical to store it on an SSD. The
+   The LRU-k caching policy ranks items in the cache ac-                                     first term of the equation represents the price paid for one SSD
+cording to the observed distance between the last k accesses                                 IO per second, while the second term represents the cost of
+an item and evicts the item with the longest distance. This is                               buffering an item (page, tuple. etc) in memory. The SSD cost
+equivalent to estimating the access frequency based on the last                              per IO/s is surprisingly uniform across hardware vendors in the
+k accesses and rank ordering the items based on the estimate.                                range of $0.05-0.10 per read IO/s, while server class DRAM
+In this section we derive the probability distribution of the                                costs around $15/GB. Therefore, the break-even point for a
+access frequency estimated by LRU-k under the independent                                    200 byte record is about 60 minutes, while for a traditional
+reference model.                                                                             4kB page is about 3 minutes. The break-even interval for a
+   Suppose we observe an access to a record r and the distance                               4kB page is around 175 sec, remarkably close to the 400 sec
+to the kth previous access is n. Represent an access to a record                             threshold derived by Gray and Putzolo 25 years ago despite
+r by a red ball and an access to any other record by a blue                                  orders of magnitude improvements in hardware. The break-
+ball. If so we have a sequence of n+1 balls where the first and                              even interval grew slowly over time as improvements in the
+last balls are both red and the remaining n − 1 balls is a mix                               cost of a HDD IOs ($1000 per IO/s in 1986, $2 per IO/s
+of k − 2 red balls
+                 and n − 1 − (k − 2) = n − k + 1 blue balls.                                in 2012; approx. 500X improvement) lagged behind DRAM
+There are n−1k−2 distinct ways to arrange a set of n−1 red and
+                                                                                             cost improvements ($5/kB in 1986, $15/GB in 2012; approx.
+blue balls where k − 2 balls are red. Suppose the probability                                350,000X improvement). Switching from a magnetic disk to
+of drawing a red balls is p (p is the probability of accessing                               an SSD improves IO cost by about 100X. In essence, SSDs
+record r). When drawing a red ball, then the probability of                                  have made the n-minute rule once more relevant.
+having a prior sequence of n balls that ends with a red ball                                    The prices used in the calculation were obtained from the
+and contains k − 2 additional red balls is                                                   Crucial and Dell web sites and from recent price quotes and
+                                                                                             web sites of suppliers of SSDs. I/O rates were obtained from
+                         
+                     n − 1 k−1
+  P r(n, k − 1) =           p     (1 − p)n−k+1 n ≥ k − 1 (8)                                 SSD spec sheets.
+                     k−2
+
+
+
+                                                                                        12
+

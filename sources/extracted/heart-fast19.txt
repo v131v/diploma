@@ -1,0 +1,887 @@
+     Cluster storage systems gotta have HeART:
+     improving storage efficiency by exploiting
+           disk-reliability heterogeneity
+  Saurabh Kadekodi, K. V. Rashmi, and Gregory R. Ganger, Carnegie Mellon University
+               https://www.usenix.org/conference/fast19/presentation/kadekodi
+
+
+
+
+         This paper is included in the Proceedings of the
+17th USENIX Conference on File and Storage Technologies (FAST ’19).
+                      February 25–28, 2019 • Boston, MA, USA
+                                    978-1-939133-09-0
+
+
+
+
+                                               Open access to the Proceedings of the
+                                                17th USENIX Conference on File and
+                                                  Storage Technologies (FAST ’19)
+                                                         is sponsored by
+                      Cluster storage systems gotta have HeART:
+         improving storage efficiency by exploiting disk-reliability heterogeneity
+
+                                Saurabh Kadekodi, K. V. Rashmi, Gregory R. Ganger
+                                           Carnegie Mellon University
+
+
+
+Abstract
+   Large-scale cluster storage systems typically consist of
+a heterogeneous mix of storage devices with significantly
+varying failure rates. Despite such differences among de-
+vices, redundancy settings are generally configured in a one-
+scheme-for-all fashion. In this paper, we make a case for
+exploiting reliability heterogeneity to tailor redundancy set-
+tings to different device groups. We present HeART, an
+online tuning tool that guides selection of, and transitions
+                                                                    Figure 1: Annualized failure rate (AFR) for the six disk groups
+between redundancy settings for long-term data reliability,         that make up >90% of the 100,000+ HDDs used for the Backblaze
+based on observed reliability properties of each disk group.        backup service [5]. Details of each disk group are given in Sec-
+By processing disk failure data over time, HeART identifies         tion 2.
+the boundaries and steady-state failure rate for each deployed
+disk group (e.g., by make/model). Using this information,           period) for the 6 HDD make/model-based disk groups that
+HeART suggests the most space-efficient redundancy option           make up more than 90% of the cluster storage system (with
+allowed that will achieve the specified target data reliability.    100,000+ disks) used for the Backblaze backup service [5].
+Analysis of longitudinal failure data for a large production        The highest failure rate is over 3.5⇥ greater than the low-
+storage cluster shows the robustness of HeART’s failure-rate        est, and no two are the same. Schroeder et al. [32] recently
+determination algorithms. The same analysis shows that a            showed that different Flash SSD makes/models similarly ex-
+storage system guided by HeART could provide target data            hibit substantial failure rate differences.
+reliability levels with fewer disks than one-scheme-for-all            Despite such differences, the degree of redundancy em-
+approaches: 11–16% fewer compared to erasure codes like             ployed in cluster storage systems for the purpose of long
+10-of-14 or 6-of-9 and 33% fewer compared to 3-way repli-           term data reliability (e.g., the degree of replication or erasure
+cation.                                                             code parameters) is generally configured as if all of the de-
+                                                                    vices have the same reliability. Unfortunately, this approach
+1   Introduction                                                    leads to configurations that are overly resource-consuming,
+   Large cluster storage systems almost always include a het-       overly risky, or a mix of the two. For example, if the redun-
+erogeneous mix of storage devices, even when using devices          dancy settings are configured to achieve a given data reliabil-
+that are all of the same type (e.g., Flash SSDs or mechani-         ity target (e.g., a specific mean time to data loss (MT T DL))
+cal HDDs). Commonly, this heterogeneity arises from incre-          based on the highest AFR of any device make/model (e.g.,
+mental deployment combined with per-acquisition optimiza-           S-4 from Fig. 1), then too much space will be used for re-
+tion of which make/model to acquire, such as targeting the          dundancy associated with data that is stored fully on lower
+lowest cost-per-byte option available at the time. As a re-         AFR makes/models (e.g., H-4A). Continuing this example,
+sult, a given cluster storage system can easily include several     our evaluations show that the overall wasted capacity can
+makes/models, each in substantial quantity.                         be up to 16% compared to uniform use of erasure code set-
+   Beyond performance and capacity differences, different           tings stated as being used in real large-scale storage clus-
+makes/models can also have substantially different reliabil-        ters [13, 25, 26, 28] and up to 33% compared to using 3-
+ities. For example, Fig. 1 shows the average annualized             replication for all data—the direct consequence is increased
+failure rates (AFRs) during the useful life (stable operation       cost, as more disks are needed. If redundancy settings for
+
+
+
+USENIX Association                                             17th USENIX Conference on File and Storage Technologies          345
+all data are based on lower AFRs, on the other hand, then                                                    Disk group        # of        Oldest
+                                                                     Make/Model
+data stored fully on higher-AFR devices is not sufficiently                                                  shorthand         disks       disk age
+protected to achieve the data reliability target.                    Seagate ST4000DM000                     S-4               37015       5 yrs
+    This paper presents HeART (Heterogeneity-Aware Re-               HGST HMS5C4040ALE640                    H-4A              8715        4.77 yrs
+dundancy Tuner), an online tool for guiding exploitation of          HGST HMS5C4040BLE640                    H-4B              15048       4.2 yrs
+reliability heterogeneity among disks to reduce the space            Seagate ST8000DM002                     S-8C              9885        1.99 yrs
+overhead (and hence the cost) of data reliability. HeART             Seagate ST8000NM0055                    S-8E              14395       1.2 yrs
+uses failure data observed over time to empirically quantify         Seagate ST12000NM0007                   S-12E             21581       8 mts
+each disk group’s reliability characteristics and determine          Table 1: The disk groups identified from the Backblaze dataset for
+minimum-capacity redundancy settings that achieve speci-             reliability heterogeneity analysis. The disk group shorthand above
+fied target data reliability levels. For the Backblaze dataset       is used to represent the respective makes/models throughout the pa-
+of 100,000+ HDDs over 5 years, our analysis shows that us-           per.
+ing HeART’s settings could achieve data reliability targets
+with 11–33% fewer HDDs, depending on the baseline one-               scale production cluster (Backblaze) and are able to expose
+scheme-for-all settings. Even when the baseline scheme is a          the expected capacity savings opportunities without compro-
+10-of-14 erasure code whose space-overhead is already low,           mising data reliability.
+HeART further reduces disk space used by up to 14%.                  2     Having HeART can make you rich
+    Online (real-time) use of observed device reliability re-           This section builds a case for HeART by showing the ben-
+quires careful design. HeART uses robust statistical ap-             efits of using different redundancy schemes for disk groups
+proaches to identify not only a steady-state AFR estimate            exhibiting different reliability characteristics in the same
+for each disk group, but also the transitions between deploy-        commercially used cluster storage system. To support the
+ment stages: infancy!useful life!wearout, as in bathtub              case, we quantify space overhead reductions that can be
+curve visualizations. HeART assumes that administrators              achieved by adopting the different redundancy schemes.
+have a baseline redundancy configuration that would be used
+in HeART’s absence; that same configuration should be used           2.1      The Backblaze dataset
+for a disk group, when it is initially deployed. HeART pro-             Our analysis is based on an open source dataset from a
+cesses failure data for that disk group, during this initial pe-     data backup organization, Backblaze [5]. This dataset con-
+riod of 3–5 months, to determine both when infancy ends              sists of over 5 years of disk reliability statistics from a pro-
+and a conservative AFR estimate for the useful life period.          duction cluster storage system with over 100,000 HDDs.
+It also suggests the most space-efficient redundancy settings           We use the standard metric, annualized failure rate (AFR),
+supported by the storage system that will achieve the speci-         to describe a disk’s fail-stop rate1 [9, 33]. As the name sug-
+fied data reliability target.                                        gests, it is the expected percentage of disks that will fail-stop
+    Naturally, the useful life period does not last forever.         in a given year from a population of disks. AFR is calculated
+HeART continues to process failure data for each disk group,         on day d, based on the past d days of reliability data, using
+automatically identifying the onset of the wearout period. At        the following formula:
+this point, a transition to more conservative redundancy (e.g.,                                          fd
+the original baseline), and possibly decommisioning, is war-                    AFR (%) =                             ⇥ 365 ⇥ 100                  (1)
+                                                                                                 n1 + n2 + . . . + nd
+ranted. Importantly, HeART distinguishes between anoma-
+lous failure occurrences (e.g., one-time device-independent          where fd is the number of disks failed in the past d days and
+events, like a power surge, in which many devices fail to-           ni is the number of disks operational during day i.
+gether) and true changes in the underlying AFR.                         Note that the AFR calculation is dependent on the number
+    This paper makes four primary contributions. First, it           of days a disk was in operation. This can be tricky to estimate
+highlights an often overlooked aspect of device heterogene-          from the Backblaze dataset since the “death” of a disk in this
+ity (reliability) that should be exploited in cluster storage sys-   dataset may also indicate its decommissioning, which may
+tems, and quantifies potential cost–and/or–reliability bene-         or may not imply its failure. We argue that, in the case of
+fits. Second, it confirms the above observation and quan-            Backblaze, the date of decommissioning a disk only affects
+tification with analysis of multi-year reliability data from a       the absolute date at which it would have fail-stopped, but
+sizable cluster storage deployment (Backblaze), showing up           does not affect its rate of failure. Backblaze adopts a proac-
+to 11–33% reduction in the overall number of disks needed            tive disk replacement strategy that is driven by monitoring
+to achieve target data reliability. Third, it describes an online    a combination of five S.M.A.R.T. (Self-Monitoring, Anal-
+tool (HeART) that automatically determines per-disk-group                 1 Storage devices can exhibit partial failures and fail-stops (complete
+useful life AFRs and durations, and identifies the right re-         failures). Partial failures might involve a particular read or write failing
+dundancy scheme settings for each. Fourth, it shows that             because of a sector error or checksum failure, while the disk as a whole is
+HeART’s algorithms are effective using data from a large-            still functional. In the case of fail-stop, the disk stops functioning altogether.
+
+
+
+
+346   17th USENIX Conference on File and Storage Technologies                                                             USENIX Association
+                                                                                                                                                          HeART                   Infancy        Useful life   Wearout
+TDL)                                                                                                                      Reliability
+                                                                                      3-5 m                          3-4 y                                                       r Disk health
+                                                                                                                                                                                          rDG                   rdef DG
+                                                             A
+                                                                                                                         requirement                                          DG def
+                                                                                                                                                                            deployed    monitoring data          decommiss
+                                                                                                                          (MTTDL)
+
+                                                                  0, 0or                         Age of disk
+                                                                                                                                                                                            or
+anomaly                     Change point
+ector                         detector                     Redundancy tuner
+                                                                        Infancy               Useful life       Wearout
+                                                                                                                             AFR anomaly Infancy Change point
+                                                                                                                                                     Useful life                 Wearout
+                                                                                                                                                                                Redundancy tuner
+                                                                                                                                        AFR (%)
+                                                                                                                               detector            detector
+
+                                                              AFR (%)
+                                                                                  3 to 5                    3 to 4                                   3 to 5                    3 to 4
+                                                                                                            years                                    months                    years
+                                                                                  months
+
+
+Infancy                     Useful life                      Wearout
+                                                               0, 0                           Age of disk                                     0, 0            Age of disk
+                                                                                                                               Figure 3: The canonical bathtub curve used to represent disk failure
+                                                                                                                               characteristics.
+
+
+
+          3-5 months                           3-4 years
+                                                                                                                                        Infancy          Useful life         Wearout
+                                                                                                                                                                                                   Time
+                                                                                                                                           rdef               rDG              rdef Failure /
+                                                                                                                                Deployment
+                                                                                                                                                                                Decommissioning
+                       Figure 2: AFR comparison between all 4TB disks grouped together                                         Figure 4: An abstract timeline of a disk group from deployment
+                       and disk groups broken down by make/model. The AFR differences                                          to failure or decommissioning, with the three distinct periods. The
+                       in Age of     disk grouping enables HeART to perform finer-
+                          make/model-based                                                                                     notations below the timeline (rde f and rDG ) denote the redundancy
+                       grained specialization leading to higher benefits.                                                      scheme employed during the respective stage.
+                       ysis and Reporting Technology) statistics.2 The increased                  pacity, thus causing disks of similar capacity to fail at a
+                       probability of failure indicated by grown defects in a disk is             similar rate.
+Infancy                supported
+                        Useful life by several previous
+                                           Wearout      studies [7, 20, 24,
+                                                                     Infancy29]. In fact,
+                                                                                      Useful life By operational
+                                                                                               •         Wearout conditions: Disks that share similar vi-
+
+                                                                            AFR (%)
+                       Pinheiro et al. [24] show that the critical threshold for several          bration or temperature experiences may cause them to fail
+                       S.M.A.R.T. attributes before their imminent failure is one—
+       3 to 5                         3 to 4                                                     3 to 5
+                                                                                                  similarly. Thus, chassis placement and other operational
+                                                                                                                                     3 to 4
+                       that is, the probability of failure of a disk in the next two
+                                      years                                                       conditions may influence failure rates.
+                                                                                                                                     years
+       months          months increases manifold when any of these S.M.A.R.T.                    months
+                                                                                               • By usage: Increased space utilization or higher I/O rates
+                       attributes show a value greater than zero. Ma et al. [20] also             may result in different disks showing different failure
+                       show
+                       Age ofthe   high likelihood of disk failure
+                                 disk                            0, 0by monitoring Age
+                                                                                     the of disk characteristics.
+                       reallocated sectors count (S.M.A.R.T. attribute 5), which is
+                       one of the signals used by Backblaze as a disk replacement                 Unfortunately since we do not have access to the oper-
+                       indicator. Therefore, we believe that Backblaze’s proactive             ational  conditions or usage patterns, we can only analyze
+                       disk replacement rate is a reasonable approximation for the             grouping   on the basis of make/model or capacity.
+                       actual disk failure rate.                                                  Fig. 2 shows  the AFR by considering all 4TB disks as one
+                                                                                               disk group (red curve with circular marks) and the AFRs
+                       2.2 Disk group formation and varying AFRs                               of the three make/models of 4TB disks as individual disk
+                          To effectively exploit heterogeneity in AFRs of different            groups (black curves). We see significant differences be-
+                       disk groups, we need to categorize the disks using some pa-             tween AFRs when disks are grouped by make/model, sug-
+                       rameter that (1) groups disks with similar AFRs together                gesting that grouping by capacity is insufficient. HeART
+                       and (2) has substantially different AFRs across groups. In              groups disks by make/model.
+                       whichever manner we choose to group the disks, in order to                 Table 1 shows the six make/model disk groups that make
+                       gain statistical confidence in the AFR value, we need to en-            up over 90% of the Backblaze deployment, with their pop-
+                       sure that each disk group has a sizeable population. Our def-           ulation size, the age of their oldest disk, and the shorthand
+                       inition of a sizeable population is approximately 10,000 or             names we will use throughout the paper.
+                       more disks. This is in line with disk populations considered               AFR variation over time. As expected, AFR values of
+                       in previous reliability studies [21]. We identify the following         each disk group vary over the lifetime of disks. It is well
+                       four ways to categorize disks:                                          known that the AFR values over a disk’s lifetime follow a
+                       • By make/model: Economies of scale result in large quan-               bathtub curve [11, 12, 45]. Fig. 3 shows the canonical repre-
+                          tities of disks being purchased from the same vendor. Prior          sentation of a bathtub curve. The lifetime is typically divided
+                          studies have shown that AFR may vary significantly by                into three distinct periods:
+                         vintage [10, 20, 24].                                                                                 • Infant mortality: A higher failure rate in the early days
+                       • By capacity: Grown defects can be a function of disk ca-                                                after deployment. This is also called the burn-in period.
+                          2 Backblaze uses S.M.A.R.T. 5 (Reallocated Sectors Count), S.M.A.R.T.
+                                                                                                                               • Useful life period: The stable region of operation, where
+                       187 (Reported Uncorrectable Errors), S.M.A.R.T. 188 (Command Time-
+                                                                                                                                 rate of failure is lower.
+                       out), S.M.A.R.T. 197 (Current Pending Sector Count) and S.M.A.R.T. 198                                  • Wearout stage: A higher failure rate towards the disks’
+                       (Uncorrectable Sector Count) as indicators that a disk is about to fail. [6]                              end of life due to wear and aging.
+
+
+
+                       USENIX Association                                                                            17th USENIX Conference on File and Storage Technologies                            347
+                      (a) S-4                                             (b) H-4A                                    (c) H-4B
+
+
+
+
+                     (d) S-8C                                    (e) S-8E                                        (f) S-12E
+                           Figure 5: Cumulative raw AFR versus age (in days) for all six disk groups being analyzed.
+
+   Fig. 5 shows the AFR behavior versus age of the six disk                     ing the appropriate redundancy scheme for each disk group.
+makes/models. The three disks in the top row clearly exhibit                    Based on the canonical bathtub curve (Fig. 3), and the AFR
+all three stages of the bathtub curve.3 This is because the                     curves shown in Fig. 5, we conclude that the safest stage
+oldest disks from the S-4, H-4A and H-4B disk groups in the                     to apply lower redundancy (without risking not meeting the
+dataset are old enough to have entered their wearout stages.                    reliability target) during a disk group’s lifetime is in its use-
+Since the deployment of S-8C, S-8E and S-12E disks has                          ful life period. Fig. 4 shows the abstract timeline of a disk
+been more recent, these disk groups have ended their infant                     group, where r denotes the redundancy scheme applied in
+mortality, but are yet to enter their wearout stages.                           each stage. Since all cluster storage systems today use some
+                                                                                redundancy scheme whose resilience is acceptable to them,
+2.3     Space savings from heterogeneous AFRs                                   we assume that to be the default redundancy scheme. Since
+   Our goal is to reduce storage overhead by tailoring the                      infancy and wearout periods have higher and less stable
+redundancy scheme employed to the failure rate of a disk                        AFRs compared to useful life, for every disk group, HeART
+group during its useful life period. We parameterize a redun-                   employs the default redundancy scheme for all infancy and
+dancy scheme using two parameters n (called “length”) and                       wearout periods. This is shown as rde f in Fig. 4.
+k (called “dimension”), and call it a (n, k) scheme.4 For any                      HeART suggests lower redundancy than the default
+replication based scheme, k = 1 and n represents the total                      scheme only during the useful life period, during which AFR
+number of replicas. For any erasure coding based scheme, k                      values are relatively stable. Data redistribution and issues re-
+represents the number of data chunks and (n k) is the num-                      lated to data placement and scheme transitions are discussed
+ber of parity chunks, thus resulting in n chunks in total.5 For                 in Section 5.
+an (n, k) redundancy scheme, the storage overhead is given
+                                                                                   We use the standard metric for reliability of data em-
+by nk .
+                                                                                ployed in storage systems, mean time to data loss (MT T DL).
+   HeART achieves reduction in storage overhead by ex-
+                                                                                MT T DL is calculated based on two rates – mean time to
+plicitly factoring in the group-specific AFR values in decid-
+                                                                                failure (MT T F) and mean time to repair (MT T R) [23, 38]
+   3 Fig. 5c corresponding to disk H-4B does not completely conform to the      MT T F is directly related to the disk’s AFR. MT T R is the
+bathtub shape. We will discuss this case later in detail.                       time it takes to reconstruct the lost data on the failed disk.
+   4 This notation follows the standard notation employed in the coding the-    Following prior work, we model the time to repair based
+ory literature.                                                                 on the time it takes to detect that a disk has failed (which
+   5 Although the description of the notation applies only to “systematic”
+
+codes, and most of the codes employed in storage systems are indeed sys-
+                                                                                is approximately 15 minutes) [13, 17]. We note that, by
+tematic, HeART is applicable to storage systems employing non-systematic        choosing the failure detection time as a proxy for the re-
+codes as well.                                                                  pair time, we are effectively choosing a lower bound on
+
+
+
+348    17th USENIX Conference on File and Storage Technologies                                                            USENIX Association
+the repair time. Reliability differences between redundancy             Disk groups r de f = (14, 10)   r de f = (9, 6)   r de f = (3, 1)
+schemes are higher when repair times are higher, leading to
+                                                                        DG    AFR    rDG      Cost# rDG         Cost# rDG        Cost#
+even greater potential for space saving through HeART.
+   When a disk group enters its useful life period, HeART               S-4 3.29% (14, 10) NA           (9, 6) NA         (3, 1) NA
+chooses a redundancy scheme (rDG ) that meets the following             H-4A 0.92% (24, 20) 14%         (15, 12) 16%      (4, 2) 33%
+conditions:                                                         Table 2: A sample of the estimated savings achievable through
+  1. is as reliable as rde f , i.e. MT T DLrDG MT T DLrde f         HeART. The space reductions obtained on H-4A disks by using
+  2. tolerates at least as many failures as rde f                   redundancy schemes with lower storage overhead while meeting
+                                                                    the reliability target set by applying the default redundancy scheme
+   According to condition 1 above, we need to set a tar-
+                                                                    (rde f ) on S-4 disks.
+get MT T DL in order to compare the resilience of different
+redundancy schemes. Although prior studies have shown                  For rde f = 3-replication (recall that, under the (n, k) nota-
+MT T DL targets to be as low as 10,000 years [27], in order         tion introduced above, 3-replication is denoted as the (3, 1)
+to ensure that we do not regress on reliability that disks in       erasure code), we can tune the redundancy on H-4A disks
+our dataset can currently offer, we set the target MT T DL          to (4, 2) to respect our 2⇥ default stripe dimension limit and
+to be the MT T DL of the default redundancy scheme ap-              still achieve an MT T DL that is approximately 11⇥ that of S-
+plied on the disk group with the highest AFR. S-4 is the            4’s MT T DL. Using a (4, 2) scheme leads to a 33% reduction
+disk group with highest useful life AFR in the Backblaze            in disk space.
+dataset (refer Fig. 1). Therefore, for every default redun-            Large internet services companies try very hard to mini-
+dancy scheme, we will use S-4’s MT T DL for that scheme as          mize free space (as low as 5%, according to some admin-
+the target MT T DL.                                                 istrators) in order to minimize capital and operating costs.
+   Multiple redundancy schemes can achieve the same or              We are told that space savings translate directly into reduced
+similar MT T DL values. These schemes can differ in their           numbers of disks needed, and even modest space savings
+dimension (k) or the number of parity chunks per stripe             (e.g., 10%) would build a solid case for tailoring redundancy
+(n k) or both. It is well known that, generally speak-              schemes to heterogeneous disk AFRs.
+ing, codes with a longer dimension can provide the same                We note that much of the reduction in storage overhead
+MT T DL with lower space overhead compared to shorter               arises from allowing codes up to 2⇥ in dimension (i.e., pa-
+codes. However, long codes consume significantly higher             rameter k). However, simply employing an erasure code with
+cluster bandwidth for reconstruction, since many more disks         twice the dimension for all data is not generally a suitable
+have to be accessed when performing reconstruction of failed        solution. First, the AFR for certain disk groups might be
+data [17, 25, 26, 28]. The cluster bandwidth consumed dur-          high enough to make codes with 2⇥ dimension not accept-
+ing reconstruction is a major concern in erasure-coded stor-        able causing them to miss the target reliability. Second, and
+age systems. This has been highlighted in several works in          more broadly, the reconstruction overheads can be unaccept-
+the past [17, 25, 26, 28] and is consistent with our discus-        able. For popular codes employed in practice, the amount of
+sions with cluster storage system administrators. We, there-        cluster bandwidth required for reconstruction is proportional
+fore, limit our cost reduction analysis to codes with at most       to k⇥AFR, where k is the dimension of the code. The sta-
+2⇥ the dimension (i.e., parameter k) of the default redun-          ble and lower AFR during a disk group’s useful life period
+dancy scheme.                                                       allows the I/O generated for reconstruction to be contained
+   Table 2 shows space savings for one disk group (H-4A)            even if longer codes are employed, which is why HeART op-
+as an example. We will first highlight the space reduction          timizes redundancy schemes only during a disk group’s use-
+when erasure coding schemes are used as the default, focus-         ful life. Using longer codes on data stored on disk groups in
+ing on the (14, 10) and (9, 6) schemes known to have been           their infancy and wearout stages would exacerbate the clus-
+used in large data centers [13, 25, 26, 28]. For (14, 10) as        ter bandwidth consumption for reconstruction due to higher
+the default scheme, the MT T DL difference between H-4A             failure rates in these stages.
+and S-4 disks is over 580⇥. Thus, we can choose a weaker
+redundancy scheme (a scheme with lower storage overhead             3     The ways of the HeART
+n
+k ), so long as conditions 1 and 2 above are fulfilled. In fact,      This section describes the challenges, design and imple-
+the high AFR differences allow us to use the longest allowed        mentation of HeART. We also quantify the cost reductions
+optimized code (2⇥ the dimension of the default redundancy          achieved by HeART for the Backblaze dataset.
+scheme) for H-4A disks, i.e. (24, 20) leading to a useful life
+space reduction of 14%. Similarly, when using (9, 6) as the         3.1      Challenges
+default scheme, the MT T DL difference between H-4A and                There are several challenges in taking the idea presented
+S-4 is over 160⇥. This again allows us to choose the longest        in Section 2 to practice.
+code for H-4A when rde f = (9, 6), i.e. (15, 12), providing a          Challenge 1: Function online and be quick. In mak-
+space reduction of 16%.                                             ing our case for HeART, we made use of the complete fail-
+
+
+
+USENIX Association                                             17th USENIX Conference on File and Storage Technologies                 349
+                                        HeART                                       (rde f ) is used to protect the data stored on a disk group.
+                Reliability                                                         Periodically, disk health data for each disk group is passed
+                                                               Disk health
+               requirement
+                                                              monitoring data       through an anomaly detector. Following an anomaly check,
+                (MTTDL)
+                                                                                    the cumulative AFR of every disk group is passed through
+                                                                                    a change point detector, which checks if a transition to dif-
+                                                                                    ferent phase of life has occurred. Once the change point de-
+                                                                  or
+                                                                                    tector announces start of the useful life period, HeART sug-
+                AFR anomaly            Change point
+                                                                                    gests a new redundancy mechanism for the useful life of the
+                  detector               detector         Redundancy tuner          disk group (rDG ). It computes a determined useful life AFR
+                                                                                    (AFRDG ), which is the AFR at the end of infancy padded
+              Figure 6: Schematic diagram of HeART. Components include an           with a tunable buffer, and uses it to calculate MT T DLrDG
+              anomaly detector, an online change point detector, and a redun-       for different redundancy scheme (rDG ) options. The buffer
+              dancy tuner.                                                          is introduced to tolerate the fluctuation of AFR during the
+              ure information (e.g., the full bathtub curve) for the disk           useful life period (see Section 4.3). HeART keeps check-
+              groups. This helped in clearly identifying the 3 stages of            ing for anomalies and change points throughout the useful
+                           Infancy
+              a disk group’s           Useful life
+                              lifetime and AFR values  Wearout
+                                                          in each of theTime
+                                                                          stages.   life period. When the change point detector marks the end
+              In practice, r
+                           however,  AFR  r
+                                          values   for   r
+                                                       disk groups  deployed   in   of useful life, HeART raises an alert to reset the redundancy
+                        DG def             DG             def DG
+                                                                                    scheme to rde f to handle the increased AFR during wearout,
+              clusterdeployed
+                      storage systems can only be known in      an online fash-
+                                                         decommissioned
+              ion (i.e., as a continuous stream of reliability data, as it is       as was handled in the absence of HeART.6
+              observed). Furthermore, the crux of the cost reduction from              The remainder of this section describes our approach to
+              HeART comes from quickly tuning the redundancy scheme                 addressing the above mentioned challenges. We leverage es-
+              as soon as we are confident of a disk group having entered            tablished tools and algorithms from online services and time-
+              its useful life period. Thus, our first challenge in building         series analysis literature. While other options may perform
+              HeART is that it needs to function in an online fashion taking        even better, our evaluations indicate that these established
+ncy           a life
+          UsefulcontinuousWearout
+                             stream of disk health data as input and quickly        tools are effective. We show the efficacy of HeART using
+              react to the changes in the failure rate.                             the Backblaze dataset in Section 4.
+ 3 to 5                 3 to 4
+                 Challenge 2: Be accurate. It is important to correctly
+                        years                                                       3.3     Online anomaly detection
+ months       identify the three different stages of the bathtub curve for
+                                                                                       Incidents like losing power to a rack of disks, a natural
+              each disk group (recall Fig. 3). If we are hasty in declaring
+                                                                                    disaster, or an accident, can cause a large number of fail-
+              thedisk
+          Age of   end of the infancy period or lax in identifying end of
+                                                                                    ures resulting in a sudden rise in AFR. Such bulk failures
+              useful life, we might not meet the reliability target because
+                                                                                    can easily exceed the limits of any reasonable redundancy
+              of having tailored the redundancy to a relatively low failure
+                                                                                    scheme, so administrators seek to mitigate them by defining
+              rate during the useful life period. In contrast, if we are too
+                                                                                    appropriate failure domains and spreading data+redundancy
+              lax about declaring end of infancy or too hasty in declaring
+                                                                                    across the failure domains [25, 26]. Such failures are not
+              onset of the wearout stage, the opportunity of cost reduction
+                                                                                    reflective of the true rise in AFR because of wearout, and
+              will diminish.
+                                                                                    therefore HeART considers these incidents as anomalies. It
+                 Challenge 3: Filter-out anomalies. Events such as power            is important to note that the benefits we extract from exploit-
+              outages, natural disasters or human error can cause large             ing the reliability heterogeneity are proportional to the length
+              numbers of disks to fail at once It is important to distinguish       of the useful life period, and therefore prematurely announc-
+              between an accidental rise in AFR due to such anomalous               ing wearout stage due to an anomaly would significantly di-
+              events versus the rise in AFR due to onset of the wearout             minish achievable gains.
+              stage. Our third challenge is to perform AFR anomaly detec-
+                                                                                       We use the H-4B disks as a motivating example for
+              tion to avoid prematurely declaring end of useful life, conse-
+                                                                                    anomaly detection (shown in Fig. 7). The raw AFR curve
+              quently reducing the window of opportunity for cost reduc-
+                                                                                    (red curve) shows that just after a few days into its useful
+              tion. At the same time, HeART needs to exercise caution so
+                                                                                    life, there are large spikes in the AFR curve for drives that
+              as to not treat a genuine rise in AFR as an anomaly, which
+                                                                                    are about 235 days old (point A) and 380 days old (point B).
+              risks not meeting reliability targets.
+                                                                                    Further along, we observe three more spikes that are in suc-
+              3.2    HeART architecture                                             cession for disks that are about 1200 days old (points C, D
+                Fig. 6 shows the primary components of HeART. HeART                 and E). The failures corresponding to points A and B are all
+              assumes the existence of a disk health monitoring/logging             caused because of 322 drives failing on one particular date.
+              mechanism already in place, which is common in large-                     6 We note that the current architecture of HeART determines one useful
+              scale cluster storage deployments. From the time of deploy-           life AFR for all disks belonging to a disk group and does not handle changes
+              ment till the end of infancy, the default redundancy scheme           in the intra-disk-group reliability distribution over time.
+
+
+
+
+              350    17th USENIX Conference on File and Storage Technologies                                                          USENIX Association
+Figure 7: Raw and HeART-curated AFR curves for the H-4B disk          Figure 8: Total number of disks and number of disk failures by date
+group. Five spikes in AFR (points A–E), which correspond to four      for H-4B disks. The step-wise jumps in the black curve represent
+(anomalous) bulk failure events, are automatically filtered out by    incremental deployments. The largest red spike represents the disks
+HeART.                                                                that failed on July 23, 2017, causing anomalies A and B in Fig. 7.
+
+Here, failure of disks of two different ages correspond to a          minimum AFR values in at least 30 days past the last change
+failure event on the same day because these disks were de-            point is less than a certain threshold T f lat . T f lat is the thresh-
+ployed on different dates. Fig. 8 shows the total number of           old for flatness and is a tunable parameter in HeART. Sensi-
+disks running and the per-day number of disk failures of H-           tivity to T f lat is evaluated in Section 4.3. Note that HeART
+4B as a function of the date. The left y-axis shows the cu-           takes a conservative approach in declaring the onset of the
+mulative disks of H-4B running on each day. The steps in              useful life period of a disk group in order to increase confi-
+the black curve show the incremental deployments of H-4B              dence about reducing redundancy for data stored on that disk
+disks. The right y-axis shows the number of H-4B disks fail-          group.
+ing on each day (red curve). The tallest red spike in Fig. 8             End of useful life period. Being lax in declaring the
+corresponds to points A and B from Fig. 7. Points C, D and            end of useful life period (i.e., onset of wearout) can risk in
+E occurred because of disks failing on different days.                HeART not meeting the intended reliability target. Hence,
+   In the absence of anomaly detection, HeART would have              HeART takes a conservative approach and marks the end
+incorrectly concluded that the disk group’s wearout stage be-         of useful life for the first AFR observed that is greater than
+gan as early as point A.                                              the determined useful life AFR. Since HeART checks for
+                                                                      anomalous AFR fluctuations before checking for change
+3.4    Online change point detection                                  points, if the anomaly detection phase does not filter out an
+   We refer to a transition in the AFR curve of a disk group          increase in AFR, HeART assumes it to be a true increase in
+as a change point. There are two major change points for              AFR. Thus, here too HeART takes a conservative approach
+each disk group: end of infant mortality stage and the onset          and errs on the side of exiting the useful life period early and
+of the wearout stage. This subsection describes our methods           reverting to the default redundancy scheme.7
+of identifying the two change points.
+   Onset of useful life period. HeART uses prior studies              4     Measuring HeART
+about infant mortality in HDDs along with change point de-               This section describes implementation details of various
+tection to decide a disk group’s end of infancy. Prior studies        components that make up HeART and presents an evaluation
+performed on the Google and EMC disk fleets [20, 24] have             of HeART on the Backblaze dataset.
+shown that infant mortality lasts for approximately one quar-
+ter. Therefore, in order to be conservative, HeART exempts
+                                                                      4.1     Implementation of the components
+the first quarter from being assessed for end of infant mortal-          Our current implementation of HeART leverages existing,
+ity. Since disk reliability data is collected periodically, each      standard algorithms for anomaly detection and change point
+time data is collected after the first 90 days, we run change             7 Although the H-4A graph in Fig. 5b appears to show a sudden, huge
+point detection on the AFR curve generated by a sliding win-          rise in AFR, we believe that it is an artifact of Backblaze’s recording of
+dow of the past 30 days. HeART declares end of infancy if             decommissioned disks as failed, based on the device removal pattern seen
+the last change point marked by the detector is over 30 days          in the failure data. Data from more sources are needed to confirm this hy-
+                                                                      pothesis. If some disks do exhibit such transitions, then strategies for pre-
+old, and the failure rate during the last 30 days is relatively       dicting failures (and wearout onset), such as by using S.M.A.R.T. statis-
+constant. More precisely, HeART declares end of infancy               tics [4, 21, 44, 48], will be needed to use any but the most conservative
+when the difference between the observed maximum and                  redundancy schemes.
+
+
+
+
+USENIX Association                                               17th USENIX Conference on File and Storage Technologies                      351
+      (a) S-4 with HeART-determined AFR                 (b) H-4A with HeART-determined AFR          (c) H-4B with HeART-determined AFR
+
+
+
+
+    (d) S-8C with HeART-determined AFR          (e) S-8E with HeART-determined AFR             (f) S-12E with HeART-determined AFR
+Figure 9: HeART in action on all disk groups, showing successful identification of infant mortality, useful life and wearout periods as well
+as automatic removal of anomalies.
+
+detection. Employing more sophisticated algorithms might                      tion [39, 40]. We set the sliding window size to one month,
+lead to even better results.                                                  because AFRs at a lower granularity than a month are jittery.
+   Anomaly detector: For anomaly detection, our current
+implementation of HeART uses the RRCF algorithm [3] ex-                       4.2   Evaluation on the Backblaze dataset
+posed by Amazon’s data analytics service offering called Ki-                     Identifying useful life period. Fig. 9 shows the results
+nesis [2].8 The anomaly detector acts on a reliability data                   from HeART running on all 6 disk groups of the Backblaze
+stream made available by the disk health monitoring sys-                      dataset. HeART accurately identifies the infancy, useful life
+tem. The output from the anomaly detector is also a data                      and wearout stages of the S-4, H-4A and H-4B disk groups
+stream containing anomaly scores produced by the RRCF                         shown in Figs. 9a, 9b and 9c, respectively. For the S-8C,
+algorithm. Potential anomalies identified by RRCF have a                      S-8E and S-12E disk groups (Figs. 9d, 9e and 9f), HeART
+higher anomaly score than data that the algorithm considers                   identifies the end of infancy and correctly shows that they
+non-anomalous. RRCF generates the anomaly score based                         are still in their useful life. The width of the shaded region
+on how different the new data is compared to the recent past.                 of each disk group highlights the “savings region”, i.e. the
+For consistency with change point detection, we set the win-                  useful life period determined by HeART for which HeART
+dow size of the recent past to be one month. If the anomaly                   potentially suggests a lower redundancy scheme. The height
+score is above a certain threshold, HeART considers that                      of the shaded region in Fig. 9 denotes the AFR values pro-
+snapshot of reliability data as anomalous. RRCF advises                       tected by the useful life AFR value determined by HeART
+to only consider the highest anomaly scores as true anoma-                    for that disk group.
+lies [3]. The anomaly score threshold is a tunable parameter                     It is important to note that even though Fig. 9 shows cu-
+in HeART. Lowering the score makes HeART more sensitive                       mulative AFR behavior, HeART performs anomaly detection
+to fluctuations in AFRs.                                                      and online change point detection on AFRs calculated using
+   Change point detector: Our current implementation of                       monthly sliding windows. Thus, not only is the cumulative
+HeART uses a standard window-based change point detec-                        AFR always inside the shaded region, but the instantaneous
+tion algorithm, which compares the discrepancy between ad-                    failure rate for any 30-day period is also less than the de-
+jacent sliding windows within the AFR curve to determine                      termined AFR value. In fact, the first rise in the instanta-
+if a change point has been encountered. In particular, we                     neous failure rate is what determines the end of the useful
+employ the Ruptures library for online change point detec-                    life period. Fig. 10 shows the instantaneous failure rate of
+   8 We use Amazon’s service so as to avoid re-implementing a state-of-the-   S-4 disks being lower than the determined useful life AFR
+art algorithm.                                                                value throughout the useful life period.
+
+
+
+352     17th USENIX Conference on File and Storage Technologies                                                       USENIX Association
+                                   (14,10)                                   (9,6)                                    (3,1)
+ Disk groups r de f = MT T DL4.01%AFR = 1.46E + 21          r de f = MT T DL4.01%AFR = 3.31E + 16 r de f = MT T DL4.01%AFR = 6.36E + 12
+DG      AFR     MT T DLrde f rDG         MT T DLrDG Cost# MT T DLrde f rDG           MT T DLrDG Cost# MT T DLrde f rDG    MT T DLrDG Cost#
+S-4     4.01% 1.46E + 21 (14, 10) 1.46E + 21 NA            3.31E + 16 (9, 6)         3.31E + 16 NA     6.36E + 12 (3, 1) 6.36E + 12 NA
+H-4A 1.82% 7.57E + 22 (24, 20) 3.56E + 21 14% 7.80E + 17 (15, 12) 7.20E + 16 16%                       6.80E + 13 (4, 2) 1.70E + 13 33%
+H-4B 2.04% 4.28E + 22 (24, 20) 2.01E + 21 14% 4.94E + 17 (15, 12) 4.56E + 16 16%                       4.83E + 13 (4, 2) 1.21E + 13 33%
+S-8C 2.07% 3.98E + 22 (24, 20) 1.87E + 21 14% 4.66E + 17 (15, 12) 4.30E + 16 16%                       4.62E + 13 (4, 2) 1.16E + 13 33%
+S-8E 2.48% 1.61E + 22 (21, 17) 1.58E + 21 11% 2.26E + 17 (13, 10) 3.99E + 16 13%                       2.69E + 13 (4, 2) 6.72E + 12 33%
+S-12E 2.44% 1.75E + 22 (21, 17) 1.72E + 21 11% 2.41E + 17 (13, 10) 4.26E + 16 13%                      2.82E + 13 (4, 2) 7.06E + 12 33%
+
+Table 3: Disk space saved by HeART by tuning the redundancy in the useful life of a disk group according to the observed disk group-specific
+AFRs. The units for MT T DLs is years. The cost savings are calculated for 3 default schemes: (14, 10) on AFR 4.01% disks, (9, 6) on AFR
+4.01% disks and 3-replication (i.e. (3, 1)) on AFR 4.01% disks. Thus, the target reliability is the MT T DL of the respective default redundancy
+schemes using a 4.01% AFR (the rde f table header). The max dimension of the scheme permitted during useful life for each disk group has
+at most twice the dimension of default redundancy scheme, i.e. 20 data chunks for (14, 10), 12 data chunks for (9, 6) and 2 data chunks for
+3-replication.
+
+                                                                              Cost savings per disk group. Table 3 summarizes the
+                                                                           cost savings of employing disk group specific redundancy in
+                                                                           their respective useful lifespans. Disk groups with similar
+                                                                           AFRs are grouped together. As discussed in Section 2, we
+                                                                           restrict the dimension (k) of the optimized code to at most 2⇥
+                                                                           that of the default redundancy scheme (rde f ). In each case of
+                                                                           rde f , we set the target reliability to the MT T DL achieved
+                                                                           by using the highest-AFR disk group, which in the case of
+                                                                           Backblaze are the S-4 disks.
+                                                                              It is important to note that the useful life AFRs determined
+                                                                           by HeART are higher than the useful life AFRs shown in
+                                                                           Fig. 1. Recall from Section 2, that HeART adds a (tunable)
+                                                                           buffer above the useful life AFR determined at the end of
+                                                                           infancy (which is an additional 25% by default). HeART
+Figure 10: AFR of the S-4 disk group using a sliding window of 30          chooses to be conservative in determining a useful life AFR
+days. The determined useful life AFR value by HeART is conser-             value to ensure that reliability targets are comfortably met
+vative enough to subsume even the 30-day AFR values which vary             and to elongate the length of the useful life period to maxi-
+more than the cumulative AFRs.                                             mize benefits.
+                                                                              As in Section 2, we exemplify the space reduction for
+   In contrast to S-4 (Fig. 9a), the H-4A (Fig. 9b) and H-4B               erasure coding schemes using (14, 10) and (9, 6) schemes,
+(Fig. 9c) disk groups have a sudden occurrence of their re-                which are known to have been employed in large-scale data
+spective wearout stages. The quick reactivity requirement                  centers [13, 25, 26, 28].
+explained in Section 3.1 comes into effect for these disk                     First, we evaluate using (14, 10) as the default redundancy
+groups. How quickly HeART reacts to changes in the AFR                     scheme. (14, 10) has the lowest storage overhead (1.4⇥)
+is determined by how quickly failure data is provided to                   among the default redundancy schemes we evaluate, mak-
+HeART. Since Backblaze maintains daily snapshots of disk                   ing it the hardest to find codes that meet the target MT T DL
+health, the quickest reaction to an increased failure rate is on           and reduce overhead even further. Despite these constraints,
+the day that the failures occur. In our evaluation, HeART                  HeART enables a 14% space reduction for H-4A, H-4B and
+successfully identifies the increased AFR on the very day it               S-8C disks by suggesting a (24, 20) code and a reduction of
+was provided with the increased AFR data.                                  11% for S-8E and S-12E disks by suggesting a (21, 17) code.
+   Anomaly detection. As explained in Section 3.3, the                        Next, we measure HeART’s performance when using
+anomaly detector successfully detects five anomalies in the                (9, 6) as the default redundancy scheme. We observe a space
+lifetime of H-4B disks. Additionally, two anomalies are also               reduction of 16% on H-4A, H-4B and S-8C disks by using
+detected for the H-4A disks. Correctly identifying anoma-                  the maximum allowed (15, 12) redundancy scheme. For S-
+lous events increased the identified useful life period of H-4B            8E and S-12E disks, HeART suggests shorter (13, 10) code
+disks by over 5⇥. In the absence of anomaly detection, the                 lengths compared to the above three disk groups in order to
+end of useful life period would have been incorrectly identi-              address their relatively higher determined AFR values, lead-
+fied at age 235 days (shown by point A in Fig. 7).                         ing to a space reduction of 13%.
+
+
+
+USENIX Association                                                  17th USENIX Conference on File and Storage Technologies                353
+Figure 11: Overall space reduction achieved by HeART on the
+Backblaze dataset over the complete lifetime of every disk group,
+for erasure codes as the default scheme. For a maximum code di-      Figure 12: The effect of varying T f lat (AFR flatness threshold) on
+mension of up to 2 ⇥ rde f , we observe between 6 7.5% space         the H-4B disk group’s AFR curve. Larger T f lat implies a higher
+reduction and for a maximum code dimension of up to 4 ⇥ rde f , we   useful life AFR along with a larger useful life period. The default
+observe between 10 12% space reduction, translating to actual        value for T f lat in HeART is 0.5.
+space savings of 40 80 PBs.
+                                                                     4.3    Sensitivity analysis
+   Finally, we also include the cost reduction for the canoni-          There are several configuration parameters that govern the
+cal redundancy scheme, 3-replication, for completeness. We           behavior of HeART, of which most are dependent on the
+see that HeART enables 33% space reduction for all disk              ready-made tools we have used for different components
+groups. We note that if replication is employed primarily            of our system (e.g., the threshold for anomaly scores when
+for availability, that data may not be a candidate for tuning        using RRCF for anomaly detection). There are, however,
+redundancy through HeART.                                            two fundamental parameters that are independent of which
+   For H-4A, H-4B and S-8C disks, HeART chose the 2⇥                 anomaly detector or change point detector is used.
+max stripe-length for all three evaluated default redundancy            Before going into the details about the two parameters, we
+schemes, extracting the maximum cost reduction (as ex-               note that the modulation of both the parameters only has an
+plained in Table 2). Even with the maximum allowed stripe            effect on the gains that our optimization can yield. Neither
+length, the MT T DLs for the above disks are approximately           of them affects correctness of our framework or protection
+2.5⇥ higher than the target MT T DL value, suggesting fur-           of data in any way. This allows operators of cluster storage
+ther storage cost reductions if one is allowed even longer           systems to start with conservative values, observe the AFR
+codes.                                                               behavior of their disks and accordingly choose apt values to
+   Overall cost reduction. To highlight the overall cost re-         minimize their costs without risking not reaching their relia-
+duction achieved on the Backblaze disk fleet, we show the            bility target. We next discuss the two parameters.
+capacity-weighted cost savings in Fig. 11. This cost re-                Flatness parameter (T f lat ): T f lat is used to deduce the
+duction is over the whole lifetime of the disks (including           end of the infant mortality period. As mentioned in Sec-
+the unoptimized infancy and wearout periods) and for all             tion 3.4, the end of infancy is defined as the first 30+ day
+six disk groups (including the unoptimized S-4 disks). We            period beyond the change point detected after the first quar-
+only show the benefits for the erasure coding schemes we             ter such that the difference between maximum and minimum
+evaluated, leaving out 3-way replication, since erasure codes        observed AFR is below the threshold T f lat . Thus, T f lat essen-
+are the more popular choice for data durability. The overall         tially determines the flatness in the AFR curve for a given pe-
+cost reduction achieved with the maximum stripe dimension            riod. Currently, we define T f lat to be 0.5. A larger T f lat value
+being 2⇥ the default redundancy scheme is approximately              will reduce the length of infancy until it reaches 90 days, be-
+6% when using (14, 10) and approximately 7.5% when us-               yond which it will have no effect. A lower T f lat will enforce
+ing (9, 6) as the default. If we relax the constraint of the         a stricter flatness criteria, typically causing end of infancy to
+maximum stripe dimension to 4⇥ the dimension of the de-              be declared late. Ending infancy sooner potentially causes
+fault redundancy scheme, we can expect to achieve between            HeART to choose a larger value as the determined useful life
+10 12% overall space reduction. These modest percent-                AFR. This, in turn causes HeART to choose a stronger re-
+age savings translate to significant savings in terms of actual      dundancy scheme (with higher space overhead) compared to
+storage space in large-scale clusters. For example, as shown         one that would have been chosen with the determined AFR
+on the right-side y-axis in Fig. 11, savings in storage space        value derived as a result of a lower T f lat value. This reduces
+for the the Backblaze cluster range between 40 80 PBs.               the achievable savings within the useful life period of the
+
+
+
+354   17th USENIX Conference on File and Storage Technologies                                                    USENIX Association
+disk group. As a tradeoff, we get a larger useful life period        patible with some data placement schemes, such as Ceph’s
+with a larger T f lat , since not only does infancy end sooner,      CRUSH [42, 43], and will add some complexity (conform-
+but also the onset of wearout stage is postponed, since the          ing to disk group boundaries) to schemes that choose based
+increased useful life AFR now has higher tolerance to AFR            on considerations like available capacity and load balancing.
+variances throughout the useful life.
+    Fig. 12 shows the effect of varying T f lat on H-4B disks.          Data redistribution. Many cluster storage systems in-
+We show the results for two different values T f lat = 0.3 and       clude data redistribution mechanisms to deal with planned
+T f lat = 0.5. When T f lat was set to 0.3, we can see HeART         decommissioning and capacity/load balancing. Use of
+declaring end of infancy at close to 100 days. Despite the           HeART will also require their use for transitioning from the
+buffer added to the determined useful life AFR at the end            default redundancy scheme (rde f ) to a disk-group-specific
+of infancy, the fluctuation in monthly AFRs caused a spike           scheme (rDG ), after infancy, and back again upon onset of
+on day 394 to rise above the determined useful life AFR,             wearout. Although this introduces extra redistribution load,
+causing HeART to announce end of useful life. In contrast,           we expect it to have a small impact on overall cluster load—
+when T f lat = 0.5, infancy was declared to end on day 91,           at worst, it is two redistributions of the data over the 3–5 year
+and the determined AFR value was high enough to tolerate             deployment time of the disks.
+the spike on day 394, increasing the useful life period by a
+                                                                        Bulk changes should not be needed. On its face,
+significant amount.
+                                                                     HeART’s redundancy scheme transitions appear to require
+    Useful life AFR buffer: The AFR buffer is the conserva-          massive redistributions, all at once. Not only would this be
+tive padding added to the useful life AFR determined at the          a load spike concern, not assuaged by the “not much load
+end of infancy. Currently, the useful life AFR is determined         over the lifetime” argument, but it also potentially creates
+as the AFR value at the end of infancy plus an additional            a capacity concern: a bulk transition from rDG to the less
+buffer, the tunable AFR buffer parameter. The choice of the          space-efficient rde f , at the end of the useful life period, could
+buffer value has similar tradeoffs to the flatness parameters        require more space than is available. Fortunately, we do not
+discussed above. A high buffer value implies a more con-             expect this issue to arise in practice, as disks of a disk group
+servative approach to setting the determined useful life AFR.        are deployed over time rather than all at once (e.g., see Fig. 8)
+This will prolong the useful life period, but restrict the tuning    Since end of useful life is determined based on deployment
+of the redundancy scheme due to the high useful life AFR             age, rolling deployment will mean rolling wearout. Capac-
+value determined (and thus reducing benefits). In contrast,          ity exhaustion due to any given transition (of one subset of
+setting a low buffer value will shorten the useful life period       disks from one disk group to another) should not be as large
+but allow more cost reductions during the useful life. Opera-        a driver of slack capacity requirements, in practice, as other
+tors can set the buffer based on AFR fluctuations observed in        sources of variability (e.g., user demand). Furthermore, tran-
+their storage systems, which can stem anywhere from work-            sitions from rde f to rDG at the onset of useful life period can
+load patterns to operational conditions.                             be gradually executed as this only reduces the achieved ca-
+                                                                     pacity savings and does not affect correctness or reliability
+5   Changes of the HeART (discussion)
+                                                                     guarantees.
+   HeART suggests redundancy schemes for use with each
+disk group during its useful life period, enabling safe redun-          Accurately characterizing bathtub curves. HeART
+dancy tuning based on observed failure data. HeART rec-              is an online framework actively engaging with each disk
+ommends using the default redundancy scheme employed in              group’s bathtub curve. Naturally, it is important to under-
+the cluster during infancy and wearout periods. Exploiting           stand how many disks one needs to observe before one can
+HeART’s recommendations in a cluster storage system re-              be confident of behavior of the bathtub curve of a particular
+quires some minor data placement policy changes and some             disk group. There are several statistical bounds on the num-
+online data redistribution. This section discusses both. Fur-        ber of samples needed to reach a specified statistical confi-
+thermore, since HeART changes redundancy schemes in re-              dence level. One technique is to use the Chernoff-Hoeffding
+sponse to the observed AFR curve, we also discuss estimat-           Theorem [16, 1] to obtain a bound on the sample size (num-
+ing the required sample size (number of disks) for statistical       ber of disks) required. For example, to achieve 99% con-
+confidence.                                                          fidence that the AFR of S-4 disks (which have an AFR of
+   Data placement. HeART suggests per-disk-group redun-              3.29%, refer Table 2) is within the configured AFR-buffer of
+dancy schemes for hitting a particular data reliability target,      its determined useful life AFR (recall from Section 4, that
+based on observed AFRs. To use HeART safely, all data                the default AFR-buffer is an additional 25% over the useful
+stored using a tailored redundancy scheme must be fully              life AFR value determined by HeART), the number of disks
+stored within the corresponding disk group—that is, all n            required is approximately 4,000. More advanced statistical
+chunks (data and parity chunks) of a stripe must be stored on        techniques may provide tighter bounds and thereby indicate
+disks within the same group. This restriction may be incom-          fewer required devices in a disk group.
+
+
+
+USENIX Association                                              17th USENIX Conference on File and Storage Technologies            355
+6     HeART-less alternatives (related work)                       group AFRs and selecting the best redundancy settings for
+   The closest related work can be classified into disk re-        each, it avoids the space-inefficiency of one-size-fits-all re-
+liability studies that identify reliability heterogeneity, tech-   dundancy schemes. Analysis of failure data for a large-scale
+niques to predict disk failures using reliability data, and sys-   production storage cluster shows that using HeART could
+tems that automate redundancy scheme selection.                    achieve target data reliabilities with 11–33% fewer disks than
+   Numerous studies have been conducted to characterize            popular configurations, offering huge potential cost savings.
+disk failures [7, 10, 15, 18, 20, 23, 24, 29, 30, 31, 34].         Acknowledgements
+Among the studies conducted on large production systems,              We thank our shepherd Gala Yadgar and the anonymous
+Shah and Elerath [10, 34], Pinheiro et al. [24] and Ma et          reviewers for their valuable feedback and suggestions. We
+al. [20] independently verify that failure rates are highly cor-   also thank the members and companies of the PDL Con-
+related with disk manufacturers. These studies were con-           sortium (Alibaba, Amazon, Datrium, Dell EMC, Facebook,
+ducted on the NetApp, Google and EMC disk fleets, respec-          Google, Hewlett-Packard Enterprise, Hitachi, IBM, Intel,
+tively. Schroeder and Gibson also conducted a similar re-          Micron, Microsoft Research, MongoDB, NetApp, Oracle,
+liability study on disks from a high performance comput-           Salesforce, Samsung, Seagate, Two Sigma, Veritas, and
+ing environment [30], not only highlighting reliability het-       Western Digital) and VMware for their interest, insights,
+erogeneity between disks deployed across systems, but also         feedback, and support.
+pointing out that disk datasheet reliability is very different
+from reliability observed in the field. Recently, Schroeder        References
+et al. [32] highlighted the heterogeneity in the reliability of     [1] Chernoff-Hoeffding Theorem.    https://en.
+different SSD technologies from four different manufactur-              wikipedia.org/wiki/Chernoff_bound.
+ers. Also, Schroeder et al. [29] reported heterogeneity of
+partial disk failures (sector errors) across makes/models for       [2] A MAZON. Kinesis.         https://aws.amazon.com/
+NetApp’s disk fleet.                                                    kinesis/.
+   There have been numerous works that predict disk fail-           [3] A MAZON. Robust Random Cut Forest. https:
+ures [14, 22, 36, 41, 47]. Among the more recent ones,                  //docs.aws.amazon.com/kinesisanalytics/
+Mahdisoltani et al. [21] use machine learning techniques to             latest/sqlref/sqlrf-random-cut-forest.
+predict occurrence of partial disk errors using S.M.A.R.T.              html.
+data. Anantharaman et al. [4] use random forests and re-
+current neural networks to predict remaining useful life for        [4] A NANTHARAMAN , P., Q IAO , M., AND JADAV, D.
+HDDs. Both studies were performed on the Backblaze                      Large Scale Predictive Analytics for Hard Disk Re-
+dataset.                                                                maining Useful Life Estimation. In 2018 IEEE In-
+   Thereska et al. [37] built a self-prediction capability in           ternational Congress on Big Data (BigData Congress)
+cluster storage systems to assist in making informed redun-             (2018).
+dancy and data placement decisions by answering what-if             [5] BACKBLAZE.        Disk Reliability               Dataset.
+questions. It differs from HeART in that it does not per-               https://www.backblaze.com/b2/
+form and adapt to online analysis of reliability characteris-           hard-drive-test-data.html.
+tics, relying on pre-knowledge of reliability metrics. Keeton
+et al. [19] built an optimization framework that automatically      [6] BACKBLAZE.          HDD     SMART    Stats.
+provided data dependability solutions to protect against site-          https://www.backblaze.com/blog/
+level disasters by using information like workload patterns,            what-smart-stats-indicate-hard-drive-failures.
+and cost of recovery. This work also assumes prior knowl-
+edge of failure rates. Tempo [35] is a system that proac-           [7] BAIRAVASUNDARAM , L. N., G OODSON , G. R., PA -
+                                                                        SUPATHY, S., AND S CHINDLER , J. An analysis of la-
+tively creates replicas to ensure high durability in wide-area
+network distributed systems. It does this economically by               tent sector errors in disk drives.
+allowing the user to specify a maximum maintenance band-            [8] C HUN , B.-G., DABEK , F., H AEBERLEN , A., S IT, E.,
+width, and its design revolves around the efficient use of a            W EATHERSPOON , H., K AASHOEK , M. F., K UBIA -
+distributed hash table. Carbonite [8] is a replica maintenance          TOWICZ , J., AND M ORRIS , R. Efficient Replica Main-
+solution for distributed storage systems spread over the Inter-         tenance for Distributed Storage Systems. In USENIX
+net, which makes efficient use of bandwidth in maintaining              Symposium on Networked Systems Design and Imple-
+redundancy in the face of transient failures.                           mentation (NSDI) (2006).
+7     Conclusion                                                    [9] C OLE , G. Estimating drive reliability in desktop com-
+   HeART enables more cost-effective data reliability for               puters and consumer electronics systems. Seagate
+cluster storage systems. By robustly estimating per-disk-               Technology Paper TP (2000).
+
+
+
+356    17th USENIX Conference on File and Storage Technologies                                              USENIX Association
+[10] E LERATH , J. Hard-disk drives: The good, the bad, and       [22] M URRAY, J. F., H UGHES , G. F., AND K REUTZ -
+     the ugly. Communication of ACM (2009).                            D ELGADO , K. Hard drive failure prediction using non-
+                                                                       parametric statistical methods. In Springer Artificial
+[11] E LERATH , J. G. AFR: problems of definition, calcula-            Neural Networks and Neural Information Processing
+     tion and measurement in a commercial environment. In              (ICANN/CONIP (2003).
+     IEEE Reliability and Maintenance Symposium (RAMS)
+     (2000).                                                      [23] PATTERSON , D. A., G IBSON , G., AND K ATZ , R. H.
+                                                                       A case for redundant arrays of inexpensive disks
+[12] E LERATH , J. G. Specifying reliability in the disk drive
+                                                                       (RAID). In ACM International Conference on Man-
+     industry: No more MTBF’s. In IEEE Reliability and
+                                                                       agement of Data (SIGMOD) (1988).
+     Maintenance Symposium (RAMS) (2000).
+
+[13] F ORD , D., L ABELLE , F., P OPOVICI , F. I., S TOKELY,      [24] P INHEIRO , E., W EBER , W.-D., AND BARROSO ,
+     M., T RUONG , V.-A., BARROSO , L., G RIMES , C.,                  L. A. Failure Trends in a Large Disk Drive Popula-
+     AND Q UINLAN , S. Availability in Globally Distributed
+                                                                       tion. In USENIX File and Storage Technologies (FAST)
+     Storage Systems. In USENIX Symposium on Operating                 (2007).
+     Systems Design and Implementation (OSDI) (2010).
+                                                                  [25] R ASHMI , K. V., S HAH , N. B., G U , D., K UANG , H.,
+[14] H AMERLY, G., E LKAN , C., ET AL . Bayesian ap-                   B ORTHAKUR , D., AND R AMCHANDRAN , K. A So-
+     proaches to failure prediction for disk drives. In In-            lution to the Network Challenges of Data Recovery in
+     ternational Conference on Machine Learning (ICML)                 Erasure-coded Distributed Storage Systems: A Study
+     (2001).                                                           on the Facebook Warehouse Cluster. In USENIX Work-
+                                                                       shop on Hot Topics in Storage and File Systems (Hot-
+[15] H EIEN , E., KONDO , D., G AINARU , A., L A P INE , D.,           Storage) (2013).
+     K RAMER , B., AND C APPELLO , F. Modeling and
+     tolerating heterogeneous failures in large parallel sys-     [26] R ASHMI , K. V., S HAH , N. B., G U , D., K UANG , H.,
+     tems. In ACM / IEEE High Performance Computing                    B ORTHAKUR , D., AND R AMCHANDRAN , K. A hitch-
+     Networking, Storage and Analysis (SC) (2011).                     hiker’s guide to fast and efficient data reconstruction
+                                                                       in erasure-coded data centers. ACM Special Interest
+[16] H OEFFDING , W. Probability inequalities for sums of              Group on Data Communication (SIGCOMM) (2014).
+     bounded random variables. Journal of the American
+     statistical association (1963).                              [27] S AITO , Y., F RØLUND , S., V EITCH , A., M ERCHANT,
+                                                                       A., AND S PENCE , S. FAB: building distributed en-
+[17] H UANG , C., S IMITCI , H., X U , Y., O GUS , A.,                 terprise disk arrays from commodity components. In
+     C ALDER , B., G OPALAN , P., L I , J., Y EKHANIN , S.,            International Conference on Architectural Support for
+     ET AL . Erasure Coding in Windows Azure Storage. In
+                                                                       Programming Languages and Operating Systems (AS-
+     USENIX Annual Technical Conference (ATC) (2012).                  PLOS) (2004).
+[18] J IANG , W., H U , C., Z HOU , Y., AND K ANEVSKY,
+                                                                  [28] S ATHIAMOORTHY, M., A STERIS , M., PAPAILIOPOU -
+     A. Are disks the dominant contributor for storage fail-
+                                                                       LOS , D., D IMAKIS , A. G., VADALI , R., C HEN , S.,
+     ures?: A comprehensive study of storage subsystem
+                                                                       AND B ORTHAKUR , D. Xoring elephants: Novel era-
+     failure characteristics. ACM Transactions on Storage
+                                                                       sure codes for big data. In International Conference on
+     (TOS) (2008).
+                                                                       Very Large Data Bases (2013).
+[19] K EETON , K., S ANTOS , C. A., B EYER , D., C HASE ,
+     J. S., W ILKES , J., ET AL . Designing for disasters. In     [29] S CHROEDER , B., DAMOURAS , S., AND G ILL , P.
+     USENIX File and Storage Technologies (FAST) (2004).               Understanding latent sector errors and how to protect
+                                                                       against them. ACM Transactions on Storage (TOS)
+[20] M A , A., T RAYLOR , R., D OUGLIS , F., C HAMNESS ,               (2010).
+     M., L U , G., S AWYER , D., C HANDRA , S., AND
+     H SU , W. RAIDShield: characterizing, monitoring,            [30] S CHROEDER , B., AND G IBSON , G. A. Disk failures
+     and proactively protecting against disk failures. ACM             in the real world: What does an mttf of 1, 000, 000
+     Transactions on Storage (TOS) (2015).                             hours mean to you? In USENIX File and Storage Tech-
+                                                                       nologies (FAST) (2007).
+[21] M AHDISOLTANI , F., S TEFANOVICI , I., AND
+     S CHROEDER , B.       Proactive error prediction to          [31] S CHROEDER , B., AND G IBSON , G. A. Understanding
+     improve storage system reliability. In USENIX Annual              failures in petascale computers. In Journal of Physics:
+     Technical Conference (ATC) (2017).                                Conference Series (2007), IOP Publishing.
+
+
+
+USENIX Association                                           17th USENIX Conference on File and Storage Technologies      357
+[32] S CHROEDER , B., L AGISETTY, R., AND M ERCHANT,            [44] X U , Y., S UI , K., YAO , R., Z HANG , H., L IN , Q.,
+     A. Flash Reliability in Production: The Expected and            DANG , Y., L I , P., J IANG , K., Z HANG , W., L OU , J.-
+     the Unexpected. In USENIX File and Storage Tech-                G., ET AL . Improving service availability of cloud sys-
+     nologies (FAST) (2016).                                         tems by predicting disk error. In USENIX Annual Tech-
+                                                                     nical Conference (ATC) (2018).
+[33] S EAGATE. Hard disk drive reliability and MTBF
+     / AFR.       http://knowledge.seagate.com/                 [45] YANG , J., AND S UN , F.-B. A comprehensive review
+     articles/en_US/FAQ/174791en.                                    of hard-disk drive reliability. In IEEE Reliability and
+                                                                     Maintenance Symposium (RAMS) (1999).
+[34] S HAH , S., AND E LERATH , J. G. Disk drive vintage
+     and its effect on reliability. In IEEE Reliability and     [46] Z HANG , Z., WANG , A., Z HENG , K., M AHESWARA ,
+     Maintenance Symposium (RAMS) (2004).                            G. U., AND V INAYAKUMAR , B. Introduction to hdfs
+                                                                     erasure coding in apache hadoop. blog.cloudera.com
+[35] S IT, E., H AEBERLEN , A., DABEK , F., C HUN , B.-G.,           (2015).
+     W EATHERSPOON , H., M ORRIS , R. T., K AASHOEK ,
+     M. F., AND K UBIATOWICZ , J. Proactive Replication         [47] Z HAO , Y., L IU , X., G AN , S., AND Z HENG , W. Pre-
+     for Data Durability. In USENIX International Work-              dicting disk failures with HMM-and HSMM-based ap-
+     shop on Peer-to-Peer Systems (IPTPS) (2006).                    proaches. In Springer Industrial Conference on Data
+                                                                     Mining (ICDM) (2010).
+[36] S TROM , B. D., L EE , S., T YNDALL , G. W., AND
+     K HURSHUDOV, A. Hard disk drive reliability model-         [48] Z HU , B., WANG , G., L IU , X., H U , D., L IN , S., AND
+     ing and failure prediction. IEEE Transactions on Mag-           M A , J. Proactive drive failure prediction for large scale
+     netics (2007).                                                  storage systems. In IEEE/NASA Goddard Conference
+                                                                     on Mass Storage Systems and Technologies (MSST)
+[37] T HERESKA , E., A BD -E L -M ALEK , M., W YLIE , J. J.,         (2013).
+     NARAYANAN , D., AND G ANGER , G. R. Informed
+     data distribution selection in a self-predicting storage
+     system. In IEEE International Conference on Auto-
+     nomic Computing (ICAC) (2006).
+
+[38] T RIVEDI , K. Probability and Statistics with Reliabil-
+     ity, Queueing, and Computer Science Applications. Wi-
+     ley, 2001.
+
+[39] T RUONG , C., O UDRE , L., AND VAYATIS , N.          A
+     review of change point detection methods.            In
+     arXiv:1801.00718v1 [cs.CE] (2018).
+
+[40] T RUONG , C., O UDRE , L., AND VAYATIS , N.
+     ruptures: change point detection in python. In
+     arXiv:1801.00826v1 [cs.CE] (2018).
+
+[41] WANG , Y., M A , E. W., C HOW, T. W., AND T SUI , K.-
+     L. A two-step parametric method for failure prediction
+     in hard disk drives. IEEE Transactions on industrial
+     informatics (2014).
+
+[42] W EIL , S. A., B RANDT, S. A., M ILLER , E. L., L ONG ,
+     D. D., AND M ALTZAHN , C. Ceph: A scalable, high-
+     performance distributed file system. In USENIX Sym-
+     posium on Operating Systems Design and Implementa-
+     tion (OSDI) (2006).
+
+[43] W EIL , S. A., B RANDT, S. A., M ILLER , E. L., AND
+     M ALTZAHN , C. CRUSH: Controlled, scalable, de-
+     centralized placement of replicated data. In ACM /
+     IEEE High Performance Computing Networking, Stor-
+     age and Analysis (SC) (2006).
+
+
+
+358   17th USENIX Conference on File and Storage Technologies                                             USENIX Association
+

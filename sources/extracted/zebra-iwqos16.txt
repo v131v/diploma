@@ -1,0 +1,830 @@
+      Zebra: Demand-aware Erasure Coding for
+             Distributed Storage Systems
+                                                 Jun Li, Baochun Li
+               Department of Electrical and Computer Engineering, University of Toronto, Canada
+                                          {junli, bli}@ece.toronto.edu
+
+
+
+   Abstract—Erasure coding has been increasingly replac-        With Reed-Solomon (RS) codes [11], the most com-
+ing replication in distributed storage systems, thanks to     mon choice of erasure codes in distributed storage
+its lower storage overhead with the same level of failure     systems, we can encode r parity blocks from k data
+tolerance. However, with lower storage overhead, the
+reconstruction overhead of erasure codes can increase         blocks of the same size, such that any k among these
+significantly as well. Under the ever-changing workload, in   k + r blocks can recover the original data. In other
+which the data access can be highly skewed, it is difficult   words, at most r failures can be tolerated. When k = 10
+to achieve a well trade-off between the storage overhead      and r = 4, we can tolerate at most 4 failures with only
+and the reconstruction overhead.                              1.4x storage overhead. With the increasing of k, we can
+   In this paper, we propose Zebra, a framework that
+encodes data into multiple tiers by their demand. Given
+                                                              achieve even lower storage overhead while tolerating the
+the overall storage overhead and the number of failures       same number of failures.
+to tolerate, Zebra determines the parameters of erasure
+coding in each tier by solving a geometric programming
+problem. Based on the demand of data, Zebra can
+dynamically assign data into the corresponding tiers to                        1.4 (a) CPU overhead                              1.4 (b) network overhead
+                                                                               1.2                                               1.2
+
+
+
+                                                                                                         network transfer (GB)
+minimize the overall reconstruction overhead, and achieve
+                                                                               1.0                                               1.0
+                                                              reconstruction
+a flexible tradeoff between the storage overhead and the
+reconstruction overhead in multiple tiers, such that hot                       0.8                                               0.8
+                                                                time (sec.)
+data can enjoy less overhead of reconstruction and cold                        0.6                                               0.6
+data can be stored with lower storage overhead. When
+demand changes, Zebra can adjust itself accordingly with                       0.4                                               0.4
+a marginal amount of network transfer.                                         0.2                                               0.2
+                                                                               0.02 4 6 8 101214161820                           0.02 4 6 8 101214161820
+                   I. I NTRODUCTION                                                        k                                                  k
+
+   Distributed storage systems [1], [2], [3] store a mas-     Fig. 1. CPU and network overhead to reconstruct one block with RS
+sive amount of data over a large number of commodity          code, where each block contains 64 MB.
+servers. Due to the nature of the commodity hard-
+ware, as well as other reasons like software glitches,
+power failures, and upgrade and maintenance opera-               However, RS codes can incur a significantly higher
+tions, servers in distributed storage systems are subject     overhead when we need to reconstruct an unavailable
+to frequent failures on a daily basis. For example, in a      block. With the (k = 10, r = 4) RS code, for example,
+Facebook cluster with 3000 servers, 50 failures that lead     if one block is not available, we need to obtain 10 blocks
+to data unavailability can be expected every day [4].         to reconstruct it. The reconstruction in a distributed
+Therefore, in distributed storage systems, redundant          storage system is a universal operation, which can also
+data must be stored such that a specific number of            be triggered when the distributed storage system is
+failures can be tolerated.                                    performing a degraded read of a block, i.e., reading data
+   The naive way to store redundant data in a distributed     in a temporarily unavailable block. For example, when a
+storage system is replication. However, replication is        server is temporarily unavailable, all accesses to the data
+very expensive in terms of storage overhead, especially       blocks it stores will have to be performed by degraded
+for data at a petabyte scale. For example, with 3-            reads. In a degraded read, the overhead of reconstruction
+way replication, to store 10 PB of data, we need to           can lead to higher access latency. Under typical values
+spend additional 20 PB to store the other two copies.         of k, the network transfer incurred by reconstructions
+Hence, distributed storage systems are migrating from         can be huge: in a Facebook’s cluster the daily median of
+replication to erasure coding [5], [6], [7], [8], [9], as     top-of-rack network transfer incurred by reconstruction
+erasure coding can tolerate more failures with much less      can be as much as 180 TB [12]. Fig. 1 illustrates the
+storage overhead [10].                                        overhead of time and network transfer to reconstruct
+                                                                              (3,1) RS code                         (2,1) RS code
+            (a) demand of top 100 files     (b) demand over time
+         800                            450                            A1     A2       A3     R1        A1     B1                        R1
+         700                            400          File No.1
+         600                            350          File No.3                                                      (4,1) RS code
+
+         500                            300          File No.5
+
+Demand
+                                        250          File No.7         B1     B2       B3     R2        A2     A3     B2            B3   R2
+         400                            200          File No.9
+         300                            150
+         200                            100                                    (a) one tier                         (b) two tiers
+
+         100                             50
+           00 20 40 60 80 100 0 5 10 15 20                           Fig. 3. Comparison of data encoded in one and two tiers of RS codes.
+                                                                     Ai and Bi are data blocks, i = 1, 2, 3. R1 and R2 are parity blocks
+             File ID (sorted by demand)           Time (hr.)         encoded by corresponding RS codes. Colored red, A1 and B1 are hot
+                                                                     blocks with 100 visits per unit of time, while other blocks are cold
+                                                                     with only 10 visits.
+Fig. 2. The demand skewness of files in a Facebook workload trace.
+
+
+one block of 64 MB with RS codes1 . We can see                       Zebra can migrate data accordingly into different tiers or
+that both the time and network transfer incurred by the              change the parameter values of the tier, while carefully
+reconstruction increases linearly with k. In other words,            controlling overhead in the migration.
+a smaller value of k means less reconstruction overhead,                We run simulations under various workload traces
+leading to less network transfer for data reconstruction             to evaluate the performance of the Zebra framework.
+as well as lower latency for degraded reads.                         The evaluation results show that Zebra can reduce
+   Therefore, in a distributed storage system, while we              overall reconstruction overhead, especially by 54.9%
+desire for a small value of k to achieve low recon-                  for the hot data. The cold data, on the other hand, will
+struction overhead, it takes a large k to save storage               incur less storage overhead to maintain their tolerance
+overhead. Currently, most distributed storage systems                against failures. With the ever-changing workload, we
+deploy only one erasure code to encode data, optimized               demonstrate that the network transfer of migration can
+either for storage overhead or reconstruction overhead.              be well controlled, such that it occupies no more than
+However, in practical distributed storage systems, the               2.4% of the network transfer of demand.
+demand of data can be highly skewed. In Fig. 2a, we
+show the demand of data in a workload trace from                                   II. M OTIVATION AND E XAMPLES
+Facebook [14]. This workload contains more than 104                     In this section, we present the general idea that mo-
+files while we only show the 100 most demanded files                 tivates the design of the Zebra framework. We assume
+in the figure, with all the rest having no more than 11              that in a distributed storage system, data are stored in
+visits. We can see that a very small portion of data                 blocks of 64 MB, where we compute 1 parity block
+are highly demanded while the rest are barely touched.               from every 3 data blocks. In other words, a (3, 1) RS
+With only one erasure code we can not accommodate                    code is deployed in this distributed storage system.
+cold data with low storage overhead while achieving                     As a toy example in Fig. 3a, assume that we have 6
+low reconstruction overhead for hot data. Moreover, the              data blocks in total, stored with two additional parity
+demand for the data can change over time dynamically.                blocks. In this way, we can tolerate a failure of any
+For example, in Fig. 2b, while file No. 1 and 3 have                 single block, with 1.33x storage overhead. However, the
+consistent demand over time, the other three files only              demand of the 6 data blocks is not equal to each other,
+have transient high demand at some time and have no                  where A1 and B1 are highly demanded with 100 visits
+visit any other time. Therefore, it is also hard to find             per unit of time, and all other four blocks are visited
+an erasure code that can work well adaptively with the               by merely 10 times per unit of time. Suppose that each
+ever-changing demand.                                                data block has equal chance to be unavailable. When
+   In this paper, we propose Zebra, a novel framework                one of them becomes unavailable, we need to obtain 3
+for distributed storage systems deploying RS codes.                  other blocks to reconstruct it until it has been repaired
+According to the demand of data, Zebra can split data                on a replacement server. In a unit of time, this means
+into multiple tiers such that data in different tiers are            that 16 (2 × 100 + 4 × 10) × 3 × 64 MB = 7.5 GB on
+encoded with RS codes with different values of pa-                   average will be read from disks and transferred through
+rameters. By solving geometric programming problems,                 network per unit of time.
+Zebra determines the parameter values of RS codes                       Under the Zebra framework, on the other hand, we
+in each tier, such that hot data can be reconstructed                can encode these 6 data blocks into two tiers, with two
+with low overhead and cold data can enjoy low storage                RS codes. We encode the two hot blocks with a (2, 1)
+overhead at the same time. When demand changes,                      RS code and the other four blocks with a (4, 1) RS code.
+  1 The time of the reconstruction is measured using the zfec li-    In each tier, we still have 1 parity blocks in this way,
+brary [13] running on an Intel Core i7 processor.                    maintaining the same storage overhead. Meanwhile, we
+can still tolerate the failure of any single block. How-     in Zebra we propose to dynamically assign data into
+ever, this time we can significantly reduce the average      multiple tiers by their demand so as to achieve a flexible
+number of blocks to visit per unit of time. Though           tradeoff between storage and reconstruction overhead.
+the cold blocks need to obtain 4 blocks to reconstruct,         Some distributed storage systems, such as
+the hot blocks have dominant demand with much less           HDFS [23], allow data to be stored under a tiered
+blocks to obtain. On average per unit of time, we need       architecture, where data in different tiers are stored by
+to have 61 (2 × 2 × 100 + 4 × 4 × 10) × 64 MB = 5.83         different erasure codes or replication with preconfigured
+GB to read, saving corresponding disk I/O and network        parameters and can be automatically migrated between
+transfer by 22.23%. For the two hot blocks in particular,    different tiers [15], [24]. However, all these systems
+their reconstruction overhead can simply be reduced          require users to configure the erasure code used in each
+from 3 to 2 blocks, i.e., 33.3% reduction in time, disk      tier as well as their parameters statically. Hence, they
+I/O, and network transfer.                                   can not well adapt themselves to the ever-changing
+   In this example, we deploy two tiers of RS codes.         workload. Besides, as in different tiers the storage
+However, Zebra is not limited to only two tiers. In fact,    overhead incurred by the corresponding erasure codes
+we can flexibly deploy any number of tiers inside the        will also be different, it is hard to control the overall
+Zebra framework with different parameter values of RS        storage overhead. The Zebra framework, on the other
+codes, where the number of tiers and the parameter           hand, does not need to specify parameters of each tier
+values can be efficiently calculated according to the        or even the number of tiers. According to the demand
+demand of data, as well as the requirements of storage       of data, Zebra can configure itself flexibly, where only
+overhead and failure tolerance.                              the overall storage overhead and failure tolerance need
+                                                             to be manually specified.
+                 III. R ELATED W ORK
+                                                                              IV. S YSTEM M ODEL
+   At the scale of petabyte storage, erasure coding
+has become more and more attractive to distributed              In this paper, we assume that in a distributed storage
+storage systems because of its low storage overhead and      system, data are stored in blocks with the same size.
+high failure tolerance. Hence, many distributed storage      This is a common practice in distributed storage systems
+systems, such as HDFS [9], [15], Openstack Swift [5],        (e.g., HDFS [3]).
+Google file system [6], and Windows Azure storage [8],          Assume that we have N blocks in total, and each
+are moving towards or have deployed erasure coding as        block Bi is associated with demand of di visits per unit
+an alternative to replications, where in most cases RS       of time, i = 1, . . . , N . We also assume that any r block
+codes are chosen by these distributed storage systems.       failures should be tolerated without data loss. Hence,
+However, they all choose only one kind of erasure code       in the Zebra framework each block will be encoded
+with fixed parameters. In other words, it is hard to trade   with a (ki , r) RS code, where we call ki as the rank of
+well between storage overhead and reconstruction over-       block Bi . For convenience, we let D = (d1 , . . . , dN ),
+head of erasure codes, under the dynamical workload          and K = (k1 , . . . , kN ). We also want to control the
+with highly skewed data demand [16].                         overall storage overhead such that the overall storage
+   Traditional RS codes can incur a high overhead of         space consumed is no more than C times of the original
+reconstruction when some of the data are not available       data.
+due to failures inside distributed storage systems [12],        In this model, we assume that the RS codes deployed
+[17]. There has been a growing attention of improving        in the distributed storage system should be systematic.
+the overhead of reconstruction of erasure codes. For         In other words, a (k, r) systematic RS code will com-
+example, locally repairable codes [18] can achieve low       pute k + r blocks that directly contains k original data
+reconstruction overhead by allowing unavailable data to      blocks. The other r blocks are known as parity blocks.
+be reconstructed from a small number of other servers.       In this way, we can always directly obtain any data
+Similar ideas have been applied in the design of other       block without decoding as long as it is available. Hence,
+erasure codes [8], [17], [19], [20], [21]. On the other      we can assume that all demand will go directly to the
+hand, another family of erasure codes, called regenerat-     corresponding data blocks rather than parity blocks,
+ing codes, are designed to achieve the optimal network       unless the demanded data blocks are unavailable.
+transfer in the reconstruction [22]. All these erasure          We now use this model to represent the way to encode
+codes, however, are optimized for their own objectives       data in one or multiple tiers with RS codes. Fig. 3
+over all encoded data, unaware of that the demand of         (without loss of generality, we can rewrite Ai as Bi+3 ,
+data can be high skewed. As data with different demand       i = 1, 2, 3) illustrates two examples of this model where
+may have different performance objectives, applying          N = 6, C = 34 , and D = {100, 10, 10, 100, 10, 10}. In
+one single erasure code over all data may not achieve        Fig. 3a, ki = 3 for all i, i.e., all blocks are encoded in
+all their objectives. Different from these erasure codes,    one tier with a (3, 1) RS code. On the other hand, in
+Fig. 3b, we have K = {2, 4, 4, 2, 4, 4} such that the six       Second, the solution solved from (1)-(3) is an offline
+blocks are encoded into two tiers with a (2, 1) and a        solution. In other words, we need to know the demand
+(4, 1) RS code.                                              in advance before we can get the optimal solution,
+   In this way, we can see that the number of tiers in       which makes it impractical. We need to find an online
+the model do not need to be explicitly defined as blocks     algorithm that can solve K in advance of the demand.
+with the same rank can naturally be categorized into the        Third, given a solution of this problem, we can’t
+same tier. Once the rank of each block is equal to each      even guarantee that it is feasible. For example, if the
+other, for example, it becomes the conventional case         solution is K = {8, 8, 8, 8, 8, 8}, we will need to encode
+of only one tier. Hence, we are not limited by a given       6 blocks with an (8, r) RS code. This is impossible
+number of tiers, and we can easily change the number         without rearranging the data blocks into a smaller size.
+of tiers when demand changes.                                Variable-size blocks, however, will incur significantly
+   In this paper, our objective is to minimize the overall   more complexity to manage data inside the distributed
+overhead of reconstruction with respect to the constraint    storage system. In this paper, we retain the assumption
+of the overall storage overhead C. As shown in Fig. 1,       of fixed-size blocks and manage to encode data with
+the reconstruction overhead of a block increases linearly    such solutions without incurring much additional over-
+with its rank. We assume that each block has the same        head.
+chance to be unavailable. Thus, the chance of recon-            In the rest of the paper, we introduce the Zebra
+structing a block should also increase linearly with its     framework that solves these practical issues efficiently
+demand. Combining all blocks together, we  PNcan define      and then show the encoding scheme under the Zebra
+the overall reconstruction overhead as        i=1 di ki =    framework.
+D · K.
+   Besides the overall reconstruction overhead, we need                      V. Z EBRA F RAMEWORK
+to control the overall storage overhead, which can be
+computed with D and K in the model. Since each block         A. Solving ranks efficiently
+has the same size, we assume that the size of each block        In the Zebra framework, we propose a few heuris-
+is 1 for convenience. Thus, the storage space consumed       tics to compute ranks of blocks efficiently. We start
+to store block Bi and its parity is 1 + kri . The sum of     from temporarily removing the integer constraint (3)
+                                      PN
+storage space of all blocks is N + i=1 kri . Since the       and resolving the complexity issues of the non-integer
+total storage space we can use under the constraint of       geometric programming problem in (1)-(2) by studying
+the overall storagePoverhead C is CN , we can write          its property.
+this constraint as i=1 k1i ≤ (C−1)N
+                      N
+                                    r   .                       Without loss of generality, we assume that in D, di ≥
+   Therefore, we can solve K to minimize the overall         dj if i > j. In other words, we sort the element in D in
+reconstruction overhead with respect to the storage over-    a non-ascending order. In this way, an optimal solution
+head by the following integer geometric programming          of K in (1)-(2) should also be in non-descending order.
+problem.                                                        We prove this property by contradiction. Assume that
+                                                             there exist i and j in an optimal solution of (1)-(2) such
+           min         D·K                             (1)
+                       N
+                                                             that ki > kj where i < j, and then the reconstruction
+                       X 1            (C − 1)N               overhead of block i and j is di ki + dj kj . If di > dj ,
+            s.t.                  ≤            ,       (2)
+                       i=1
+                             ki           r                  it is straightforward that di ki + dj kj > di kj + dj ki .
+                                                             Therefore, we can get a solution with even lower overall
+                       ki ∈ Z+ .                       (3)
+                                                             reconstruction overhead by exchange the rank of block
+   Typically, a geometric programming problem can be         Bi and Bj , which is contradictory to the assumption
+easily converted to a convex optimization problem and        that the original solution is optimal. On the other hand,
+                                                                                                         2ki kj
+solved efficiently [25]. However, there are some other       if di = dj , we can assign a new rank, ki +k     j
+                                                                                                                , to both
+issues that makes it challenging to achieve a practical      block Bi and Bj to get a lower overall reconstruction
+solution by directly solving this problem.                   overhead, while still satisfying the condition in (2). This
+   First, in a distributed storage system there can be an    is also contradictory to the assumption that the original
+extremely large number of data blocks. For example,          solution is optimal.
+in HDFS the default block size is 64 MB. If there               From this property, we can directly get a corollary
+are 1 PB of data stored in HDFS, there will be over          that ki = kj if di = dj . In other words, if two
+107 blocks in total. No solver of convex optimization        block have the same demand, they will also have the
+problems can solve our model in a reasonable amount          same rank in the optimal solution. Therefore, inspired
+of time. Besides, the geometric programming problem          by this property, we can refine the original model to
+in (1)-(3) is an integer programming problem. This also      significantly decrease the complexity to solve it, by
+significantly increases the complexity to solve it.          reducing the number of variables to solve.
+   First, we assume that all blocks of the same file             (a) files merged with similar demand                        (b) reconstruction overhead
+should have the same or similar demand in a distributed               55                                                    3.0 1e8
+                                                                                                                            2.8
+
+                                                                                                   overall reconstruction
+storage system. In practice, if the demand of blocks in               50                                                                      ideal K
+                                                                      45                                                    2.6               Zebra
+a single file is not the same, we can use the demand                                                                        2.4               single RS
+                                                                      40                                                    2.2
+                                                                 # files
+                                                                                                    overhead (# blocks)
+of the hottest block of the file as the demand of the
+                                                                      35                                                    2.0
+file. The intuition of this assumption is that typically a
+                                                                      30                                                    1.8
+distributed storage system that stores large-size files will                                                                1.6
+                                                                      25                                                    1.4
+have distributed data processing system running upon it,              201 2 3 4 5 6 7 8 9 10                                1.21 2 3 4 5 6 7 8 9 10
+such as Hadoop and Spark, which will visit each block                              t                                                      t
+of the file distributively. Therefore, once a file is visited,
+all of its blocks will probably be visited with the same
+                                                                  Fig. 4. Complexity and approximation ratio of the refined model.
+demand. Notice that if all blocks of the same file have
+the same demand, this step will not hurt the optimality
+of the solution.                                                 show in Fig. 2. In this workload, there are 15565 files in
+   Second, we extend this property by assuming that              total. If we store data into blocks of 64 MB, there will
+blocks with similar demand will also have similar                be 1.8 × 107 blocks. The result in Fig. 4a shows that
+ranks. Thus, we can classify the demand of all blocks            we can reduce the number of files into 55 even when
+into discrete categories. The simplest way is to set a           t = 1. Notice that when t = 1, we actually don’t merge
+parameter t where any demand that falls into the interval        files unless their demand is exactly the same. When we
+(tx−t, tx] will be approximated as tx, ∀x ∈ Z∗ . Hence,          increase the value of t, we can even further reduce the
+files with similar demand will be merged into the same           complexity of solving k. In fact, we can always solve
+one, and we can further reduce the complexity to solve           K within 0.1 seconds for this workload, with any value
+the model. For the cold data, this is especially useful, as      of t.
+cold data typically occupy a very large portion of all the          We calculate the overall reconstruction overhead in
+data, yet with similar demand of very little values. Thus,       Fig. 4b. The overall reconstruction overhead is calcu-
+we can quickly categorize cold data into few intervals,          lated by (4), which represents the reconstruction over-
+and then thousands of files can be grouped into few              head of all block visits under the given demand. We
+ones.                                                            assume that any two block failures should be tolerated,
+   After these two steps, we can refine the model such           i.e., r = 2, and the overall storage overhead should be
+that there are n files, where each file Fi is associated         no more than 1.25. We can see that the performance
+with size wi and demand di , i = 1, . . . ,Pn. The sum of        of the approximated solution of K (approximated K)
+                                               n
+of the size of each file must be N , i.e., i=1 wi = N .          is close to the non-integer solution of K (ideal K) in
+Each file will be encoded with a (ki , r) RS code, and           (4)-(6), with 11.4% more reconstruction overhead in
+the overall storage overhead should be no more than              the worst case. Compared to the single erasure code,
+C. Hence, the problem to solve the optimal K can be              which we use (8, 2) RS code in this case to meet
+redefined as                                                     the requirement of storage overhead, the approximated
+                         n
+                         X                                       solution of K can save up to 28.2% reconstruction
+            min                wi di ki                   (4)    overhead.
+                         i=1
+                         Xn
+                            wi   (C − 1)N                        B. Encoding data in multiple tiers
+              s.t.             ≤                          (5)
+                            k
+                         i=1 i
+                                     r                              From the ranks solved above, we can now encode
+                         ki > 0, ∀i.                      (6)    data into multiple tiers. The number of tiers is deter-
+                                                                 mined by merging files with the same rank into one
+This is still a geometric programming problem. Notice            tier. We actually encode blocks in each tier with a
+that here we remove the constraint (3) that each ki must         (ki , r) RS code, where ki is the rank of the file and
+be an integer. In the Zebra framework, we will solve             r is the number of failures to tolerate. In particular,
+this problem first, and then round ki to an integer. For         for the blocks of rank 1, i.e., ki = 1, they will be
+now we always round ki to dke in the approximated                replicated with 1 + r copies. Since data in each tier
+solution. In this way, we won’t break the requirement            are migrated from multiple files, the chance of having a
+of storage overhead in (4), while the   Pnworst case of          tier with no more than ki blocks is negligible. Inside
+additional reconstruction overhead is i=1 wi di . Thus,          each tier, we encode every ki blocks into r parity
+the approximation ratio of this solution is 1 + min1i ki .       blocks with the (ki , r) RS code where we term such
+   In practice, the approximation ratio of a real workload       a group of ki + r blocks as a stripe. All blocks in
+can be close to 1. To demonstrate this gap, we run               each stripe will be stored into different servers. If we
+the simulation on the workload from Facebook that we             have remaining blocks or the total number of blocks
+is less than ki , we will temporarily encode them with
+an (l, r) RS code if the number of remaining blocks                                                      3.0 1e6
+                                                                                                                           α=0.2          α=1
+
+
+                                                                                overall reconstruction
+is l. Since l < ki , this will incur additional storage                                                  2.5               α=0.5          single RS
+overhead. However, given the large number of blocks
+                                                                                                         2.0               α=0.8
+stored in a distributed storage system, this additional
+
+
+                                                                                 overhead (# blocks)
+storage overhead is marginal.                                                                            1.5
+   VI. D EPLOYING Z EBRA WITH O NLINE D EMAND                                                            1.0
+A. Online demand                                                                                         0.5
+   Before we deploy the Zebra framework in any prac-                                                     0.00    5           10 15         20         25
+tical scenarios, we should be aware that ranks inside                                                                        time (hr.)
+the Zebra framework can only be constructed with the
+given demand, however, they must work well with the
+                                                                 Fig. 5. Overall reconstruction overhead with demand updated online.
+demand in the future.
+   To meet this requirement with online demand, the
+demand D we use in the model will not be purely                  B. Data migration
+determined by the most recent demand, but a linear
+combination of demand over a longer period of time.
+Specifically, we split the time into intervals. For exam-                     1087
+                                                                              106
+                                                              # blocks with
+ple, if the interval is one hour, we measure the demand                                                  α=1       α=0.8
+                                                                              105
+of each file every hour, and the demand measured in this                      104
+                                                              ranks changed
+                                                                              103
+hour is the most recent demand in the next interval.                          102
+                                                                              101
+   If we use the most recent demand to solve K, we                            10
+may imprudently increase ki of some block if this block                              0                         5      10           15        20            25
+gets transiently high demand in the latest interval and                       1065
+                                                              # blocks with
+in the next interval there will be no such high demand.                       104                        α=0.5       α=0.2
+Therefore, we also need to consider the consistency of                        103
+                                                                              102
+                                                              ranks changed
+the demand besides the latest demand. In this paper,                          101
+we use α to achieve a flexible tradeoff between the                           100
+                                                                              10 0                             5      10          15         20            25
+consistency and the transiency of the demand. Assume
+                                                                                                                        time (hr.)
+that D0 is the most recent demand and D is the demand
+we use to calculate K in the last interval. After this           Fig. 6. The number of blocks to migrate into different ranks after
+interval, we are going to update the demand D as                 each hour.
+              (1 − α)D + αD0 , α ∈ [0, 1].             (7)          Once the demand changes after each time interval, we
+It is straightforward that when α = 1, we will always            will need to update the files if their ranks are changed.
+use the latest demand to calculate K used in the next            This may involve quite a lot of migration overhead,
+interval. On the other hand, as α goes to 0, the latest          especially the network transfer. An naive way to update
+demand will be less and less taken into account. When            files with new ranks is to compute new parity blocks
+α = 0, D won’t be updated at any time. In this                   with the new RS code and then remove the old parity
+way, the transient demand will get smoother over time.           blocks. To encode r parity blocks from k data blocks
+Therefore, we won’t be easily tricked by the transient           with a (k, r) RS code, we need to transfer at least
+demand. In other words, a smaller α can help to make             k + r − 1 blocks, by computing all parity blocks on
+it more consistent in the updated demand D over time.            one server and sending r − 1 ones to other servers. In
+   Once again, we run the simulation with the hourly             other words, if the rank of a file is updated, the traffic to
+updated demand on the workload from Facebook, with               generate new parity blocks will be even more than the
+r = 2, C = 1.25, and t = 1. Fig. 5 illustrates the results.      amount of this file. Fig. 6 shows the number of blocks
+Compared to the single RS code, Zebra can work well              that have different ranks after each hour. We can see
+with online demand, and we can on average save 60.8%             that the migration overhead varies with different values
+of reconstruction overhead in general. We can observe            of α, and it is hard to predict (as we have more blocks
+that in this workload, the transiency is quite significant       to migrate when α = 0.8 than α = 1. In fact, there
+(from the overhead of the single RS code), and thus with         can be 650.5 TB of data to migrate to new RS codes
+a larger α we can slightly better adapt to the general           at some hour when α = 0.8. In other words, we need
+workload change. In fact, the best choice of α depends           to generate new parity blocks for almost 32 of all data.
+on the characteristics of the workload, and we will show         This will not only hinder the migration process from
+the results with more workload in Sec. VII.                      finishing quickly, but hurt the performance of the data
+access as well. Hence, though migration is unavoidable                                                     TABLE I
+to meet the ever-changing demand, our objective is to                              N ETWORK TRANSFER (N O . OF BLOCKS ) BETWEEN (mk, r) AND
+                                                                                                      (k, r) RS CODES .
+reduce the network transfer for migration to a marginal
+level, for any values of α.                                                                         without Cauchy matrix          with Cauchy matrix
+   In this paper, we propose a different way to encode                              downgrade            mk + r − 1                     (m − 1)r
+                                                                                     upgrade            m(k + r − 1)              (m − 1)(k + 2r − 1)
+data such that we can control the migration overhead
+without increasing the overall reconstruction overhead
+significantly. We use Cauchy RS codes [26], [27] in
+Zebra, which contains a Cauchy matrix in its generating                                           m < 2 + k−1    r . Apparently when m = 2 this condition
+matrix. With a (k, r) RS code, we have a (k + r) × k                                              can always be satisfied, and we will use this property
+matrix G as its generating matrix, such that the encod-                                           to save the migration overhead.
+ing operation can be formalized as the multiplication                                                However, we can rely on the Cauchy matrix only
+of the generating matrix and the k data blocks, as                                                when the rank of the new code is multiple times or can
+illustrated in Fig. 7a. In particular, if the first k rows                                        be divided into the rank of the old code. To maximize
+of G are an identity matrix, the corresponding RS code                                            this effect, we can also change the way to solve ranks.
+will be systematic.
+                     In this way, we can write G as                                              We set kmax , an upper bound of ranks of all blocks, such
+          I                                                                                       that all ki should be no more than kmax . Moreover, the
+G =           . In a Cauchy RS code, the matrix Ĝ is
+          Ĝ                                                                                      rank of all blocks should be a divisor of kmax . Given ki
+a Cauchy matrix. An advantage of Cauchy RS code is
+                                                                                                  solved from (4)-(6) with an additional constraint ki ≤
+that all encoding operations can be converted into XOR
+                                                                                                  kmax , ∀ki , we encode the corresponding block with a
+operations. More importantly, Cauchy matrix makes it
+                                                                                                  (k, r) RS code where k is the minimum divisor of kmax
+easy to migrate from one RS code into another RS code
+                                                                                                  that is no less than ki .
+with significantly less overhead, since any submatrix of
+                                                                                                     When we migrate m stripes of blocks encoded with
+a Cauchy matrix is still a Cauchy matrix (Fig. 7b).
+                                                                                                  a (k, r) RS code into one stripe with an (mk, r) RS
+   Because of this property, we can easily downgrade
+                                                                                                  code, we may also need to move data blocks because
+or upgrade data between an (mk, r) and a (k, r) RS
+                                                                                                  two blocks in different stripes may be stored in the same
+code, m ∈ Z+ . We show in Fig. 7c and Fig. 7d
+                                                                                                  server. In Zebra, if kmax is set, we store every kmax data
+how we can migrate between these two RS codes. To
+                                                                                                  blocks into different servers, and compute parity blocks
+downgrade from a (k, r) RS code to an (mk, r) RS
+                                                                                                  with the corresponding (k, r) RS code which will be
+code, by applying the property of the Cauchy matrix,
+                                                                                                  stored into other servers. When we need to migrate into
+we only need to XOR the r parity blocks in the m
+                                                                                                  an (mk, r) RS code, we will not need to move any
+stripes together. To upgrade from an (mk, r) RS code
+                                                                                                  data blocks, but only migrate parity blocks as described
+to a (k, r) RS code, we need to generate the parity
+                                                                                                  above. This method can also be applied to the upgrade
+blocks in the m − 1 stripes under the (k, r) RS code
+                                                                                                  case as well. Apparently, we can maximize the effect
+and XOR the new parity blocks and the existing parity
+                                                                                                  of the Cauchy matrix by wisely selecting the value
+blocks into the parity blocks of the last stripe. We show
+                                                                                                  of kmax . For example, when kmax = 16, we have 5
+in Table I the network transfer of both upgrade and
+                                                                                                  available ranks (1, 2, 4, 8, 16). Thus, when downgrading
+downgrade, as well as the network transfer of the naive
+                                                                                                  or upgrading to any neighbor ranks we can always
+migration scheme. We can see that the Cauchy matrix
+                                                                                                  exploit the Cauchy matrix to save network transfer (with
+can help to save network transfer in both cases, when
+                                                                                                  m = 2). For some other values of kmax , some rank may
+                                                                                                  not be integer multiples of its neighboring rank (e.g., 4
+   0
+       1 0 0 0
+                     1
+                                   1
+                                      0
+                                         D
+                                             1
+                                                        D1   D2     D3    D4   P1    P2
+                                                                                                  and 3 when kmax = 12), we will have to remove all
+                          0      1
+   B 0 1 0 0 C                        B D C
+k=4
+   B                 C 1
+   B 0 0 1 0 C B D C B D C
+                             D     2  B      C                                                    existing   parity blocks and generate new parity blocks
+   B                 C B
+                       2         C B
+                                   3         C
+   B 0 0 0 1 C⇥@ D A=B D C                                                                        with   the  new ranks.
+   B                 C 3           4  B      C
+   @ 1 5 2 7 A               D        @ P A
+r=2
+                       4           1
+       5 1 3 4                     2
+                         data blocks
+                                         P                         P'1    P'2  P'3   P'4             In  Fig.  8, we compare the performance with different
+   generating matrix               data and parity
+                                        blocks          D 1   D 2   D 3   D 4
+                                                                                                  values    of  kmax . We run the Facebook workload by
+(a) encoding of a (k=4, r=2) Cauchy RS code (c) upgrade from (4,2) RS code to (2,2) RS code       updating     ranks   of data every hour and calculate all
+0
+   1 0
+         1                 0
+                           1  D
+                                  1                     D 1   D 2   D 3   D 4
+                                                                                                  the  network      transfer  incurred by the migration, with
+                ✓     ◆
+B 0 1 C                    B D C
+B
+@ 1 5 A
+         C⇥ D 1
+              2    D
+                        =  B
+                           2
+                           @ P A
+                           0
+                                  C
+                                                                    P'1   P'2  P'3   P'4
+                                                                                                  C   =    1.25,   r   =  2,  t = 1, and α = 0.8. We can
+                           1
+
+0
+   5 1
+         1
+                           0
+                           2
+                           0
+                              P0
+                               1
+                                  1
+                                       0
+                                      P +P =P
+                                       3   1                                                      see  that  all  values   of  kmax in Fig. 8 can significantly
+                               0       0
+   1 0                        D       P +P =P
+B 0 1 C
+B        C
+                ✓
+                   D
+                      ◆    3
+                           B
+                               2
+                              D C C
+                                       4   2
+                                                                                                  reduce   the  network    transfer such that only 2.2% of the
+@ 2 7 A⇥ D
+              3
+                        =B 4
+                           @ P A
+                           0
+
+   3 4
+              4            3
+                           0
+                           4  P
+                                                        D1    D2    D3    D4   P1    P2           original   network    transfer will be incurred (kmax = 16).
+     (b) split (4,2) RS code into (2,2) RS code (d) downgrade from (2,2) RS code to (4,2) RS code
+                                                                                                  The   overall   reconstruction   overhead, on the other hand,
+                                                                                                  will increase by between 8.7% (kmax = 24) and 29.8%
+    Fig. 7. Construction of the Cauchy RS code and its migration.                                 (kmax = 16).
+                                                                                                                     demand.
+                             2.0 1e7                                                3.0 1e7
+
+    network transfer of                                    overall reconstruction
+                             1.5                                                    2.5                                                     TABLE II
+                                                                                    2.0                               C HARACTERISTICS OF WORKLOADS USED IN THE SIMULATION .
+
+
+
+
+    migration (# blocks)
+                             1.0                                                    1.5
+                                                            overhead (# blocks)
+                             0.5                                                    1.0                               workload
+                                                                                                                        FB1
+                                                                                                                                   size
+                                                                                                                                 0.96 PB
+                                                                                                                                           # files
+                                                                                                                                           15223
+                                                                                                                                                     max demand
+                                                                                                                                                        688
+                                                                                                                                                                  mean demand
+                                                                                                                                                                      1.6
+                                                                                    0.5                                 FB2      1.07 PB   16256        721           1.5
+                             0.0             no kmax                                0.0   single RS
+                                           kmax = 12                                         no kmax
+                                                                                          kmax = 12
+                                           kmax = 16                                      kmax = 16                     Like previous evaluations, we divide the time in each
+                                           kmax = 20                                      kmax = 20                  workload into intervals, where each time interval spans
+                                           kmax = 24                                      kmax = 24
+                                                                                                                     the same amount of time. In our simulation, we set each
+                                                                                                                     interval as one hour. In each interval, we calculate the
+Fig. 8. Network transfer incurred by the migration and the overall
+reconstruction overhead with different values of kmax , when α = 0.8.                                                rank of files with the demand updated by (7). The new
+                                                                                                                     file that appears for the first time in an interval will
+                                                                                                                     be stored with with a default rank. The default rank
+
+
+                         saving of
+                             100.0%                          additional                 20.0%
+
+         ratio of
+                                                                                                                     is calculated as the minimum divisor of kmax that is
+                              75.0%
+                              50.0%                         ovherhead of                10.0%
+                                                                                                                                     r
+                                                                                                                     no less than C−1   , and can hence achieve the required
+                              25.0%
+
+
+     migration traffic migration traffic
+                                                           reconstruction
+                                                                                                                     storage overhead C with r failures to tolerate. In the
+                               0.0% 2 5 8 1                                              0.0% 2 5 8 1
+                                               0. . 0. =
+                                             α=α=0α= α
+                                                                                                         0. . 0. =
+                                                                                                       α=α=0α= α
+                                                                                                                     simulation, the size of each block is 64 MB. After each
+                                                                                                                     interval, the ranks of all existing files will be updated.
+
+                                                                                    total traffic in
+                                                                                                                     Given the rank of each file, we can further calculate
+                                                                                                       40
+
+    to demand traffic
+                                           2.0%                                                                      the average overhead of reconstruction per visit, the
+                                                                                                       20
+                                                                                    migration (TB)
+                                           1.0%                                                                      storage overhead of blocks, and the network transfer
+                                           0.0% 2 5 8 1                                                 0 2 5 81     of the migration.
+                                               0. . 0. =
+                                             α=α=0α= α
+                                                                                                         0. . 0. =
+                                                                                                       α=α=0α= α        In the simulation, besides Zebra and one RS code,
+                                                                                                                     we add another scheme that encodes data into two tiers
+                                                                                                                     of RS codes. This scheme is similar to the method
+Fig. 9. Comparison of network transfer incurred by migration with                                                    proposed in [24] which implements two tiers with two
+various values of α, when kmax = 24.
+                                                                                                                     other preconfigured erasure codes. In our simulation, the
+                                                                                                                     two tiers both deploy RS codes for the purpose of fair
+   We show the results of other values of α in Fig. 9.                                                               comparison. For convenience, we name the two tiers as
+We can see that with any values of α, the total network                                                              hot tier and cold tier, as the hot tier will store hot data
+transfer for migration will be reduced to no more than                                                               with low reconstruction overhead while the cold tier
+37 TB, which occupies less than 2.4% of all traffic                                                                  can provide low storage overhead for the cold data. In
+incurred by demand. Meanwhile, at most 12.1% more                                                                    this scheme, under the constraint of the overall storage
+reconstruction overhead will be incurred. Hence, we                                                                  overhead, we try to assign as much hot data as possible
+reduce the network transfer for migration to a marginal                                                              to the hot tier and store the rest in the cold tier. In the
+level without incurring much additional reconstruction                                                               simulation, we deploy a (4, 2) RS code in the hot tier
+overhead.                                                                                                            and a (12, 2) RS code in the cold tier.
+                                                                                                                     B. Results
+                                                VII. S IMULATION
+                                                                                                                        We first evaluate the reconstruction overhead. At
+A. Methodology                                                                                                       each time interval, we calculate the average of the
+   We evaluate the performance of the Zebra framework                                                                reconstruction overhead per visit, where we define the
+with more workloads in this section. The two work-                                                                   reconstruction overhead as the number of blocks to read
+loads [14] used in this paper are obtained from a 600-                                                               in the reconstruction. In other words, if the rank of
+machine cluster at Facebook running MapReduce jobs,                                                                  a block is k, its reconstruction overhead at that time
+each of which spans 24 hours. In the workload, the                                                                   is k as well. This average reconstruction overhead per
+demand of HDFS files is recorded. We show character-                                                                 visit can be considered as the expected reconstruction
+istics of the two workloads in Table II, and we have                                                                 overhead of visiting an unavailable block once we have
+been using the FB2 workload to evaluate the design of                                                                a failure in the distributed storage system. In all the
+Zebra throughout this paper so far. From Table II we can                                                             simulations below, we set C = 1.4, r = 2, t = 1,
+see that both workloads have a significant skewness of                                                               α = 0.5, and kmax = 24, unless mentioned otherwise.
+data demand, where more than half of data have demand                                                                   We show the average reconstruction overhead in
+less than the 1.6 and only a small portion has very high                                                             Fig. 10, where we sort files by their demand, and then
+                                 (a) storage overhead 1.2x (b) storage overhead 1.4x                      use the same storage overhead as Fig. 10b. We find that
+                                18                          18                                            the two workloads demonstrate different reconstruction
+                                          (10,2) RS                  (5,2) RS
+                                16                          16
+
+
+  average reconstruction
+                                          Zebra (FB1)                Zebra (FB1)                          overhead with different values of α, where FB1 favors
+                                14        Two RS (FB1)      14       Two RS (FB1)                         lower α for the consistency while FB2 favors higher
+                                12        Zebra (FB2)       12       Zebra (FB2)                          α for the transiency of the demand. Hence, we believe
+                                          Two RS (FB2)               Two RS (FB2)
+                                10                          10
+
+
+overhead per visit (# blocks)
+                                                                                                          that the best choice of α depends on the characteristics
+                                 8                           8                                            of the workload.
+                                 6                           6
+                                 4                           4
+                                 2                           2
+                                                                                                                                           1.8     (5,2) RS
+
+
+                                                                                                                      storage overhead
+                                 00% 20% 40% 60% 80%100% 00% 20% 40% 60% 80%100%                                                           1.7     Zebra (FB1)
+                                                                                                                                           1.6     Two RS (FB2)
+                                     top percentage of file    top percentage of files                                                             Zebra (FB1)
+
+                                                                                                                      in the 1% interval
+                                      (sorted by demand)         (sorted by demand)                                                        1.5     Two RS (FB2)
+                                                                                                                                           1.4
+Fig. 10. Average reconstruction overhead per visit with storage                                                                            1.3
+overhead 1.2 and 1.4.                                                                                                                      1.2
+                                                                                                                                            90% 92% 94% 96% 98%
+                                                                                                                                               percentage of files
+calculate the average reconstruction overhead per visit                                                                                         (by demand from
+of files in a given percentage of top demanded files                                                                                              bottom to top)
+with C = 1.2 and 1.4, respectively. From Fig. 10a and
+Fig. 10b, we can see that all data can expect lower re-                                                       Fig. 12. Storage overhead of data with different demand.
+construction overhead per visit than the single RS code
+with the same storage overhead. The reason is that in                                                        We compare the storage overhead of data with differ-
+the Zebra framework, even though cold data may have                                                       ent demand in Fig. 12, where we measure the average
+higher reconstruction overhead than the single RS code,                                                   storage overhead of files in all time intervals. This
+their demand can actually occupy a very small portion                                                     time we sort the files by their demand (from bottom
+of all demand. Hence, on average, the reconstruction                                                      to top) and calculate the average storage overhead of
+overhead per visit of all data can be lower than the                                                      data in a 1% interval of files. For example, data points
+single RS code, especially for the hotter data. The two                                                   with 99% on the x-axis indicate the average storage
+RS codes can also achieve lower average reconstruction                                                    overhead of files with demand in the bottom 99%-
+overhead than the single RS codes. However, Zebra                                                         100% interval, i.e., the top 1% most demanded files.
+can achieve better results as it tries to minimize the                                                    In fact, 90% files have very low demand in both FB1
+overall reconstruction overhead. Similar results can also                                                 and FB2, and hence they all have very similar storage
+be obtained when we require for a higher value of                                                         overhead. In Fig. 12 we focus on the top 10% files. We
+storage overhead in Fig. 10b, where with two RS codes                                                     can see that at most 2% files have storage overhead
+we can not even compete with single RS codes due to                                                       higher than the given constraint in Zebra, indicating
+the static configuration of RS codes. On average, we                                                      their extremely high demand. On the other hand, due
+can save the average reconstruction overhead by 53.7%                                                     to the static configuration of the two RS codes, more
+and 54.9% for the top 15% demanded files in Fig. 10a                                                      data with high demand have to be stored in the cold tier
+and Fig. 11b, respectively.                                                                               with unnecessarily low storage overhead. Hence, with
+                                                                                                          the two RS codes, we can not fully utilize the storage
+
+
+
+
+                                  average reconstruction
+                                                                8                                         space, and this also explains why two RS codes have
+                                                                7    α=0.2 (FB1)      α=0.2 (FB2)         higher reconstruction overhead in Fig. 10b.
+                                                                6    α=0.5 (FB1)      α=0.5 (FB2)            We illustrate the network transfer incurred by the
+                                                                5    α=0.8 (FB1)      α=0.8 (FB2)         migration in Fig. 13, by comparing it with the total
+
+
+
+                                overhead per visit (# blocks)
+                                                                4                                         network transfer to serve the demand. With various
+                                                                3                                         constraints of the overall storage overhead, we can see
+                                                                2                                         that the total migration traffic never exceeds the 10% of
+                                                                1                                         the total demand traffic, thanks to the Cauchy RS codes
+                                                                00   20 40 60 80                    100   used in Zebra. Though more migration traffic can be
+                                                                      top percentage of files             observed with higher storage overhead, we can see that
+                                                                        (sorted by demand)                this increased amount of traffic is marginal.
+                                                                                                                           VIII. C ONCLUSIONS
+Fig. 11. Average reconstruction overhead with various values of α.
+                                                                                                            In this paper, we exploit the skewness of demand
+            We compare the choices of α in Fig. 11, in which we                                           in distributed storage systems and propose the Zebra
+                                          10.0%                            [9] “[HDFS-7295] Erasure Coding Support inside HDFS,”
+                                                                               https://issues.apache.org/jira/browse/HDFS-7285.
+                                                       FB 1
+
+
+
+             ratio of migration traffic
+                                                                          [10] H. Weatherspoon and J. D. Kubiatowicz, “Erasure Coding vs.
+                                           8.0%        FB 2                    Replication: A Quantitative Comparison,” in Proc. International
+                                                                               Workshop on Peer-To-Peer Systems (IPTPS), 2002.
+                                           6.0%                           [11] I. Reed and G. Solomon, “Polynomial Codes over Certain
+
+
+
+
+                 to demand traffic
+                                                                               Finite Fields,” Journal of the Society for Industrial and Applied
+                                                                               Mathematics, vol. 8, no. 2, pp. 300–304, 1960.
+                                           4.0%                           [12] K. V. Rashmi, N. B. Shah, D. Gu, H. Kuang, D. Borthakur, and
+                                                                               K. Ramchandran, “A Solution to the Network Challenges of
+                                           2.0%                                Data Recovery in Erasure-coded Distributed Storage Systems:
+                                                                               A Study on the Facebook Warehouse Cluster,” in Proc. 5th
+                                                                               USENIX Workshop on Hot Topics in Storage and File Sys-
+                                           0.0% C = 1.2 C = 1.3 C = 1.4        tems (HotStorage), 2013.
+                                                                          [13] Z.        Wilcox-O’Hearn,         “zfec       1.4.24,”      2012,
+                                                                               http://pypi.python.org/pypi/zfec.
+                                                                          [14] https://github.com/SWIMProjectUCB/SWIM/wiki/Workloads-
+Fig. 13. The ratio of the total network transfer incurred by the
+                                                                               repository.
+migration to the network transfer incurred to serve demand.
+                                                                          [15] W.       Wang       and       H.     Kuang,       “Saving     ca-
+                                                                               pacity          with         HDFS           RAID,”          2014,
+                                                                               https://code.facebook.com/posts/536638663113101/saving-
+framework that can efficiently encode data according to                        capacity-with-hdfs-raid/.
+                                                                          [16] Y. Chen, S. Alspaugh, and R. Katz, “Interactive Analytical
+their demand into multiple tiers. By deploying the Zebra                       Processing in Big Data Systems: A Cross-industry Study
+framework, we can achieve a much lower reconstruction                          of MapReduce Workloads,” Proc. VLDB Endow., vol. 5,
+overhead for the hot data, while spending less storage                         no. 12, pp. 1802–1813, August 2012. [Online]. Available:
+                                                                               http://dx.doi.org/10.14778/2367502.2367519
+space to store the cold data. With the ever-changing                      [17] D. S. Papailiopoulos, J. Luo, A. G. Dimakis, C. Huang, and
+demand, Zebra can update itself accordingly with a low                         J. Li, “Simple Regenerating Codes: Network Coding for Cloud
+network transfer in the migration.                                             Storage,” in Proc. of IEEE INFOCOM, 2012.
+                                                                          [18] D. Papailiopoulos and A. Dimakis, “Locally Repairable Codes,”
+                                                                               in Proc. IEEE International Symposium on Information Theory
+                                          ACKNOWLEDGMENT                       Proceedings (ISIT), July 2012, pp. 2771–2775.
+   This research is partially supported by the SAVI                       [19] F. Oggier and A. Datta, “Self-repairing Homomorphic Codes
+                                                                               for Distributed Storage Systems,” in Proc. of IEEE INFOCOM,
+NSERC Strategic Networks project, two NSERC Strate-                            Apr. 2011.
+gic Partnership Projects, and an NSERC Discovery                          [20] K. V. Rashmi, N. B. Shah, D. Gu, H. Kuang, D. Borthakur,
+Research Program.                                                              and K. Ramchandran, “A “HitchHiker’s” Guide to Fast and
+                                                                               Efficient Data Reconstruction in Erasure-coded Data Centers,”
+                                                                               in Proc ACM SIGCOMM, 2014.
+                                             R EFERENCES                  [21] C. Huang, M. Chen, and J. Li, “Pyramid Codes: Flexible
+                                                                               Schemes to Trade Space for Access Efficiency in Reliable
+ [1] B. Calder, J. Wang, A. Ogus, N. Nilakantan, A. Skjolsvold,                Data Storage Systems,” ACM Trans. Storage, vol. 9,
+     S. McKelvie, Y. Xu, S. Srivastav, J. Wu, H. Simitci, J. Haridas,          no. 1, pp. 3:1–3:28, March 2013. [Online]. Available:
+     C. Uddaraju, H. Khatri, A. Edwards, V. Bedekar, S. Mainali,               http://doi.acm.org/10.1145/2435204.2435207
+     R. Abbasi, A. Agarwal, M. F. u. Haq, M. I. u. Haq, D. Bhard-         [22] A. G. Dimakis, P. B. Godfrey, Y. Wu, M. J. Wainwright, and
+     waj, S. Dayanand, A. Adusumilli, M. McNett, S. Sankaran,                  K. Ramchandran, “Network Coding for Distributed Storage
+     K. Manivannan, and L. Rigas, “Windows azure storage: A highly             Systems,” IEEE Trans. Inform. Theory, vol. 56, no. 9, pp. 4539–
+     available cloud storage service with strong consistency,” in              4551, 2010.
+     Proceedings of the Twenty-Third ACM Symposium on Operating           [23] D.             Borthakur,            “HDFS              Architec-
+     Systems Principles (SOSP). ACM, 2011, pp. 143–157.                        ture        Guide,”         Hadoop         Apache         Project,
+ [2] S. Ghemawat, H. Gobioff, and S. Leung, “The Google File Sys-              http://hadoop.apache.org/common/docs/current/hdfs design.pdf.
+     tem,” in Proc ACM Symposium on Operating Systems Principles          [24] M. Xia, M. Saxena, M. Blaum, and D. A. Pease, “A Tale of
+     (SOSP), Oct. 2003.                                                        Two Erasure Codes in HDFS,” in Proc. USENIX Conference on
+ [3] K. Shvachko, H. Kuang, S. Radia, and R. Chansler, “The                    File and Storage Technologies (FAST), 2015.
+     Hadoop Distributed File System,” in Proc. 26th Symposium on          [25] S. Boyd and L. Vandenberghe, Convex Optimization. New
+     Mass Storage Systems and Technologies (MSST). IEEE, 2010.                 York: Cambridge University Press, 2004.
+ [4] M. Sathiamoorthy, M. Asteris, D. Papailiopoulos, A. G. Di-           [26] J. Blomer, M. Kalfane, M. Karpinski, R. Karp, M. Luby,
+     makis, R. Vadali, S. Chen, and D. Borthakur, “XORing Ele-                 and D. Zuckerman, “An XOR-based Erasure-resilient Coding
+     phants: Novel Erasure Codes for Big Data,” in Proc. VLDB                  Scheme,” International Computer Science Institute, Tech. Rep.
+     Endowment, 2013.                                                          Technical Report TR-95-048, August 1995.
+ [5] J.       Arnold,     “Erasure      Codes       With       Open-      [27] J. Plank and L. Xu, “Optimizing Cauchy Reed-Solomon Codes
+     Stack      Swift         Digging     Deeper,”     July     2013,          for Fault-Tolerant Network Storage Applications,” in Proc. IEEE
+     https://swiftstack.com/blog/2013/07/17/erasure-codes-with-                International Symposium on Network Computing and Applica-
+     openstack-swift-digging-deeper/.                                          tions, July 2006, pp. 173–180.
+ [6] D. Ford, F. Labelle, F. I. Popovici, M. Stokely, V.-A. Truong,
+     L. Barroso, C. Grimes, and S. Quinlan, “Availability in Globally
+     Distributed File System,” in Proc. USENIX Operating Systems
+     Design and Implementation, 2010.
+ [7] “HDFS-RAID,” http://wiki.apache.org/hadoop/HDFS-RAID.
+ [8] C. Huang, H. Simitci, Y. Xu, A. Ogus, B. Calder, P. Gopalan,
+     J. Li, and S. Yekhanin, “Erasure Coding in Windows Azure Stor-
+     age,” in Proc. USENIX Annual Technical Conference (USENIX
+     ATC), 2012.
+

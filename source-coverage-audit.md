@@ -1,0 +1,108 @@
+# Аудит покрытия источников
+
+Дата: `2026-04-20`
+
+Связанные каталоги проекта:
+
+- [readme.md](./readme.md)
+- [sources/meta.json](./sources/meta.json)
+- [conspects/meta.json](./conspects/meta.json)
+- [examples/meta.json](./examples/meta.json)
+
+## 1. Состояние корпуса
+
+До прошлого добора в каталоге было `18` источников.
+
+После первой волны расширения были добавлены:
+
+1. `tpds17_ear_2017`
+2. `pacemaker_osdi_2020`
+3. `cocytus_fast_2016`
+4. `tiger_osdi_2022`
+
+После текущей волны были добавлены и обработаны:
+
+1. `cbase_ec_electronics_2021`
+2. `greenhdfs_hotpower_2010`
+3. `janus_atc_2013`
+4. `hard_jbigdata_2019`
+5. `plank_fast_2009`
+
+Итоговый корпус сейчас содержит `27` источников.
+
+## 2. Broad Coverage С Пересечениями
+
+Текущий overlap-подсчёт по главным зонам диплома:
+
+- `репликация / hybrid / replication->EC`: `10`
+- `температура / hot-cold / workload-aware`: `9`
+- `transition / conversion / migration cost`: `12`
+- `survey / benchmarking / evaluation`: `3`
+
+Это означает, что после текущего добора корпус стал заметно более ровным:
+
+- блок `replication -> EC / hybrid redundancy` уже закрыт не только `Morph` и `RapidRAID`, но и `EAR`, `CBase-EC`, `Cocytus`, `HaRD`;
+- блок `temperature-aware policy` усилен не только `HSM`, `ELECT`, `ER-Store`, но и `CBase-EC`, `GreenHDFS`, `Janus`;
+- блок `practical transitions` теперь покрыт не только `HeART` и `PACEMAKER`, но и `EAR`, `HaRD`, `CBase-EC`, а также policy-level migration papers вроде `GreenHDFS` и `Janus`;
+- методология `evaluation` больше не держится почти целиком на одном systematic review: её теперь дополнительно поддерживает benchmark paper FAST'09.
+
+## 3. Что Закрыл Текущий Добор
+
+### `cbase_ec_electronics_2021`
+
+- Самый точный недостающий source для `hot/cold recognition + dynamic conversion`.
+- Даёт двустороннюю логику `hot->cold` и `cold->hot`, а не только архивирование холодных данных.
+- Полезен как bridge между `ER-Store` и более системными работами вроде `ELECT`.
+
+### `greenhdfs_hotpower_2010`
+
+- Закрывает практическую сторону `temperature-driven placement`.
+- Показывает, как классификация данных реально управляет миграцией между hot/cold зонами, а не остаётся только аналитической метрикой.
+- Полезен для аргумента, что policy на основе температуры должна учитывать стоимость переходов и периоды стабильной idle-активности.
+
+### `janus_atc_2013`
+
+- Усиливает policy-level блок для `workload-aware tiering`.
+- Особенно полезен для раздела о том, как принимать решения по размещению данных между быстрым и медленным tier'ами на основе trace-driven characterization.
+- Даёт production-grade аргументы, а не только лабораторную модель.
+
+### `hard_jbigdata_2019`
+
+- Закрывает недостающий кусок про безопасное уменьшение replication factor.
+- Показывает, что переходы по числу реплик сами по себе могут портить data distribution, locality и network behavior, если не учитывать topology и heterogeneity.
+- Хорошо дополняет `PACEMAKER`, который больше про bursty transition I/O и disk-adaptive redundancy.
+
+### `plank_fast_2009`
+
+- Это не paper про temperature policy, а точечное усиление `evaluation methodology`.
+- Нужен для того, чтобы в дипломе был не только обзор систем и эвристик, но и опора на то, как вообще корректно сравнивать coding approaches на практике.
+
+## 4. Что Теперь Всё Ещё Узко
+
+После этого добора главный дефицит уже не в `temperature-aware policy` как таковой. Самые узкие места теперь такие:
+
+- по-прежнему мало работ, которые в одном paper одновременно закрывают `temperature classification`, `replication <-> EC conversion` и `safe transition orchestration`;
+- benchmarking/evaluation всё ещё слабее, чем системный корпус: `3` источника достаточно для опоры, но это всё ещё заметно меньше, чем количество design/system papers;
+- мало современных strong primary papers именно про end-to-end orchestration всей цепочки `classify -> choose redundancy -> execute transition safely`.
+
+Практически это означает: срочной дыры больше нет, но если добирать ещё, то следующий полезный слой должен быть не “ещё один paper про EC вообще”, а именно papers про `end-to-end policy orchestration` или сильные современные `benchmark/evaluation` источники.
+
+## 5. Технический Статус
+
+Все пять новых источников обработаны успешно:
+
+1. PDF находятся в `sources/files/`
+2. extracted text находится в `sources/extracted/`
+3. записи добавлены в `sources/meta.json`
+4. `sources/extracted/manifest.json` и `sources/extracted/abstracts.json` синхронизированы
+
+Проверка после обновления:
+
+- `sources/meta.json`: `27` записей
+- `sources/extracted/manifest.json`: `27` записей
+- `sources/extracted/abstracts.json`: `27` записей
+- id-сеты во всех трёх файлах совпадают
+
+## 6. Вывод
+
+На этом этапе корпус уже выглядит достаточно сбалансированным для диплома: прямые источники по `replication -> EC`, hybrid schemes, temperature-aware storage policy и practical transitions теперь представлены заметно лучше, чем в исходном наборе. Следующий рациональный добор, если он понадобится, должен быть очень точечным и идти не в ширину, а в глубину по `orchestration` и `evaluation`.

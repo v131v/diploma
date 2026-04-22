@@ -1,0 +1,643 @@
+Received 12 March 2024, accepted 26 March 2024, date of publication 29 March 2024, date of current version 9 April 2024.
+Digital Object Identifier 10.1109/ACCESS.2024.3382987
+
+
+
+
+HSM: A Hybrid Storage Method Based on the
+Heat of Data and Global Disk
+Space Utilization
+YING SONG              1,2,3 , WENXUAN ZHAO                   1,2 , YINGAI TIAN1 , AND BO WANG4
+1 Beijing Information Science and Technology University, Beijing 100101, China
+2 Beijing Advanced Innovation Center for Materials Genome Engineering, Beijing Information Science and Technology University, Beijing 100101, China
+3 State Key Laboratory of Computer Architecture, Institute of Computing Technology, Chinese Academy of Sciences, Beijing 100086, China
+4 Software Engineering College, Zhengzhou University of Light Industry, Zhengzhou 450002, China
+
+Corresponding author: Ying Song (songying@bistu.edu.cn)
+This work was supported in part by the National Natural Science Foundation of China under Grant 61872043; in part by the State Key
+Laboratory of Computer Architecture [Institute of Computing Technology (ICT), Chinese Academy of Sciences (CAS)] under Grant
+CARCHA202103; and in part by the Key Scientific and Technological Projects of Henan Province under Grant 232102211084.
+
+
+
+
+  ABSTRACT In distributed systems, the method for data storage is crucial. Previous data storage work use
+  the replication or Erasure Coding method to store data. Such single storage method leads to the excessive
+  storage overheads for cold data with low access frequency or the low reading performance for hot data
+  with high access frequency. Nowadays, the research on the hybrid storage has become a hot topic of
+  concern for many scholars. Existing hybrid storage works take into account data reading performance and
+  the storage overheads, and use the replication and Erasure Coding methods to store the hot data and cold
+  data respectively. However, in the scenarios of sufficient disk space or low disk space, these fixed data
+  storage methods will lead to the relatively low system data reading performance or the excessively low
+  disk space of the system. In this paper, we propose HSM, a hybrid storage method based on the heat
+  of data and global disk space utilization. HSM fully considers the system’s requirements for the data
+  reading performance and storage overheads under different global disk space utilization scenarios, and
+  adaptively selects appropriate storage methods for data whose heat is different through data deletion, data
+  reconstruction, and data archiving. The experiment results show that when system disk space is sufficient,
+  HSM reduces data reading time by up to 18%; when system disk space is low, although increasing storage
+  overhead by up to 7%, HSM reduces cross-rack data transfer traffic by up to 20% and cross-rack data transfer
+  time by up to 15% compared with ERP in the process of changing the storage methods.
+
+
+  INDEX TERMS Distributed storage system, hybrid storage, erasure coding, replication.
+
+
+I. INTRODUCTION                                                                               components, and unexpected failures of components are com-
+Now we live in a big data age [1]. With the widespread use                                    mon. How to improve reliability, availability and reading
+of distributed systems and the development of information                                     performance of large-scale data, reduce the storage overheads
+technology, the big data technology is increasingly widely                                    of data are major challenges for distributed systems in the
+used in various industries [2]. On the other hand, the explosive                              big data scenario. A typical way is to use three-way replica-
+growth of data volume has also put tremendous pressure on                                     tion redundancy technology, which provides fault tolerance
+storage systems [3]. Large-scale distributed clusters, such                                   by storing multiple replicas of the same data on different
+as Google File System [4] and Hadoop [5], are usually                                         nodes. When the amount of data is small, the replication
+composed of many independent low-reliability commercial                                       technique is simple to implement. However, in large data
+                                                                                              centers, Large-scale data makes storing multiple replicas a
+   The associate editor coordinating the review of this manuscript and                        quite expensive solution, which requires twice the storage
+approving it for publication was Alberto Cano            .                                    overheads.
+                                  2024 The Authors. This work is licensed under a Creative Commons Attribution-NonCommercial-NoDerivatives 4.0 License.
+48630                                                For more information, see https://creativecommons.org/licenses/by-nc-nd/4.0/                         VOLUME 12, 2024
+Y. Song et al.: HSM Based on the Heat of Data and Global Disk Space Utilization
+
+
+
+
+   Therefore, as an alternative, Erasure Coding has been intro-                     Our contributions are summarized as follows:
+duced by many distributed storage systems, like Ceph [6],                           • We present HSM, a hybrid storage method based on
+Azure [7] and Hadoop Distributed File System [8]. Among                               the heat of data and global disk space utilization. It can
+multiple Erasure Coding families, Reed-Solomon Code is                                adaptively select appropriate storage methods for data
+the most widely utilized coding schemes, providing fault                              with different heat under the system with different global
+tolerance closer to that of replication technologies but with                         disk space utilization, greatly improve parallel data read-
+lower storage requirements. An RS code usually has two                                ing performance and reduce the storage overheads for
+parameters, n and m, which represent that an RS code encodes                          system with low disk space.
+n into m parity chunks, so that n data chunks and m parity                          • We conduct a group of experiments to evaluate HSM.
+chunks form a stripe. Although Erasure Coding can reduce                              The results show that compared with ERP and RS Codes,
+storage costs than replication, they significantly increase disk                      when system disk space is sufficient, HSM reduces
+I/O and network bandwidth occupation when systems reads                               data reading time by up to 18%. When system disk
+popular unavailable data than replication.                                            space is low although increasing storage overhead by
+   At present, in a distributed system, a single data storage                         up to 7%, HSM reduces cross-rack data transfer traf-
+method has been difficult to meet the storage and reading                             fic by up to 20% and cross-rack data transfer time
+requirements of data with different heat, and may aggravate                           by up to 15% in the process of changing the storage
+the disk space tension of the system. In order to improve the                         methods.
+storage efficiency and reading performance, existing works
+                                                                                  The rest of this paper is summarized as follows. In Section II,
+design new hybrid storage methods [9], [10], [11], [12], [13],
+                                                                                  the background and some preliminary work are introduced.
+[14]. For example, EC Fusion [11] is a hybrid storage of the
+                                                                                  Section III introduces the latest works. Section IV describes
+RS Code and the minimum-storage regenerating Code, MSR
+                                                                                  the design of HSM in detail. Section V evaluates the perfor-
+Code. It dynamically selects the appropriate code based on
+                                                                                  mance of HSM. Section VI summarizes this work.
+the workload of the application. For write-intensive work-
+loads, RS code is used to reduce computational overheads and
+storage costs. For read-intensive application workload, using                     II. BACKGROUND
+MSR code can improve the recovery efficiency. Similar to the                      In this section, we briefly review the basic properties of
+above the hybrid storage methods, EC Fusion does not fully                        replication and the Erasure Coding, which are the basis of
+considering the heat of data, which may use the code with the                     our storage method.
+low parallel reading efficiency to store high access frequency
+hot data, leading to poor parallel data reading performance.                      A. REPLICATION
+Some works begin to consider this reality. For example, the                       Replication is one of the first fault-tolerant methods used to
+encoding-oriented replica placement policy [15], ERP, cold                        tolerate hard disk failures. It can copy one data u + 1 times
+data with low access frequency is archived and stored from                        and store the data to u + 1 different storage node, so as to
+replication to RS code, which saves the storage overheads                         tolerate data failures caused by up to u storage node fail-
+of cold data with low access frequency and maintains high                         ures. When a storage node fails, the complete data can be
+parallel reading efficiency of the hot data which is still stored                 obtained directly from other nodes where the data replication
+in replication. However, when disk space is abundant, these                       is stored. Replication storage is simple to implement, and
+fixed data storage methods may still use Erasure Coding to                        effectively ensure the excellent efficiency of reading data. But
+store data, reducing the efficiency of parallel data reading.                     the replication storage may bring the additional u times space
+In the other hand, when disk space is tight, they may con-                        overheads, reduce the utilization of the system resources and
+tinue to use multiple replicas to store data, exacerbating the                    increase power consumption.
+problem of low disk space.
+   In order to solve the problem of low parallel data reading                     B. ERASURE CODING
+performance and low disk space, in this paper, we pro-                            This paper focuses on a famous Reed-Solomon (RS) code.
+pose HSM, a hybrid storage method based on the heat and                           Compared with replication storage, Erasure Coding storage
+global disk space utilization. Under different global disk                        provides similar fault tolerance, but the storage cost is greatly
+space utilization scenarios, HSM weighs the requirements                          reduced. An RS code usually has two parameters, n and m,
+of the system for data reading performance and storage                            which represent that an RS code encodes n normal chunks
+overheads, and adaptively selects appropriate storage meth-                       into m parity chunks, so that n normal chunks and m parity
+ods for data with different heat through data deletion, data                      chunks form a stripe. Any remaining n chunks can be decoded
+reconstruction or data archiving, so as to increase the par-                      to repair the original chunk, so that at most m data chunk
+allel reading performance of hot data, reduce the storage                         failures can be tolerated. Figure 1 presents the details of the
+overheads of cold data and cross-rack data transmission                           matrix coding process of a RS(5, 3) code. Here, data chunks
+time and traffic in the process of changing data storage                          and parity chunks are organized into fixed-size units called
+methods.                                                                          chunks.
+
+
+VOLUME 12, 2024                                                                                                                              48631
+                                                                 Y. Song et al.: HSM Based on the Heat of Data and Global Disk Space Utilization
+
+
+
+
+                                                                     Wei et al. proposed a hybrid fault-tolerance scheme based
+                                                                  on potential replicas, called HFPR [18], for solving the
+                                                                  problem that mobile distributed systems contend with incon-
+                                                                  sistent network signals and relatively low bandwidth in weak
+                                                                  network environments. In order to disperse network transmis-
+                                                                  sion pressure and reduce network transmission, HFPR stores
+                                                                  data with the Erasure coding redundancy and then gradually
+                                                                  increases data redundancy by reserving potential replicas.
+                                                                  However, HFPR is similar to URSA .
+                                                                     To save the storage overheads of cold data and maintain
+                                                                  high parallel reading efficiency for hot data with high access
+FIGURE 1. Encoding process of an RS (5, 3) code.
+                                                                  frequency, Xu et al. proposed an encoding-oriented replica
+                                                                  storage method, ERP [15]. ERP archives the cold data which
+III. RELATED WORK                                                 makes the storage method of the cold data change from repli-
+Now there are many works on adaptive hybrid storage meth-         cation to Erasure Coding. At the same time, the hot data is still
+ods, including hybrid storage methods based on multiple           stored by the replication. In the process of data archiving, for
+types or the same type of Erasure Coding and hybrid storage       the help of their chunk placement method, ERP reduces the
+methods based on Erasure Coding and replication. Next,            cross-rack data transmission time and traffic.
+we briefly review the latest scientific research achievements        In the above existing hybrid storage methods, whether
+of hybrid storage as follows.                                     based on the hybrid storage methods of Erasure Coding and
+   To keep high storage efficiency and reliability with low       replication, or the internal hybrid coding of Erasure Coding,
+recovery costs, Xie et al. proposed a encoding and decod-         or the hybrid storage methods of multiple Erasure Coding,
+ing algorithm, AZ Code [12]. Based on the MSR code                they failed to fully consider the heat of data and global
+and LRC codes, AZ Code utilizes a specific MSR code to            disk space utilization of the system. This makes the data
+generate a local parity check chunk, and utilizes a typical       with low access frequency adopt the storage methods with
+RS code to generate a global parity check chunk. However,         high storage redundancy [19], [20], resulting in the waste of
+the data redundancy is slightly larger. In order to reduce the    storage resource, or the data with high access frequency use
+high repair bandwidth and storage overheads of stable nodes,      the inappropriate storage methods, resulting in poor parallel
+Jin-Ping proposed a LRC-RS [16] hybrid coding method.             read performance [21].
+LRC-RS uses the LRC coding to store data in high trusted
+nodes, and uses the RC coding with low code rate to store          IV. THE DESIGN OF HSM
+data in low trusted nodes by classifying nodes according to       For improving the storage efficiency and parallel read ability
+confidence level. But it also adds some of the complexity of      of distributed systems, we first analyze the distribution of the
+encoding and decoding.                                            access frequency in this section. Then, we define the expres-
+   Zhang et al. proposed a hybrid cloud-scale chunk stor-         sion of heat to better analyze the differences of the access
+age system called URSA [17]. URSA directly stores primary         frequency on data in the system. Next, we introduce the
+replicas on SSDs and replicates backup replicas on hard           design concept of HSM. Finally, we introduce the algorithm
+disk drives (HDDs). To make up for the performance gap            implementation of HSM in detail.
+for random writes between SSDs and HDDs, Yiming Zhang
+et al. design an adaptive journal, through transforming small      A. HEAT CALCULATION AND CLASSIFICATION
+backup writes into journal appends, which are then asyn-          Zipf law is an experimental law proposed by G.K.Zipf, and
+chronously replayed and merged to backup HDDs. Then,              it is used to describe the law of word frequency distribution.
+in order to efficiently index the journal, they design a novel    According to Zipf law, in a particular natural language corpus,
+range-optimized merge-tree structure. URSA have slightly          the frequency of words is inversely proportional to its ranking
+higher data redundancy because they do not adequately con-        in the frequency table, i. e., the product is a constant. The
+sider erasure coding methods.                                     available formula represents that:
+   EC-Fusion [11] proposed by Qiu et al. is an efficient
+                                                                                                   f ∗r =C                                  (1)
+hybrid erasure code storage framework in cloud storage sys-
+tems, which combines RS and MSR codes. According to the             This f represents the frequency of word occurrence, and r
+application workloads, EC-Fusion dynamically selects the          represents the frequency ranking. The product of the two is
+appropriate code. For write-intensive workloads, RS code is       approximately a constant C, but the constant C is not a fixed
+used to reduce computational overhead and storage costs. For      constant and floats up and down around a central number.
+read-intensive application workload, using MSR code can           This means that a few words appear very frequently, while
+improve the recovery efficiency, which make it possible for       most words appear relatively infrequently.
+them to solve the problem that front and back office work-          According to the Zipf law, the top few words in the corpus
+loads can simultaneously and efficiently process in parallel.     appear much more frequently than other words. For example,
+
+48632                                                                                                                           VOLUME 12, 2024
+Y. Song et al.: HSM Based on the Heat of Data and Global Disk Space Utilization
+
+
+
+
+the first word is about twice as frequent as the second word,                     to store data, it may affect the parallel reading performance
+while the second word is about twice as frequent as the fourth                    of the hot data. On the contrary, if only the replication is
+word. This distribution is also vividly known as the two-eight                    used to store the data, this may greatly increase the storage
+law, that 20% of the words in the corpus account for 80% of                       overheads of the cold data. Therefore, we use the replication
+the occurrence frequency, and there is a serious polarization.                    storage method to store the hot data, which can improve the
+   Zipf law not only applies to the field of linguistics, but                     parallel reading performance of the hot data, while the cold
+also similar frequency distribution laws can be observed in                       data only needs to be stored at a lower storage cost to reduce
+other fields. For example, in distributed storage systems, the                    data storage overheads. At the same time, the heat of data will
+access frequency of clusters’ files also follows this priori                      change. When the heat of the data decreases or increases, the
+rule [22]. These files are divided into several chunks during                     data storage method should also be able to change with low
+the storage and stored in distributed systems in the form of                      overheads for the system read performance and data storage
+chunks. Therefore, the data mentioned in this paper refers                        overheads.
+to chunks of the data, including the heat of data, which also
+refers to the heat of chunks. Since the access frequency of                       2) THE DESIGN FOR THE GLOBAL DISK SPACE UTILIZATION
+files is different and each file contains chunks which have the                   When the global disk space utilization of the distributed
+same access characteristics as the file, the chunks also have                     system is low and the system has sufficient storage space,
+different access characteristics. According to this rule, most                    we give priority to data reading performance. When the global
+of the data access is concentrated on a few popular chunks,                       space utilization is moderate, we weigh read performance and
+while most chunks have relatively low access frequency.                           storage space utilization, giving priority to improving the read
+Typically, about 80% of the access is concentrated on 20% of                      performance of the hot data and reducing the storage over-
+the data in the entire data set. Therefore, based on this access                  heads of the cold data. When the global space utilization is
+rule, we can define the heat of the data in the cluster. Define                   high, we give priority to alleviating storage space constraints.
+the top 20% of the most popular data as hot data, and the                         By archiving cold data, the data stored in the replication is
+remaining 80% of the data as cold data. Hot data occupy most                      converted into the Erasure Coding method to reduce storage
+of the data access relative to cold data. In order to speed up                    overheads.
+reading performance in distributed systems, HSM selects the
+storage method with high parallel data reading performance                        3) THE DESIGN IN THE LAYOUT OF DATA
+for hot data.                                                                     When the heat of data changes from hot to cold or vice versa
+                                                                                  and the global disk space utilization changes in intervals, the
+                                                                                  data storage method would change accordingly. In the process
+B. DESIGN CONCEPT
+                                                                                  of changing data storage methods, operations such as data
+In order to solve the above-mentioned problems of low data
+                                                                                  archiving and data reconstruction will generate intra-rack and
+reading performance and low disk space, this section first
+                                                                                  cross-rack data transmission traffic. Since cross-rack traffic
+introduces the design of HSM for the data heat, then analyzes
+                                                                                  is more scarce than intra-rack traffic [3], we focus on cross-
+the design of HSM for the global disk space utilization, and
+                                                                                  rack traffic. In order to reduce the cross-rack transmission
+finally introduces a data layout which reduces the cross-rack
+                                                                                  traffic required to change the data storage method, we adopt
+transmission traffic when the storage method of data need to
+                                                                                  a specific data layout method to store the chunks, which
+be changed.
+                                                                                  makes the chunks that may need to be encoded to store into a
+                                                                                  main rack during the data archiving process, thus avoiding the
+1) THE DESIGN FOR THE HEAT                                                        situation that transferring chunks to this main rack cross racks
+In the replication method scenario, when a large number of                        and then encoding data. At the same time, in order to reduce
+read requests are made on the same chunk, the requests can be                     the cross-rack traffic generated by subsequent data recovery,
+directed to multiple replica nodes to increase the parallel read                  the Erasure Coding layout after data archiving will maximize
+efficiency and thus alleviate hot-spot issues. When applying                      the advantages of partial decoding, which is beneficial to
+an access data chunk, we can select the nearest replica for it to                 subsequent aggregate recovery.
+reduce the data transfer time. In the case of the Erasure Cod-
+ing, when data loss occurs, data reading will bring additional                    C. ALGORITHM
+decoding calculation overheads. Therefore, for the parallel                       We divide the rack into a main rack and some secondary
+data reading performance, the replication storage method is                       racks, as shown in Figure 2. First of all, considering that
+often better than the Erasure Coding storage method. On the                       the main rack subsequently performs operations such as
+other hand, compared to the replication, the Erasure Coding                       data encoding and data reconstruction, and these operations
+has less storage cost because it only needs to encode a few                       require network bandwidth, so the rack with the best network
+chunks to ensure its reliability. In a distributed system, only a                 bandwidth performance is selected as the main rack, and the
+few hot data can be frequently accessed in a short time, while                    1st replica of the data is stored in the main rack. Then, the
+other cold data may have only a small amount of access in a                       2nd and 3rd replica chunks of the data are stored together
+long time. If we only use the common Erasure Coding method                        on each secondary rack in the order of the replica numbers.
+
+VOLUME 12, 2024                                                                                                                             48633
+                                                                       Y. Song et al.: HSM Based on the Heat of Data and Global Disk Space Utilization
+
+
+
+
+                    FIGURE 2. Examples of the data storage with HSM.
+
+
+
+
+In order to maintain node-level fault tolerance, the 2nd and            cold data, we all use the three-way replication method with
+3rd replica chunks of the same data are stored in the same              good parallel data reading performance to store the data.
+secondary rack on different nodes. In the process of storing               In terms of experimental conclusion that new data is often
+replicas on the main rack and the secondary rack, in order to           hot data [23], when storing new data, the new data stored in
+balance the storage load, the replicas are preferentially stored        the three-way replication method.
+on data nodes with low storage load in the rack.                           When the amount of data stored in the system begins to
+   We define data popularity as the number of times data is             increase and the global disk space utilization is greater than
+accessed by users per unit time. The available formula is               30% and less than or equal to 60%, the storage space is no
+simply expressed as                                                     longer sufficient. Therefore, while ensuring that the system
+                                                                        has high data reading performance, we must also consider
+                                   N
+                            H=                                  (2)     reducing the data storage overheads. Firstly, we rank the
+                                   T                                    popularity of data and define hot data and cold data. Because
+   Among them, H represents the popularity value of the                 hot data has a very high frequency of data access compared
+data, N represents the number of accesses of the data, and              to cold data. In order to achieve high read performance of hot
+T represents the time. According to Zipf law, 20% of the data           data, we continue to use the three-way replication method to
+has 80% of the visits, so the data with the top 20% of user             store hot data. On the other hand, in order to save storage
+visits are defined as hot data. Define the data with the bottom         overheads, we use the two-way replication method to store
+80% of user access times as cold data.                                  cold data. In the process of changing the storage method from
+   In the process of data storage, the global disk space utiliza-       the three-way replication method to the two-way replication
+tion and the popularity of the chunks will change. At this time,        method, data deletion is performed, and the 3rd replica chunks
+we need to weigh the system’s requirements for parallel data            of the cold data in the secondary rack is deleted. If there
+reading performance and storage overheads under different               is a change from cold data to hot data, we reconstruct the
+global disk space utilization scenarios, and adaptively choose          data, copy 2nd replica chunks of the data as the 3rd replica
+data storage methods.                                                   chunks, and store it on other low-load nodes in the same rack.
+   As shown in Algorithm 1, when the global disk space                  When storing new data, the new data stored in the three-way
+utilization is less than or equal to 30%, the system storage            replication method.
+space is sufficient. Between data storage overheads and par-               When the global disk space utilization is greater than 30%
+allel reading performance, we give priority to parallel data            and less than or equal to 60%, if we delete data to save storage
+reading performance. At this time, whether it is hot data or            overheads, there is a possibility that the global disk space
+
+48634                                                                                                                                 VOLUME 12, 2024
+Y. Song et al.: HSM Based on the Heat of Data and Global Disk Space Utilization
+
+
+
+
+utilization will experience a large interval change, causing the                  part of the Erasure Coding stripe. These parity chunks need
+global disk space utilization to be less than or equal to 30%.                    to be saved on different nodes of the same main rack. After the
+In order to prevent the data storage method from continuously                     encoding is completed, we delete these 1st replica chunks of
+oscillating, a ‘‘P’’ mark is set for the data stored in two-way                   the main rack which participates in encoding. The 2nd replica
+replication method after data deletion. When the data marked                      chunks of these data whose 1st replica chunks participates in
+with ‘‘P’’ is stored in a system where the global disk space                      encoding then forms the normal chunks part of the stripe.
+utilization is less than or equal to 30%, its data storage method                    In order to maximize the advantages of partial decoding
+is not change to the three-way replication method due to the                      and reduce the cross-rack data transmission traffic generated
+global disk space utilization of the system or the change from                    by subsequent data recovery, the layout of stripes after data
+cold data to hot data. It still uses the two-way replication                      archiving should follow the layout principles: In order to
+method for storage.                                                               maximize the advantages of partial decoding, we should place
+   When the global disk space utilization is higher than 60%,                     as many chunks of the same stripe as possible on the same
+the storage space is extremely low. Between the storage over-                     rack. But for node fault tolerance, any two chunks of the same
+head and parallel data reading performance, we give priority                      stripe are not distributed to the same node. At the same time,
+to storage overhead. We firstly rank the popularity of the data,                  in order to obtain fault tolerance of m nodes, at most m chunks
+use the two-way replication method to store the hot data, and                     of the same stripe are placed on the same rack. Finally, for
+use the Erasure coding method to store the cold data. When                        the uniform distribution of chunks, the numbers of chunks of
+the hot data is stored from the three-way replication method                      a same stripe in any two racks differ by at most 1. N(n, m) =
+to the two-way replication method, data deletion will be                          ⌈ n+m
+                                                                                     m ⌉ is the number of racks which store chunks of the same
+performed to delete the 3rd replica chunks of the hot data                        stripe.
+in each rack. In the storage process of cold data changing
+from the two-way replication method to the Erasure Coding                                                          n+m
+                                                                                                    N (n, m) = ⌈       ⌉ =k                   (4)
+method, the data will be archived to form an Erasure Coding                                                         m
+stripe, which is applied to RS(n, m). If there is a situation
+where hot data stored by the three-way replication method                            For short, we call the ith stripe Si, the ith rack Ri and
+becomes cold data, data deletion will be performed firstly,                       the ith data Di. As shown in Figure 2, the six racks of
+and then data archiving will be performed. Next, if there is                      {R0. . . R5} need to store the ten chunks {D0. . . D9}. At this
+the cold data stored by the Erasure coding method becomes                         time, the global disk space utilization is less than or equal
+hot data, the data is changed from the Erasure coding method                      to 30%, and the disk space is sufficient. For the parallel
+to the two-way replication method. This process requires data                     data reading performance, the three-way replication method
+reconstruction. We copy all 2nd replica chunks of the data                        with good reading performance is selected for data storage.
+as 1st replica chunks, and stores them on the different low-                      First, we compare the network bandwidth performance of
+load nodes of the original main rack. In this process of data                     the six racks, and select R0 with the best network bandwidth
+reconstruction of a RS(n, m) stripe which changes to two-way                      performance as the main rack to store the 1st replica chunk.
+replication method, Tre is the cross-rack data transfer traffic                   Then we store the 2nd replica chunks and 3rd replica chunks
+and n is from RS(n, m).                                                           of {D0. . . D9} in R1 to R5 in order.
+                                                                                     When the number of stored data begins to increase and the
+                                 Tre = n                                 (3)
+                                                                                  global disk space utilization is greater than 30% and less than
+Because new data is often hot data, it is stored in two-way                       or equal to 60%, we rank the popularity of the data and find
+replication method. Similarly, in order to prevent the data                       that {D0, D5} is hot data and the remaining data is cold data.
+storage method from constantly oscillating, we set an ‘‘E’’ to                    we use a three-way replication method to store {D0, D5},
+mark the data that changes the data storage method after data                     a two-way replication method to store the remaining cold
+deletion and data archiving. When the data marked with ‘‘E’’                      data, and performs data deletion, deleting 3rd replica chunks
+is stored in a system where the global disk space utilization                     of the cold data in {R2. . . R5}.
+is greater than 30% and less than or equal to 60%, its data                          When the global disk space utilization is greater than 60%,
+storage method will not change due to the global disk space                       storage space is extremely low. we rank the popularity of data
+utilization of the system or the change from cold data to hot                     and find that {D0, D5} is hot data and the rest of the data is
+data.                                                                             cold data. For storage overheads, we use two-way replication
+   In the process of data archiving, we need chunks to form                       method to store hot data {D0, D5}, and the 3rd replica chunks
+the parity chunks and normal chunks part of the stripe.                           of {D0, D5} in R1 is deleted. For other cold data, we archive
+In order to reduce the cross-rack traffic caused by encoding,                     data and use the Erasure coding method to store it. In order
+we have chosen a specific data layout method to store all                         to maximize the advantages of partial decoding, a specific
+the 1st replica chunks that may participate in encoding in                        Erasure coding layout idea is followed. For RS(4,2), {D1, D6,
+the main rack. This avoids the need to transmit data to the                       D2, D7} and {D3, D8, D4, D9} as the normal chunks parts of
+machine and then encoding. Therefore, the parity chunks                           the two stripes. Next, we encode the data in {D1. . . D9} in the
+encoded by 1st replica chunks constitute the parity chunks                        R0, and generate the parity chunks parts {P0, P1} and {P2,
+
+VOLUME 12, 2024                                                                                                                             48635
+                                                                            Y. Song et al.: HSM Based on the Heat of Data and Global Disk Space Utilization
+
+
+
+
+        FIGURE 3. Total read time for HSM, ERP and RS(4,2) under the different global disk space utilization scenarios.
+
+
+
+
+        FIGURE 4. Total read time for HSM, ERP and RS(4,2) under the different amount of the data.
+
+
+
+Algorithm 1 A Hybrid Storage Method Based on the Heat                         Dell PERC H730P integrated RAID hard disk, total storage
+and Global Disk Space Utilization                                             space 1T, running Ubuntu 16.04.1. We configure KVM on
+Input: the data of the system                                                 this server and create seven new virtual machines, each with
+Output: storage_mode                                                          8G memory, 5GB RAM, and 50GB SCSI hard disk and
+  1:    if global disk space utilization <= 30%                               running Ubuntu 16.04.1. We use one virtual machine as a
+  2:       if the data has flag ‘P ’
+  3:           return;
+                                                                              control terminal and use six virtual machines to simulate six
+  4:       else                                                               racks. Each virtual machine has four processes to simulate
+  5:           Apply 3Replica();                                              four nodes. The bandwidth of the switch is 1Gbps. And we
+  6:    if 30% < global disk space utilization <= 60%                         use the 128MB chunks in this experiment.
+  7:       if the data has flag ‘E ’                                             In order to verify various performance indicators of HSM,
+  8:           return;
+  9:       if the data changes from hot to cold
+                                                                              we select ERP (Encoding-oriented Replica Placement Policy)
+ 10:           Apply 3to2Replica(); Add flag ‘P’;                             and RS(4,2) for comparative experiments. Among them, ERP
+ 11:       else if the data changes from cold to hot                          uses different storage methods for data based on data popu-
+ 12:           Apply 2to3Replica();                                           larity, which is similar to HSM, and RS(4,2) is widely used
+ 13: if global disk space utilization −60%                                    in the paper experiments.
+ 14:    if the data changes from hot to cold
+ 15:       if the data is 3Replica
+ 16:           Apply 3to2Replica(); Add flag ‘E ’;                            B. EXPERIMENTAL DESIGN
+ 17:       else
+ 18:           Apply 2toECO; Add flag ‘E’;
+                                                                              In this section, we compare the parallel read performance and
+ 19:    else if the data changes from cold to hot                             the storage overheads of HSM, ERP and RS(4,2) through the
+ 20:           Apply ECto2Replica();                                          time of data reading and the storage overheads. Then we use
+                                                                              cross-rack transmission traffic and transmission time during
+                                                                              the data reconstruction and data archiving to compare the
+                                                                              transmission overheads of HSM and ERP in the process of
+P3}. And then when the encoding is completed, we delete                       changing data storage methods.
+{D1. . . D9} in the R0.                                                          In order to test the performance of HSM in different global
+                                                                              disk space utilization (Gdsu) scenarios, we store chunks in
+V. PERFORMANCE EVALUATION                                                     virtual machines with the fixed disk space size to make the
+In this section, we present extensive experiment results to                   global disk space utilization of the system reach 10%, 40%,
+evaluate the performance of the storage method HSM.                           and 70%. In this way, we simulate three different interval sce-
+                                                                              narios of global disk space utilization (Gdsu) <= 30%, 30%
+A. EXPERIMENTAL ENVIRONMENT                                                   < global disk space utilization (Gdsu) <= 60%, global disk
+System configuration: we use one server with ten-core                         space utilization (Gdsu) > 60%. And three groups of control
+2.40 GHz Intel(R) Xeon(R) Gold 5115 CPU, 256G memory,                         experiments are set up under these three scenarios. At the
+
+48636                                                                                                                                      VOLUME 12, 2024
+Y. Song et al.: HSM Based on the Heat of Data and Global Disk Space Utilization
+
+
+
+
+          FIGURE 5. Total storage overheads for HSM, ERP and RS(4,2) under the different global disk space utilization scenarios.
+
+
+
+
+same time, in order to test the impact of the amount of stored                    method to a two-way replication or Erasure Coding method,
+data on the experiment, we store 50, 100, and 150 chunks in a                     so that HSM reduces the parallel read performance.
+rack composed of 6 virtual machines. Because the maximum                             In addition, we also verify the impact of storing differ-
+amount of data in these three groups of control experiments is                    ent amounts of data on parallel read performance under the
+150 chunks and the size of a chunk is 128MB, the global disk                      same global disk space utilization scenario. As shown in
+space utilization occupied by it when stored using the three-                     Figure 4(a) and Figure 4(b), in two scenarios where the global
+way replication method with the maximum storage overhead                          disk space utilization is less than or equal to 30% and the
+is about 18%. In this way, the global disk space will not                         global disk space utilization is greater than 30% and less
+change when storing the data, so that the range of disk space                     than or equal to 60%, with the increase of the amount of
+utilization does not affect the data storage method. Because                      data, compared with ERP and RS(4,2), the advantage of read
+80% of accesses focus on 20% of the entire data set, based                        performance in HSM becomes larger and larger. Because the
+on this access rule, we define 20% of the data as hot data and                    access hot-spot problems of ERP and RS(4,2) will become
+the remaining 80% of the data as cold data. Since RS(4,2) is                      more serious when the amount of data increases and data
+widely used in experiments, when archiving data, we set the                       read requests are excessively concentrated on the racks that
+Erasure coding stripe to RS(4,2).                                                 store hot data, which may create more network and disk
+                                                                                  I/O blocking. On the contrary, HSM distributes data read
+                                                                                  requests to many racks that store replicas of data for reducing
+C. ANALYSIS OF EXPERIMENTAL RESULTS                                               congestion. As shown in Figure 4(c), when the global disk
+1) PARALLEL READ PERFORMANCE ANALYSIS                                             space utilization is higher than or equal to 60%, HSM changes
+We test the parallel reading performance of HSM, ERP and                          the data storage method, which also causes a lot of network
+RS(4,2) based on data reading time. Because HSM has dif-                          and disk I/O blocking when reading data, so that the parallel
+ferent data storage methods under different global disk space                     read performance advantage is not obvious.
+utilization scenarios, we firstly test the data reading perfor-
+mance of HSM, ERP, and RS(4,2) under different global                             2) STORAGE OVERHEAD ANALYSIS
+disk space utilization scenarios. As shown in Figure 3(a),                        Then, we compare HSM with ERP and RS(4,2) based on
+Figure 3(b) and Figure 3(c), when the global disk space                           the data storage overheads. Because HSM has different data
+utilization is less than or equal to 30%, compared with                           storage methods under different global disk space utilization
+ERP and RS(4,2), HSM reduces by up to 16 % and 18%                                scenarios, we also test the storage overheads of HSM, ERP,
+data reading time. When the global disk space utilization is                      and RS(4,2) under different global disk space utilization sce-
+greater than 30% and less than or equal to 60%, the read                          narios. As shown in Figure 5(a), Figure 5(b) and Figure 5(c),
+performance advantage of HSM decreases. Compared with                             when the global disk space utilization is less than or equal
+ERP and RS(4,2), HSM reduces the data read time by up                             to 30%, due to sufficient disk space, HSM gives priority
+to 11% and 13% respectively. When the global disk space                           to parallel data reading performance and uses the three-way
+utilization is greater than 60%, HSM no longer has a read                         replication method to store data. Therefore, compared to ERP
+performance advantage compared with ERP. Compared with                            and RS(4,2), HSM increases storage overhead by up to 88%
+RS(4,2), HSM reduces data read time by up to 6%. The reason                       and 100% respectively. However, when the global disk space
+is that the access parallelism of the replication method is                       utilization is greater than 30% and less than or equal to 60%,
+higher than the Erasure Coding method. HSM uses a three-                          the disk space is no longer sufficient. For ensuring high data
+way replication method to store data when the global disk                         reading performance, HSM should consider reducing the data
+space utilization is less than or equal to 30%, so HSM is better                  storage overheads. HSM changes the storage method from the
+than ERP and RS in data reading performance (4,2). However,                       three-way replication method to two-way replication method
+with the increase of global disk space utilization, HSM needs                     for cold data, so the storage overhead is greatly reduced.
+to consider storage overhead and change the data storage                          Compared with ERP and RS(4,2), HSM only increases the
+method. The data is stored from a three-way replication                           storage overhead by up to 38% and 47% respectively. When
+
+VOLUME 12, 2024                                                                                                                            48637
+                                                                   Y. Song et al.: HSM Based on the Heat of Data and Global Disk Space Utilization
+
+
+
+
+                                                                    transmission time by 15%. With the amount of data increases,
+                                                                    HSM improves cross-rack data transmission. The advantage
+                                                                    of rack data transfer time will also be more obvious. In order
+                                                                    to maximize the advantage of partial decoding, HSM stores
+                                                                    the two parity chunks replicas in the same main rack in the
+                                                                    RS(4,2) stripe, which generated by the data encoding in the
+                                                                    main rack. Therefore, compared with ERP, HSM increases
+                                                                    the cross-rack traffic during data reconstruction, but reduces
+                                                                    cross-rack traffic for transferring parity chunks replicas to
+                                                                    storage in other racks. As shown in Figure 7, in the pro-
+FIGURE 6. Total cross-rack transmission traffic for HSM and ERP.    cess of cross-rack data transmission, with the increase of
+                                                                    the cross-rack transmission traffic, the blocking of cross-rack
+                                                                    data transmission will become more obvious. At the same
+                                                                    time, because HSM has less cross-rack data transmission
+                                                                    traffic than ERP, the cross-rack data transmission congestion
+                                                                    is lighter in HSM. Due to the limitations of the experimen-
+                                                                    tal equipment and the time constraints, this work did not
+                                                                    experiment with systems with different disk storage/RAM
+                                                                    configurations and measure their impact on the final results
+                                                                    which is a limitation of the current work and a goal for future
+                                                                    work.
+
+                                                                     VI. CONCLUSION
+FIGURE 7. Total cross-rack transmission time for HSM and ERP.
+                                                                    In order to solve the problems of existing data storage meth-
+                                                                    ods such as low parallel data reading performance when disk
+                                                                    space is sufficient and the excessive data storage overheads
+the global disk space utilization is higher than 60%, HSM
+                                                                    when disk space is low, in this paper we propose a hybrid stor-
+gives priority to storage overhead and changes the storage
+                                                                    age method based on the heat of data and global disk space
+method from the two-way replication method to the Erasure
+                                                                    utilization, called HSM. HSM weighs the system’s require-
+Coding method for the cold data, and changes the hot data
+                                                                    ments for parallel data reading performance and the storage
+from the three-way replication method to the two-way repli-
+                                                                    overheads under different global disk space utilization sce-
+cation method, which greatly reduces the storage overheads.
+                                                                    narios, and adaptively selects appropriate storage methods
+Compared with ERP, HSM no longer has a storage overhead
+                                                                    for the data which have different heat through operations
+disadvantage. Compared with RS(4,2), HSM only increases
+                                                                    such as data deletion, data reconstruction, or data archiving.
+storage overhead by up to 7%.
+                                                                    It can increase the parallel reading performance for the hot
+                                                                    data and reduce the storage overheads for the cold data.
+3) TRANSMISSION OVERHEAD BY CHANGING THE DATA                       Firstly, we introduce Zipf law and define the popularity of
+STORAGE METHODS ANALYSIS                                            the data based on Zipf law. Secondly, we introduce in detail
+In this experiment, we test the cross-rack data transmis-           the principles and algorithms of the hybrid storage method
+sion overheads of HSM and ERP based on the cross-rack               based on the heat and global disk space utilization. It is
+data transmission traffic and data transmission time in the         designed to effectively improve the parallel reading efficiency
+process of changing the storage methods. When the global            of distributed systems, alleviate global disk space constraints,
+disk space utilization is greater than 60%, we set 20% of           and reduce cross-rack data transmission traffic and time in
+the cold data stored in the Erasure Coding method as the            the process of changing the storage methods. Experimental
+data which requires data reconstruction based on Zipf law.          results show that compared with ERP and RS(4,2), when
+Then we count the data reconstruction cross-rack transmis-          disk space is sufficient, HSM reduces data reading time by
+sion traffic and cross-rack data transmission time of the           up to 18%. When disk space is low, HSM increases storage
+HSM and ERP in the process of changing storage methods.             overhead by up to 7%, but in the process of changing the
+During the experiment, RS(4,2) isn’t involved in operations         storage methods, HSM reduced cross-rack transfer traffic by
+such as data archiving and data reconstruction. The storage         20% and cross-rack transfer time by 15%.
+method remains unchanged in RS(4,2) throughout the entire
+storage process and RS(4,2) isn’t involve cross-rack data
+                                                                     REFERENCES
+transmission. Therefore, no relevant experiment for RS(4,2)
+                                                                      [1] L. Qian, ‘‘Cloud computing: An overview,’’ in Proc. Cloud Comput., 1st
+in this section.The experimental results are shown in Figure 6            Int. Conf. (Cloudcom), Beijing, China, Dec. 2009, pp. 626–631.
+and Figure 7. Compared with ERP, HSM reduces cross-rack               [2] K. Michael, ‘‘Securing the cloud: Cloud computer security techniques and
+data transmission traffic by up to 20% and cross-rack data                tactics,’’ Comput. Secur., vol. 31, no. 4, p. 633, Jun. 2012.
+
+48638                                                                                                                             VOLUME 12, 2024
+Y. Song et al.: HSM Based on the Heat of Data and Global Disk Space Utilization
+
+
+
+
+ [3] H. Zhou, D. Feng, and Y. Hu, ‘‘Bandwidth-aware scheduling repair                [22] Z. Wang, H. Wang, A. Shao, and D. Wang, ‘‘An adaptive erasure-coded
+     techniques in erasure-coded clusters: Design and analysis,’’ IEEE Trans.             storage scheme with an efficient code-switching algorithm,’’ in Proc. IEEE
+     Parallel Distrib. Syst., vol. 33, no. 12, pp. 3333–3348, Dec. 2022, doi:             40th Int. Conf. Distrib. Comput. Syst. (ICDCS), Nov. 2020, pp. 1177–1178.
+     10.1109/TPDS.2022.3153061.                                                      [23] W. Yi-Jie, X. Fang-Liang, and P. X. Qiang, ‘‘Research on erasure code-
+ [4] S. Ghemawat, H. Gobioff, and S.-T. Leung, ‘‘The Google file system,’’                based fault-tolerant technology for distributed storage,’’ Chin. J. Comput.,
+     ACM SIGOPS Operating Syst. Rev., vol. 37, no. 5, pp. 29–43, Dec. 2003,               vol. 40, no. 1, pp. 236–255, 2017.
+     doi: 10.1145/1165389.945450.
+ [5] R. G. Masur and S. K. Mcintosh, ‘‘Preliminary performance analysis of
+     Hadoop 3.0.0-Alpha3,’’ in Proc. New York Sci. Data Summit (NYSDS),
+     Aug. 2017, pp. 1–3.                                                                                        YING SONG received the Ph.D. degree in com-
+ [6] S. A. Weil, S. A. Brandt, E. L. Miller, D. D. E. Long, and C. Maltzahn,                                    puter engineering from the Institute of Computing
+     ‘‘Ceph: A scalable, high-performance distributed file system,’’ in Proc. 7th                               Technology (ICT), Chinese Academy of Sciences.
+     USENIX Symp. Operating Syst. Design Implement., 2006, pp. 307–320.                                         She is currently an Associate Professor with
+ [7] C. Huang, H. Simitci, Y. Xu, A. Ogus, B. Calder, P. Gopalan, J. Li,                                        the Computer School, Beijing Information Sci-
+     and S. Yekhanin, ‘‘Erasure coding in windows Azure storage,’’ in Proc.                                     ence and Technology University. Her work has
+     USENIX Annu. Tech. Conf. (USENIX ATC) Boston, MA, USA: USENIX                                              covered topics, such as performance modeling,
+     Association, 2012, pp. 15–26.
+                                                                                                                resource management, cloud computing, and big
+ [8] Andrew Wang. 2017. Apache Hadoop 3.0.0, Apache Software Foundation,
+                                                                                                                data computing platform. She has been authored
+     Forest Hill, MD, USA, Mar. 2020.
+                                                                                                                or coauthored more than 30 publications in these
+ [9] M. Xia, ‘‘A tale of two erasure codes in HDFS,’’ in Proc. Usenix Conf. File
+     Storage Technol., 2015.                                                         areas, since 2007. Her main research interests include computer architecture,
+[10] A. Chiniah and A. Mungur, ‘‘Dynamic erasure coding policy allocation            parallel and distributed computing, and virtualization technology. She served
+     (DECPA) in Hadoop 3.0,’’ in Proc. 6th IEEE Int. Conf. Cyber Secur. Cloud        in various academic conferences.
+     Comput. (CSCloud)/ 5th IEEE Int. Conf. Edge Comput. Scalable Cloud
+     (EdgeCom), Jun. 2019, pp. 29–33.
+[11] H. Qiu, C. Wu, J. Li, M. Guo, T. Liu, X. He, Y. Dong, and Y. Zhao,
+                                                                                                                WENXUAN ZHAO received the B.S. degree
+     ‘‘EC-fusion: An efficient hybrid erasure coding framework to improve
+                                                                                                                from Guangzhou University, Guangdong, China,
+     both application and recovery performance in cloud storage systems,’’
+     in Proc. IEEE Int. Parallel Distrib. Process. Symp. (IPDPS), May 2020,                                     in 2021. He is currently pursuing the mas-
+     pp. 191–201.                                                                                               ter’s degree with the Computer School, Beijing
+[12] X. Xie, C. Wu, J. Gu, H. Qiu, J. Li, M. Guo, X. He, Y. Dong, and Y. Zhao,                                  Information Science and Technology University,
+     ‘‘AZ-code: An efficient availability zone level erasure code to provide high                               Beijing, China. His main research interest includes
+     fault tolerance in cloud storage systems,’’ in Proc. 35th Symp. Mass Storage                               distributed storage.
+     Syst. Technol. (MSST), May 2019, pp. 230–243.
+[13] J. Jeong, J. Kwak, D. Lee, S. Choi, J. Lee, J. Choi, and Y. H. Song, ‘‘Level
+     aware data placement technique for hybrid NAND flash storage of log-
+     structured merge-tree based key-value store system,’’ IEEE Access, vol. 8,
+     pp. 188256–188268, 2020, doi: 10.1109/ACCESS.2020.3031322.
+[14] Y. Yuan, J. Zhang, and W. Xu, ‘‘Dynamic multiple-replica prov-                                             YINGAI TIAN received the B.S. degree in com-
+     able data possession in cloud storage system,’’ IEEE Access, vol. 8,                                       puter science and technology from Beijing Uni-
+     pp. 120778–120784, 2020, doi: 10.1109/ACCESS.2020.3006278.                                                 versity of Science and Technology, Beijing, China,
+[15] B. Xu, J. Huang, X. Qin, and Q. Cao, ‘‘Traffic-aware erasure-                                              in 2006. She is currently an Associate Professor
+     coded archival schemes for in-memory stores,’’ IEEE Trans. Paral-                                          with the Computer School, Beijing Information
+     lel Distrib. Syst., vol. 31, no. 12, pp. 2938–2953, Dec. 2020, doi:                                        Science and Technology University. Her main
+     10.1109/TPDS.2020.3009092.                                                                                 research interests include big data analysis meth-
+[16] H. Jin-Ping, ‘‘Hybrid coding LRC-RS in heterogeneous decentralized                                         ods, machine learning algorithm, document infor-
+     storage,’’ Comput. Eng. Des., vol. 42, no. 2, pp. 301–308, 2021.                                           mation pressing technology, and document format
+[17] Y. Zhang, H. Li, S. Liu, and P. Huang, ‘‘Hybrid block storage for efficient                                standard.
+     cloud volume service,’’ ACM Trans. Storage, vol. 19, no. 4, pp. 1–25,
+     Nov. 2023.
+[18] X. Wei, Y. Tan, D. Liu, D. Wu, Y. Wu, X. Chen, and J. Li, ‘‘Weak
+     network oriented mobile distributed storage: A hybrid fault-tolerance                                      BO WANG received the B.S. degree in com-
+     scheme based on potential replicas,’’ in Proc. IEEE 24th Int. Conf. High                                   puter science from Northeast Forest University
+     Perform. Comput. Commun., 8th Int. Conf. Data Sci. Syst., 20th Int. Conf.                                  (NEFU), Harbin, China, in 2010, and the Ph.D.
+     Smart City; 8th Int. Conf. Dependability Sensor, Cloud Big Data Syst.                                      degree in computer science from Xi’an Jiaotong
+     Appl. (HPCC/DSS/SmartCity/DependSys), Hainan, China, Dec. 2022,
+                                                                                                                University (XJTU), Xi’an, China, in 2017. He was
+     pp. 372–379.
+                                                                                                                the Guest Student of the State Key Laboratory
+[19] Y. Hu, Y. Wang, B. Liu, D. Niu, and C. Huang, ‘‘Latency reduction and
+     load balancing in coded storage systems,’’ in Proc. Symp. Cloud Comput.,
+                                                                                                                of Computer Architecture, Institute of Computing
+     Sep. 2017, pp. 365–377.                                                                                    Technology (ICT), Chinese Academy of Sciences
+[20] S. Mitra, R. Panta, M.-R. Ra, and S. Bagchi, ‘‘Partial-parallel-repair (PPR):                              (CAS), from 2012 to 2016. He is currently a
+     A distributed technique for repairing erasure coded storage,’’ in Proc. 11th                               Lecturer with the Software Engineering College,
+     Eur. Conf. Comput. Syst., Apr. 2016, p. 30.                                     Zhengzhou University of Light Industry (ZZULI). He has published more
+[21] Y. Chen, S. Alspaugh, and R. Katz, ‘‘Interactive analytical processing          than ten research articles in these areas. His research interests include dis-
+     in big data systems: A cross-industry study of MapReduce workloads,’’           tributed systems, cloud computing, edge computing, resource management,
+     Proc. VLDB Endowment, vol. 5, no. 12, pp. 1802–1813, Aug. 2012, doi:            and task scheduling. He served in various academic journals and conferences.
+     10.14778/2367502.2367519.
+
+
+
+
+VOLUME 12, 2024                                                                                                                                                48639
+

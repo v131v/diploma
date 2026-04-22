@@ -1,0 +1,1718 @@
+                                                                                                                                                                       1
+
+
+
+
+                                                 Locally repairable convertible codes with
+                                                           optimal access costs
+                                                                                              Xiangliang Kong
+
+
+                                                                                                    Abstract
+                                                  Modern large-scale distributed storage systems use erasure codes to protect against node failures with low storage
+
+
+
+
+arXiv:2308.06802v1 [cs.IT] 13 Aug 2023
+                                              overhead. In practice, the failure rate and other factors of storage devices in the system may vary significantly over
+                                              time, and leads to changes of the ideal code parameters. To maintain the storage efficiency, this requires the system
+                                              to adjust parameters of the currently used codes. The changing process of code parameters on encoded data is called
+                                              code conversion.
+                                                  As an important class of storage codes, locally repairable codes (LRCs) can repair any codeword symbol using
+                                              a small number of other symbols. This feature makes LRCs highly efficient for addressing single node failures in
+                                              the storage systems. In this paper, we investigate the code conversions for locally repairable codes in the merge
+                                              regime. We establish a lower bound on the access cost of code conversion for general LRCs and propose a general
+                                              construction of LRCs that can perform code conversions with access cost matching this bound. This construction
+                                              provides a family of LRCs together with optimal conversion process over the field of size linear in the code length.
+
+
+                                                                                              I. I NTRODUCTION
+                                            Large-scale cluster storage systems employ erasure codes to protect against node failures with low storage
+                                         overhead [1], [2], [3]. In such scenarios, a set of k data symbols is encoded as a codeword of length n using an
+                                         [n, k] code and the n codeword symbols are distributed across n different storage nodes. The ratio nk , referred to
+                                         as the code rate, is chosen according to the failure rate of storage devices. In practice, the failure rate of storage
+                                         devices in large-scale storage systems vary significantly over time. However, the rate of the erasure code employed
+                                         in the system usually remains fixed. Consequently, as time goes by, storage systems utilizing erasure codes with
+                                         static rates will either be overly resource-consuming, overly risky, or a mix of the two. To address this problem, [4]
+                                         shows that changing the code rate over time in response to the variations of failure rates of storage devices yields
+                                         substantial savings in storage space and operating costs. In this approach, one need to convert already-encoded data
+                                         from an [nI , k I ] code to its encoding under another code with different parameters [nF , k F ]. This process is known
+                                         as code conversion [5], the code with parameters [nI , k I ] is called the initial code and the code with parameters
+                                         [nF , k F ] is called the final code.
+                                            The default approach for code conversion is to re-encode the data from the initial code according to the finial code.
+                                         However, such an approach requires accessing a large number of symbols, decoding the entire data, transferring the
+                                         data over the network and then re-encoding it. This causes substantial I/O load and adversely affects the efficiency
+                                         of the system [6]. In the pursuit of designing codes that allow for efficient code conversions, Maturana and Rashmi
+                                         introduced convertible codes [5]. Their work, along with subsequent studies[7], [8], [9], focused on conversions
+                                         of MDS codes and MDS array codes, and obtained several fundamental results in the theoretical study of code
+                                         conversions for storage codes.
+                                            As another important storage codes, locally repairable codes (LRCs) can repair any codeword symbol using only
+                                         a small number of other symbols. More formally, an (n, k, r) LRC is a code that produces an n-symbol codeword
+                                         from k information symbols, such that for any symbol within the codeword, one can use at most r other symbols
+                                         to recover it. This feature makes LRCs notably efficient for large-scale storage systems, particularly in scenarios
+                                         involving single node failures. Due to their applications in distributed and cloud storage systems, LRCs have become
+                                         one of the rapidly developing topics in coding theory over the past decade. The study of LRCs encompasses a
+                                         broad range of topics, including constructions (e.g., [10], [11], [12], [13], [14], [15]), bounds (e.g., [16], [17], [18],
+                                         [19], [20], [21]), and diverse variations (e.g., [22], [23], [24], [25], [26], [27], [28]).
+                                            In this paper, we focus on code conversion problem for LRCs in the merge regime. The merge regime corresponds
+                                         to conversions where multiple codewords are merged into a single codeword. Specifically, we establish a lower bound
+                                         on the number of accessed symbols during the conversion process for general LRCs in the merge regime, and we
+                                            Xiangliang Kong is with the Department of Electrical Engineering-Systems, Tel Aviv University, Tel Aviv-Yafo 6997801, Israel
+                                         (rongxlkong@gmail.com). This work was supported by the European Research Council (ERC) under Grant 852953.
+                                                                                                                           2
+
+
+
+propose a general construction of LRCs that can perform code conversions with access cost matching this bound.
+It’s noteworthy that during the preparation of this paper, Maturana and Rashmi [9] studied conversion problem
+for LRCs with information locality. Based on piggybacking frameworks, they proposed a construction technique
+for designing LRCs that can perform code conversion at a lower cost than the default approach. In contrast to
+their work, we focus on LRCs with all-symbol locality. Moreover, our construction is from the algebraic coding
+perspective, and it explicitly provides a family of LRCs together with optimal conversion process over the field of
+size linear in the code length.
+
+A. The Setup and Related Results
+  Before formally defining and discussing the code conversion problem for LRCs, we begin with the basic definition
+and bounds for LRCs.
+  For positive integers n and 1 ≤ a < b ≤ n, we denote [n] as the set of integers {1, 2, . . . , n} and [a, b] as
+{a, a + 1, . . . , b}. Let q be a prime power, we denote Fq as the finite field of q elements. We say that C is an (n, k)q
+code if C ⊆ Fnq and |C| = q k . For a vector v ∈ Fnq and a subset S ⊆ [n], we denote v|S as the vector obtained by
+removing the coordinates outside S. Let C be an (n, k)q code and S be a subset of [n], the restriction of C to S is
+defined as C|S = {c|S : c ∈ C}.
+Definition I.1. (Locally repairable codes, [16], [29]) Let r ≤ k ≤ n be positive integers. We say that a code C
+with parameters (n, k) over alphabet Σ has locality r if for every codeword c ∈ C and every i ∈ [n], there exists a
+subset of coordinates Ii ⊂ [n] \ {i} with |Ii | ≤ r such that c(i) can be recovered by symbols from c|Ii . The subset
+Ii is called a recovering set for i and the C is called an (n, k, r)-LRC.
+   As a natural generalization of the classical Singleton bound, [16] and [29] proved a bound on the minimum
+distance of an (n, k, r)-LRC. Here, we refer to the version from [11].
+Theorem I.1. [11] Let C be an (n, k, r)-LRC of cardinality |Σ|k over alphabet Σ, then:
+                            k    r
+  • The rate of C satisfies n ≤ r+1 .
+                                                       k
+  • The minimum distance of C satisfies d ≤ n − k − ⌈ r ⌉ + 2.
+Moreover, an (n, k, r)-LRC that achieves the bound on the distance with equality is called an optimal LRC.
+   Next, we present the formal framework introduced in [5] for studying code conversions.
+   Let the initial code C I be an (nI , k I )q code and the final code C F be an (nF , k F )q code. Consider a message
+vector of length M = lcm(k I , k F ) over Fq , denoted by m ∈ FM        q . Clearly, to encode m, we need λ = M/k
+                                                                                                                 I          I
+                 I       F          F                    F
+codewords in C and λ = M/k codewords in C . To specify the information encoded in the codewords involved
+in conversion process, we define partitions P I and P F of [M ] as: P I = {P1I , . . . , PλII } consists of λI disjoint
+subsets, each of size k I and P F = {P1F , . . . , PλFF } consists of λF disjoint subsets, each of size k F . Then, for every
+i ∈ [λI ], denote ci = C I (m|PiI ) as the initial codeword in C I that encodes the message in m indexed by PiI and
+for every j ∈ [λF ], denote dj = C F (m|PjF ) as the final codeword in C F that encodes the message in m indexed
+by PjF . Then, the conversion procedure from C I to C F is defined as follows.
+Definition I.2. (Code Conversion, [5]) A conversion from the initial code C I to the final code C F with initial
+partition P I and the final partition P F is a procedure, denoted by TC I →C F , that for any m ∈ FM
+                                                                                                   q , takes the
+set of initial codewords {ci : 1 ≤ i ≤ λI } that encodes m as inputs, and output the set of final codewords
+{di : 1 ≤ i ≤ λF } that encodes m.
+Definition I.3. (Convertible Code, [5]) An (nI , k I ; nF , k F ) convertible code over Fq is defined by:
+ 1. A pair of codes (C I , C F ) where C I is an (nI , k I )q code and C F is an (nF , k F )q code.
+ 2. A pair of partitions P I and P F of [M ] (M = lcm(k I , k F )) such that each subset in P I is of size k I and
+    each subset in P F is of size k F .
+ 3. A conversion procedure TC I →C F that on input {ci : 1 ≤ i ≤ λI } outputs {di : 1 ≤ i ≤ λF }.
+  When both C I and C F are MDS codes, the corresponding convertible code (C I , C F ) is called an MDS convertible
+code. When C I is an LRC with parameters (nI , k I , rI ) and C F is an LRC with parameters (nF , k F , rF ), the
+corresponding convertible code (C I , C F ) is called an locally repairable convertible code (LRCC) with parameters
+(nI , k I , rI ; nF , k F , rF ).
+                                                                                                                           3
+
+
+
+  Next, we define the access cost of code conversion, which measures the number of symbols that are affected by
+the conversion procedure.
+Definition I.4. (Access Cost, [5]) The read access cost and write access cost are defined as the total number of
+symbols read and written during the conversion procedure, respectively. The access cost of a conversion procedure
+is the sum of its read and write access costs. The access cost of a convertible code is the access cost of its conversion
+procedure.
+   To specify the transfer of codeword symbols during the conversion, we classify them into the following three
+categories:
+ (1) remaining symbols, which refers to symbols in the initial codewords that remain as is in the final codewords;
+ (2) accessed symbols, which refers to symbols of the initial codewords that are accessed (read);
+ (3) new symbols, which refers to symbols in the final codewords which are not remaining from initial codewords.
+   As two fundamental cases of code conversions, Merge regime and split regime were introduced in [5] and [30],
+separately. In the merge regime, k F = ζk I for some integer ζ ≥ 2. As consequence, the length of the message vector
+m is M = lcm(k I , k F ) = k F . Thus, the number of initial codewords is λI = ζ and the number of final codewords
+is λF = 1. In the split regime, k I = ζk F . Thus, the number of initial codewords is λI = 1 and the number of final
+codewords is λF = ζ. As shown in [5], in the merge regime, all pairs of initial and final partitions (P I , P F ) are
+equivalent. Therefore, in the following context, we always assume that P I = {[k I ], [k I + 1, 2k I ], . . . , [(ζ − 1)k I +
+1, ζk I ]} and P F = {[ζk I ]} for all (nI , k I ; nF , k F = ζk I ) convertible codes.
+   Maturana and Rashmi [5] proved the following lower bound on the access cost of linear MDS convertible
+codes in the merge regime. They also provided two constructions and showed that this lower bound is optimal.
+                                                                                            I 3
+Their construction for general parameters requires the field size q to be at least Ω(2ζ·(n ) ). Conditioning on the
+existence of certain superregular Hankel arraires, they further reduce this requirement to q ≥ max{nI , nF } when
+                I   I
+nF − k F ≤ ⌊ n −k ζ   ⌋.
+Theorem I.2. For all linear (nI , k; nF , ζk) MDS convertible codes, the read access cost of conversion is at least
+ζ · min{k, nF − ζk} and the write access cost is at least nF − ζk. Further, if nI − k < nF − ζk, the read access
+cost is at least ζk.
+
+B. Our Contribution
+  In this paper, we study the code conversion problem of locally repairable codes in the merge regime. Due to their
+good error correcting capabilities and strong connections with MDS codes, we limit our focus on optimal LRCs,
+that is, LRCs achieving the bound on the distance in Theorem I.1. In the following context, the term LRCs will
+always refer to optimal LRCs unless otherwise specified.
+  Below, we summarize the main contributions of this paper.
+   • First, by establishing proper maps from polynomials of degree at most k − 1 to polynomials of degree at
+     most ζk − 1, we proprose a construction of MDS convertible codes with optimal access costs for general
+     parameters using GRS codes. As a consequence, we obtain a family of (nI , k; nF , ζk) MDS convertible codes
+     with optimal access costs over finite field of size linear in nI .
+   • Second, based on the construction of optimal LRCs through “good polynomials” in [11], we extend the construc-
+     tion of MDS convertible codes and propose a construction of LRCCs. Similarly, a family of (nI , k, r; nF , ζk, r)
+     LRCCs over finite field of size linear in nI is obtained.
+                                                                            I     F
+   • Third, we prove a general lower bound on the access cost of an (n , k; n , ζk) convertible code with the
+     condition that the finial code is an LRC. As a consequence, this shows that the LRCCs obtained in Section
+     III admit optimal access costs.
+
+C. Notations
+  Throughout the paper, we use bold lowercase letters to represent vectors and bold uppercase letters to represent
+matrices. We use Ir to denote the identity matrix of order r and the subscript “r” is usually omitted if it’s clear from
+the context. We use (ai,j ) 1≤i≤m to denote the m × n matrix with ai,j as its (i, j)-th entry and we denote 0m×n as
+                            1≤j≤n
+the m × n matrix with all entries equal to 0. Given a vector v of length n over Fq , we use diag(v) to denote the
+                                                                                                                                 4
+
+
+
+diagonal matrix with v(i) as its i-th diagonal element. Let s, t be positive integers and A = {a1 , . . . , as } ⊆ Fq ,
+we denote
+                                               A(t) = (ai−1
+                                                        j ) 1≤i≤t       1≤j≤s
+
+
+as the t × s Vandermonde matrix with (i, j)-th entry ai−1
+                                                      j   and call A(t) the t × s Vandermonde matrix generated
+by A. Moreover, for α ∈ Fq , we use αA to denote the subset {αa1 , . . . , αas } ⊆ Fq .
+   For integer k ≥ 1, let g1 , . . . , gk be Fq -linearly independent polynomials in Fq [x] and denote SpanFq {g1 , . . . , gk }
+as the k-dim subspace of Fq [x] spanned by g1 , . . . , gk . Specially, when gi = xi−1 , we denote F<k q [x] as SpanFq {g1 , . . . , gk }
+                                                                              Pk
+for simplicity. Let f ∈ SpanFq {g1 , . . . , gk } and assume that f = i=1 fi gi , where fi ∈ Fq . We denote vf =
+(f1 , . . . , fk ) and call vf the coefficient vector of f w.r.t. basis {gi }ki=1 . When the basis {gi }ki=1 =   i−1 k
+                                                                                                             Q{x }i=1 , vf
+is called the coefficient vector of f for brevity. Moreover, for a subset A ⊆ Fq , we use hA (x) = a∈A (x − a) to
+denote the annihilator polynomial of A.
+
+D. Origanization of the Paper
+  The rest of the paper is structured as follows. In Section II, we provide a general construction of MDS convertible
+code with optimal access cost in the merge regime. In Section III, we extended the construction of MDS convertible
+codes and provide a construction of LRCCs with optimal access costs in the merge regime. Then, in Section IV,
+we prove a general lower bound on the access cost of the conversion process for LRCCs in the merge regime.
+Finally, we conclude the paper by highlighting some open questions in Section V.
+
+                                 II. C ONSTRUCTIONS OF MDS CONVERTIBLE CODES
+   In this section, we provide a general construction of MDS convertible codes with optimal access costs in the
+merge regime. We first provide an example to illustrate the underlying idea of our general construction. Then, in
+Section II-B, we present our construction of MDS convertible codes. Though this construction, in Section II-C, we
+obtain a family of (nI , k; nF , ζk) MDS convertible codes with optimal access costs over finite field of size linear
+in nI .
+   Recall that in the merge regime, we have k F = ζk I for some integer ζ ≥ 2. Write lI = nI −k I and lF = nF −ζk I .
+Note that when lI < lF or k I ≤ lF , the lower bound in Theorem I.2 can be obtained by the default approach.
+Thus, throughout this section, we assume that lF ≤ min{lI , k I }.
+
+A. An illustrative example
+  We start with the following example.
+Example II.1. In this example, let Fq = F19 , we construct a (6, 4)q MDS code C I , a (10, 8)q MDS code C F and
+a conversion procedure T from C I to C F with write access cost 2 and read access cost 4. Together, they form a
+(6, 4; 10, 8) MDS convertible codes with optimal access cost. Note that 2 is generator of F∗19 . We list all the values
+of 2x in Table I, which might help with calculations in this example.
+
+                                                           Table I
+                                                 C ORRESPONDENCE OF 2x IN F∗19
+
+                                      x      0     1   2      3     4     5      6    7   8
+                                      2x     1     2   4      8    16     13     7   14   9
+                                      x      9    10   11    12    13     14    15   16   17
+                                      2x    18    17   15    11     3     6     12    5   10
+
+   Let A = {a1 , a2 , a3 , a4 } = {1, 8, 7, 18}, B = {b1 , b2 , b3 , b4 } = {2, 16, 14, 17} and C = {c1 , c2 } = {4, 9}. Then,
+it holds that ai = 23(i−1) , bi = 2ai and ci = 4ai . We define the initial code C I as the [6, 4] RS code with evaluation
+points A ∪ C, i.e.,
+                                         C I = {(f (α), α ∈ A ∪ C) : f ∈ F<4     q [x]}.
+
+  Next, to define the final code C F , we need some preliminaries. Let θ = (11, 3, 3, 6) and
+                                                                                    
+                                                                   0 16 14 7
+                                                               1 17 17 17 
+                             M = A(4) · diag(θ) · (B(4) )−1 = 
+                                                               16 16 10 7  .
+                                                                                     
+
+                                                                   1 6 17 15
+                                                                                                                                      5
+
+
+
+Then, one can verify that the following holds:
+  1. For every i ∈ [4], M · (1, bi , b2i , b3i )T = θ(i)(1, ai , a2i , a3i )T .
+  2. M · (1, c1 , c21 , c31 )T = (14, 4, 4, 3)T = 13(1, c1 , c21 , c31 )T + (1, c2 , c22 , c32 )T .
+  3. M · (1, c2 , c22 , c32 )T = (16, 16, 12, 17)T = 18(1, c1 , c21 , c31 )T − 2(1, c2 , c22 , c32 )T .
+For each f ∈ F<4                                                             <4
+                 q [x], we denote M (f ) as the polynomial in Fq [x] with coefficient vector vf · M. Then, we have
+                               
+                                                                   2 3 T
+                               M (f )(bi ) = vf · M · (1, bi , bi , bi ) = θ(i)f (ai ), 1 ≤ i ≤ 4;
+                               
+                                 M (f )(c1 ) = vf · M · (1, c1 , c21 , c31 )T = 13f (c1 ) + f (c2 );
+                               
+                                 M (f )(c2 ) = vf · M · (1, c2 , c22 , c32 )T = 18f (c1 ) − 2f (c2 ).
+                               
+
+  Recall that hA and hB are the annihilator polynomials of A and B, respectively. Let T be the map from
+F<4        <4       <8
+ q [x] × Fq [x] to Fq [x] such that
+
+                                            T : (f1 , f2 ) 7−→ hB · f1 + hA · M (f2 )
+and let u = (uα , α ∈ A ∪ B ∪ C) be a vector in F10
+                                                 q with coordinates indexed by elements in A ∪ B ∪ C and
+                                   
+                                                   −1
+                                   uai = hB (ai ) , 1 ≤ i ≤ 4;
+                                   
+                                     ubi = θ(i) hA (bi )−1 , 1 ≤ i ≤ 4;
+                                                −1
+                                   
+                                   
+                                     uci = 1, 1 ≤ i ≤ 2.
+Now, we define the final code C F as
+                               C F = {(uα T (f1 , f2 )(α), α ∈ A ∪ B ∪ C) : f1 , f2 ∈ F<4
+                                                                                       q [x]}.
+
+Since T (f1 , f2 ) ∈ F<8
+                      q [x], C
+                               F
+                                 is a subcode of the [10, 8] GRS code defined by A ∪ B ∪ C and vector u. Note that
+                                                           (
+                                                             f1 (α), when α ∈ A;
+                                      uα T (f1 , f2 )(α) =
+                                                             f2 (α), when α ∈ B.
+Thus, we can use (uα T (f1 , f2 )(α), α ∈ A) and (uα T (f1 , f2 )(α), α ∈ B) to reconstruct f1 and f2 , respectively.
+This implies that dim(C F ) = 8 and C F is a [10, 8] GRS code. Moreover, note that
+                      (
+                         uc1 T (f1 , f2 )(c1 ) = hB (c1 )f1 (c1 ) + hA (c1 )(13f2 (c1 ) + f2 (c2 )),
+                         uc2 T (f1 , f2 )(c2 ) = hB (c2 )f1 (c2 ) − hA (c2 )(f2 (c1 ) + 2f2 (c2 )).
+
+Therefore, for any two codewords c1 = (f1 (α), α ∈ A ∪ C) and c2 = (f2 (α), α ∈ A ∪ C) in C I , the map T induces
+a conversion procedure from (c1 , c2 ) to d = (uα T (f1 , f2 )(α), α ∈ A ∪ B ∪ C) ∈ C F such that
+ 1) the 4 symbols in c1 |A remain in d as d|A , and the 4 symbols in c2 |A remain in d as d|B 1 ;
+ 2) the 2 symbols in d|C are linear combinations of symbols in c1 |C and c2 |C .
+Therefore, the conversion procedure T has write access cost 2 and read access cost 4.
+Remark II.1. Example II.1 provides an overview of the underlying idea behind our general construction. That is,
+by selecting proper evaluation points A = {a1 , . . . , ak }, B = {b1 , . . . , bk } and C = {c1 , . . . , cl }, we can obtain a
+surjective map T : F<k             <k
+                        q [x] × Fq [x] → Fq
+                                              <2k
+                                                    [x] such that for every (f1 , f2 ) ∈ F<k       <k
+                                                                                          q [x] × Fq [x] the following holds:
+  1. T (f1 , f2 )(ai ) = αi f1 (ai ) and T (f1 , f2 )(bi ) = βi f2 (ai ), where for each 1 ≤ i ≤ k, αi and βi are non-zero
+     constants determined by A, B and C;
+                         Pl        (1)            (2)                                              (1)          (2)
+  2. T (f1 , f2 )(ci ) = j=1 (γi,j f1 (cj ) + γi,j f2 (cj )), where for each (i, j) ∈ [l] × [l], γi,j and γi,j are constants
+     determined by A, B and C.
+Then, based on this, we can define C I as the [k + l, k] RS code with evaluation points A ∪ C and C F as
+                               C F = {(uα T (f1 , f2 )(α), α ∈ A ∪ B ∪ C) : f1 , f2 ∈ F<k
+                                                                                       q [x]},
+                         −1
+where uai = α−1
+             i , ubi = βi   and uci = 1. Since T is surjective, C F is actually the [2k + l, k] GRS code defined
+by A ∪ B ∪ C and vector (uα , α ∈ A ∪ B ∪ C).
+  1 Let C be an [n, k] RS code with evaluation points A. For any c = (f (α), α ∈ A) ∈ C and A′ ⊆ A, we denote c| ′ as the restriction of
+                                                                                                                A
+c to coordinates corresponding to A′ , i.e., c|A′ = (f (α), α ∈ A′ ).
+                                                                                                                               6
+
+
+
+  By the one-to-one correspondence between polynomials and codewords in GRS codes, T induces a conversion
+procedure from C I to C F , i.e., codewords c1 = (f1 (α), α ∈ A ∪ C) and c2 = (f2 (α), α ∈ A ∪ C) are mapped to
+d = (uα T (f1 , f2 )(α), α ∈ A ∪ B ∪ C). Similar to Example II.1, one can easily verify that d|A = c1 |A , d|B = c2 |A
+and symbols in d|C are linear combinations of symbols in c1 |C and c2 |C . This will imply that (C I , C F ) is an MDS
+convertible codes with optimal access cost.
+Remark II.2. In Example II.1, the map T is defined as
+                                           T : (f1 , f2 ) 7−→ hB · f1 + hA · M (f2 ),
+where M (f2 ) is the polynomial with coefficient vector vf2 · M. Note that M is a k × k matrix satisfying
+  1. M · (1, bi , . . . , bik−1 )T = θi (1, ai , . . . , aik−1 )T , where for each 1 ≤ i ≤ k, θi is non-zero constant determined
+     by A, B and C;
+  2. M · (1, ci , . . . , cik−1 )T ∈ SpanFq {(1, ci , . . . , cik−1 )T : 1 ≤ i ≤ l}.
+One can easily check that these properties of M ensure the map T defined above satisfies the requirements in
+Remark II.1. Thus, the crucial part of the construction is to find proper subsets A, B and C such that there exists
+a k × k matrix M satisfying the above requirements.
+
+B. Constructions of MDS convertible codes with optimal access costs
+  First, we assume that lF = lI = l < k I and present a construction of MDS convertible codes for this case. Then,
+we will modify it for the case when lF < lI .
+  Construction I: Let Ai = {ai,1 , . . . , ai,k }, 1 ≤ i ≤ ζ and C = {c1 , . . . , cl } be mutually disjoint subsets of Fq
+such that for every 2 ≤ i ≤ ζ, there is a k × k matrix Mi satisfying:
+Condition 1 For every 1 ≤ j ≤ k,
+                                                      Mi · ai,j = θi,j a1,j ,
+                                      k−1 T                hA ∪C\{a          } (ai,j )
+     where ai,j = (1, ai,j , . . . , ai,j ) and θi,j = hA i∪C\{a i,j } (a1,j ) .
+                                                              1        1,j
+
+Condition 2 For every 1 ≤ j ≤ l, Mi · (1, cj , . . . , cjk−1 )T ∈ SpanFq {(1, cj , . . . , cjk−1 )T : 1 ≤ j ≤ l}.
+Let C I be the [k + l, k] RS code with evaluation points A1 ∪ C, i.e.,
+                                         C I = {(f (α), α ∈ A1 ∪ C) : f ∈ F<k
+                                                                           q [x]}.
+              Sk                                          <k    ζ   <ζk
+Denote A =       i=1 Ai . Let M1 = I and define map T : (Fq [x]) → Fq   [x] as
+                                                                       ζ
+                                                                       X
+                                          T : (f1 , . . . , fζ ) 7−→         hA\Ai · Mi (fi ),                              (1)
+                                                                       i=1
+                                                                                        F
+where Mi (fi ) ∈ F<k
+                  q [x] is the polynomial with coefficient vfi · Mi . Then, we define C   as
+                         C F = {(uα T (f1 , . . . , fζ )(α), α ∈ A ∪ C) : fi ∈ F<k
+                                                                                q [x], 1 ≤ i ≤ ζ},                          (2)
+            −1 −1
+where uα = θi,j hA\Ai (ai,j ) when α = ai,j ∈ Ai and uα = 1 when α ∈ C.
+Theorem II.1. For positive integers ζ ≥ 2, k and l < k, the (C I , C F ) given by Construction I is a (k+l, k; ζk+l, ζk)
+MDS convertible code with optimal access cost.
+Proof. Let c1 , . . . , cζ ∈ C I be the ζ initial codewords and denote fi (x) as the encoding polynomial of ci . Since for
+every 1 ≤ i ≤ ζ, deg(Mi (fi )) ≤ k − 1 and deg(hA\Ai ) = (ζ − 1)k, it holds that T (f1 , . . . , fζ ) ∈ F<ζk
+                                                                                                         q   . Thus, C F is
+a subcode of the [ζk + l, ζk] GRS code defined by evaluation points A ∪ C and vector (uα , α ∈ A ∪ C). Moreover,
+the map T induces a conversion procedure from C I to C F , that is, c1 , . . . , cζ are converted to the codeword
+                                       d = (uα T (f1 , . . . , fζ )(α), α ∈ A ∪ C) ∈ C F .
+   Next, we show that the read and write access costs of the conversion procedure induced by T are ζl and l,
+respectively. By Theorem I.2, this implies that (C I , C F ) has optimal access cost. As a byproduct, we shall see that
+C F has dimension ζk, i.e., the map T is surjective. This yields the result.
+                                                                                                                                  7
+
+
+
+  For each (i, j) ∈ [ζ] × [k] and α = ai,j , since hA\Ai is the annihilator polynomial of A \ Ai , we have
+                                                                             ζ
+                                                                             X
+                                                         −1 −1
+                           uα T (f1 , . . . , fζ )(α) = θi,j hA\Ai (ai,j )         hA\As (ai,j )(Ms (fs ))(ai,j )
+                                                                             s=1
+                                                       −1
+                                                    = θi,j (Mi (fi ))(ai,j )
+                                                    = fi (a1,j ),
+where the last equality follows from (Mi (fi ))(ai,j ) = vfi ·Mi ·ai,j = θi,j fi (a1,j ). Therefore, we have d|Ai = ci |A1 .
+In other words, there are at least k symbols from each ci remaining in d. Thus, the write access cost is at most l.
+Moreover, note that C I |A1 = Fkq . Thus, we have C F |A = Fζk                              F
+                                                               q , which leads to dim(C ) = ζk.
+  On the other hand, for 1 ≤ j ≤ l, denote cj = (1, cj , . . . , cjk−1 )T . By Mi · cj ∈ SpanFq {c1 , . . . , cl }, we can
+                         Pl      (i,j)
+assume that Mi · cj = s=1 ηs cs . Then, for α = cj ∈ C, we have
+                                                                 ζ
+                                                                 X
+                                  uα T (f1 , . . . , fζ )(α) =         hA\Ai (cj )(Mi (fi ))(cj )
+                                                                 i=1
+                                                                  ζ                          l
+                                                                                                                !
+                                                                 X                           X
+                                                           =         hA\Ai (cj )     vfi ·         ηs(i,j) cs
+                                                                 i=1                         s=1
+                                                                 Xζ  Xl
+                                                           =               hA\Ai (cj )ηs (i, j)fi (cs ).                        (3)
+                                                                 i=1 s=1
+
+This implies that the l symbols in d|C are linear combinations of the ζl symbols in c1 |C , . . . , cζ |C . Therefore, the
+read access cost is at most ζl.
+   Now, we present the construction for the general case when lF ≤ lI . The idea is simple. Note that if C I is a
+linear [k + lI , k] MDS code, then, C I |[k+lF ] is a [k + lF , k] MDS code. Therefore, we can use the same C F obtained
+in Construction I as the final code and maintain the access S       cost.
+   Construction II: Let A1 , . . . , Aζ , C and (uα , α ∈ i∈[ζ] Ai ∪ C) be identical to those defined in Construction I.
+Let B = {b1 , . . . , blI −lF } be a subset of Fq of size (lI − lF ) such that B ∩ (A1 ∪ C) = ∅2 . Let C I be the [k + lI , k]
+RS code with evaluation points A1 ∪ C ∪ B, i.e.,
+                                      C I = {(f (α), α ∈ A1 ∪ C ∪ B) : f (x) ∈ F<k
+                                                                                q [x]}.
+
+Let the conversion procedure T and the final code C F be the same as those defined in (1) and (2).
+  By Theorem I.2 and Theorem II.1, we have the following immediate result.
+Theorem II.2. For positive integers ζ ≥ 2, k, lI and lF ≤ min{k, lI }, the (C I , C F ) given by Construction II is a
+(k + lI , k; ζk + lF , ζk) MDS convertible code with optimal access cost.
+
+C. A family of MDS convertible codes with optimal access costs
+  From Section II-B, the key to implementing Construction I and II lies in finding pairwise disjoint subsets Ai ’s
+and C from Fq , such that there exist matrices Mi ’s satisfying conditions 1 and 2 in Construction I. In the following,
+we first give a sufficient condition for when Ai ’s can ensure the existence of such Mi ’s. Then, we give an explicit
+construction of A1 , . . ., Aζ satisfying this sufficient condition. Together with proper subsets B and C, we provide
+an implementation of Construction II, and obtain a family of MDS convertible codes with optimal access costs.
+Lemma II.3. For positive integers k ≥ 2 and l < k, let A = {a1 , . . . , ak } and B = {b1 , . . . , bk } be disjoint
+subsets of Fq . Suppose that there is an invertible matrix T over Fq of order l satisfying
+                                                             B(l) = TA(l) .                                                     (4)
+Then, for any C = {c1 , . . . , cl } ⊆ Fq , there is a k × k matrix M such that:
+                                                                                                                h       (bi )
+  1. For every 1 ≤ i ≤ k, M · (1, bi , . . . , bik−1 )T = θi (1, ai , . . . , aik−1 )T , where θi = hA∪C\{a
+                                                                                                     B∪C\{bi }
+                                                                                                             } (ai )
+                                                                                                                     .
+                                                                                                                    i
+
+
+  2 When lI = lF , B = ∅
+                                                                                                                                     8
+
+
+
+  2. For every 1 ≤ i ≤ l, M · (1, ci , . . . , cik−1 )T ∈ SpanFq {(1, ci , . . . , cik−1 )T : 1 ≤ i ≤ l}.
+  By Lemma II.3, we have the following immediate corollary, which provides a sufficient condition for the existence
+of Mi ’s satisfying conditions 1 and 2 in Construction I.
+Corollary II.1. Let ζ ≥ 2, k and l < k be positive integers. Let Ai = {ai,1 , . . . , ai,k }, 1 ≤ i ≤ ζ, and C =
+{c1 , . . . , cl } be mutually disjoint subsets of Fq . If for every 2 ≤ i ≤ ζ, there is an invertible matrix Ti over Fq of
+order l satisfying
+                                                            (l)        (l)
+                                                          Ai = Ti A1 .
+Then, for every 2 ≤ i ≤ ζ, there is a k × k matrix Mi satisfies condition 1 and 2 in Construction I.
+  Now, we present the proof of Lemma II.3.
+Proof of Lemma II.3. Define M = A(k) ·diag(θ1 , . . . , θk )·(B(k) )−1 . Let ai = (1, ai , . . . , aik−1 )T , bi = (1, bi , . . . , bik−1 )T ,
+1 ≤ i ≤ k and ci = (1, ci , . . . , cik−1 )T , 1 ≤ i ≤ l. Then, for every 1 ≤ i ≤ k, M · bi = θi ai . Thus, we only need
+to verify that M satisfies the second condition.
+   For every 1 ≤ j ≤ l, it holds that
+                                                           k
+                                                         X   hB\{bi } (cj )
+                                                   cj =                     bi .
+                                                             h        (b )
+                                                          i=1 B\{bi } i
+              h        (c )                             P
+Denote ηi,j = hB\{b i} j
+                B\{bi } (bi )
+                              . This leads to M · cj = ki=1 ηi,j θi ai .
+  For each f (x) ∈ F<k−l
+                      q        [x], we denote vhC ·f as the coefficient vector of polynomial hC (x)f (x). Then,
+                                                   k
+                                                   X                                k
+                                                                                    X
+                             vhC ·f · M · cj =           ηi,j θi (vhC ·f · ai ) =         ηi,j θi hC (ai )f (ai )
+                                                   i=1                              i=1
+                                                    k
+                                                   X  hB\{bi } (cj ) hB∪C\{bi } (bi )
+                                               =                                      hC (ai )f (ai )
+                                                      h        (b ) hA∪C\{ai } (ai )
+                                                   i=1 B\{bi } i
+                                                   k
+                                                   X hC (bi )
+                                               =               hB\{bi } (cj )f (ai ).                                (5)
+                                                   h      (a )
+                                               i=1 A\{ai } i
+                                   Q              Q
+Note that hC (bi )hB\{bi } (cj ) = c∈C (bi − c) b∈B\{bi } (cj − b) = −hC\{cj } (bi )hB (cj ). Thus, (5) is equivalent to
+                                                                k
+                                                                                         !
+                                                               X   hC\{cj } (bi )f (ai )
+                                  vhC ·f · M · cj = −hB (cj )                              .                         (6)
+                                                               i=1
+                                                                      hA\{ai } (ai )
+Denote hC\{cj } as the coefficient vector of polynomial hC\{cj } (x). By (4), we have
+                                               hC\{cj } · B(l) = hC\{cj } · TA(l) .
+Denote H(x) ∈ F<l  q [x] as the polynomial with coefficient vector hC\{cj } · T. Then, the above identity implies that
+hC\{cj } (bi ) = H(ai ) for every 1 ≤ i ≤ k. Thus, (6) can be further simplified as
+                                                                 k
+                                                                                  !
+                                                                X (H · f )(ai )
+                                   vhC ·f · M · cj = −hB (cj )                      .                              (7)
+                                                                    h
+                                                                i=1 A\{ai } i
+                                                                             (a )
+  Meanwhile, by deg(f ) ≤ k − l − 1, we have deg(H · f ) ≤ k − 2. Denote ṽ as the coefficient vector of H(x)f (x).
+Then, we have
+                                 ṽ · A(k−1) = ((H · f )(a1 ), . . . , (H · f )(ak )).
+On the other hand, by Cramer’s rule, we know that
+                                    A(k−1) · (hA\{a1 } (a1 )−1 , . . . , hA\{ak } (ak )−1 )T = 0.
+Thus, by (7) and
+                         k
+                         X   (H · f )(ai )
+                                               = ṽ · A(k−1) · (hA\{a1 } (a1 )−1 , . . . , hA\{ak } (ak )−1 )T ,
+                         i=1
+                             h A\{a i } (a i )
+                                                                                                                                           9
+
+
+
+we have vhC ·f · M · cj = 0 for every f (x) ∈ F<k−l q   [x] and 1 ≤ j ≤ l. Note that {vhC ·f : f (x) ∈ F<k−l
+                                                                                                        q    [x]}
+                                    k                                     <k−l
+is a (k − l)-dim subspace of Fq and vhC ·f · cj = 0 for every f (x) ∈ Fq       [x] and 1 ≤ j ≤ l. Therefore, by
+dim(Span{c1 , . . . , cl }) = l, we have M · cj ∈ Span{c1 , . . . , cl }.
+   This completes the proof.
+   Next, using the multiplicative subgroups of F∗q , we give an explicit construction of Ai ’s and C that satisfy the
+requirements in Corollary II.1.
+   Let q ≥ (ζ + 1) · max{k, lI } + 1 be a prime power. Assume that max{k, lI }|(q − 1) and let G be a multiplicative
+subgroup of F∗q of order max{k, lI }3 . Then, |F∗q /G| ≥ ζ + 1. Denote α ∈ F∗q as the generator of the quotient group
+F∗q /G. Let A1 = {a1 , . . . , ak } ⊆ G. Then, we define
+             i−1
+    • Ai = α     A1 = {αi−1 a1 , . . . , αi−1 ak }, 2 ≤ i ≤ ζ + 1;
+              ζ            ζ                                                                ζ             I   F
+    • C = {α a1 , . . . , α ak } ⊆ Aζ+1 and B = {b1 , . . . , blI −lF } be any subset of α G \ C of size l − l .
+                         ζ                 i−1                                                        ∗
+Note that B, C ⊆ α G and Ai ⊆ α G, 1 ≤ i ≤ ζ. Thus, they are pairwise disjoint in Fq . Meanwhile, for
+2 ≤ i ≤ ζ,
+                                                                                                
+                                                1                1          ···         1
+                                              i−1              i−1                    i−1
+                                           α a1             α a2           ···      α ak        
+                             (lF )                                                              
+                           Ai =                ..                ..                    ..       
+                                                .                 .                     .       
+                                           i−1     lF −1    i−1      lF −1          i−1    lF −1
+                                         (α a1 )          (α a2 )           · · · (α ak )
+                                                                      F         (lF )
+                                    = diag(1, αi−1 , . . . , α(i−1)(l −1) )A1           .                                               (8)
+                                                                          F
+Since α 6= 0, the diagonal matrix diag(1, αi−1 , . . . , α(i−1)(l −1) ) is invertible. Thus, for 2 ≤ i ≤ ζ, set Ti =
+                               F                   (lF )      (lF )
+diag(1, αi−1 , . . . , α(i−1)(l −1) ) and we have Ai = Ti A1 .
+Remark II.3. The sets A, B and C in Example II.1 can be viewed as an example of the above construction for
+q = 19, k = 4, lI = lF = 2 and ζ = 2.
+   Clearly, the sets Ai ’s and C constructed above satisfy the requirements in Corollary II.1. Then, Ai ’s, B and C
+satisfy the requirements in Construction II. This leads to the following immediate corollary.
+Corollary II.2. For positive integers ζ ≥ 2, k, lI and lF ≤ min{k, lI }, let q be a prime power such that
+max{k, lI } | (q−1) and q ≥ (ζ +1)·max{k, lI }+1. Then, there is an explicit construction of (k+lI , k; ζk+lF , ζk)
+MDS convertible code with optimal access cost.
+Remark II.4. The requirement of the field size in Corollary II.2 is q ≥ (ζ + 1) · max{k, nI − k} + 1, which is less
+strict than those in [5].
+
+                         III. C ONSTRUCTIONS OF L OCALLY REPAIRABLE CONVERTIBLE CODES
+   In this section, we focus on constructions of locally repairable convertible codes (LRCCs) in merge regime.
+First, we recall the construction of LRCs introduced in [11] using “good” polynomials. Then, we give a example
+to illustrate the underlying idea of the construction. In Section III-C, based on the construction of LRCs using
+“good” polynomials, we present our construction of LRCCs. Though this construction, for nI = (k + lI )(r + 1)
+and nF = (k + lF )(r + 1), we obtain a family of (nI , kr, r; nF , ζkr, r) LRCCs with write access cost lF (r + 1)
+and read access cost ζlF r over finite field of size linear in nI . The access costs of the constructed LRCCs are then
+shown to be optimal in Section IV by Corollary IV.1.
+
+A. Optimal LRCs through “good” polynomials
+   To start with, we first recall the general construction of optimal LRCs in [11].
+                                                                                     n } be a family of n/(r + 1) mutually
+   Let n, k, r be positive integers such that (r + 1)|n and let A = {A1 , . . . , A r+1
+disjoint r + 1-subsets of Fq . A polynomial g(x) ∈ Fq [x] of degree r + 1 is called a good polynomial (w.r.t. A) if
+for each 1 ≤ i ≤ n/(r + 1), g is constant on Ai and we use g(Ai ) to denote this constant.
+   3 When max{k, lI } ∤ (q − 1), one can let G be the smallest multiplicative subgroup of F∗ of order at least max{k, lI } and the condition
+                                                                                           q
+that q ≥ (ζ + 1) · max{k, lI } + 1 becomes q ≥ (ζ + 1) · |G| + 1.
+                                                                                                                       10
+
+
+
+  Let m = (m1 , . . . , mk ) ∈ Fkr
+                                q be a message vector. Given a good polynomial g, define the encoding polynomial
+                                                     r k−1
+                                                     X X
+                                          fm (x) =             mjr+i g(x)j xi−1 .                                    (9)
+                                                     i=1 j=0
+
+Then, as shown in [11], C0 = {(fm (a), a ∈ A) : m ∈ Fkr        q } is an optimal (n, kr, r)-LRC w.r.t. the Singleton-type
+bound in Theorem I.1. Let v = (v1 , . . . , vn ) ∈ (F∗q )n . Like GRS codes to RS codes, one can easily obtain that the
+following code
+                                        C = {(vi fm (ai ), i ∈ [n]) : m ∈ Fkr q }
+
+is also an (n, kr, r)-optimal LRC. For simplicity, we call C the LRC defined by A, g(x) and v. Specially, when v
+is the all one vector, we call C the LRC defined by A and g(x).S
+                                                                   n/(r+1)
+   Let C˜ be the [n, kr] GRS code defined by evaluation points i=1         Ai and vector v. There is a one-to-one
+                                         ˜
+correspondence between codewords of C and polynomials of degree less than kr. Similarly, there is also a one-
+to-one correspondence between codewords of C and polynomials in Fq [x] of form (9). From this perspective, C
+can be viewed as the image of C˜ under the base transformation that maps {xi }0≤i≤kr−1 to {xi g j } 0≤i≤r−1 . Based
+                                                                                                    0≤j≤k−1
+on this connection between the LRCs obtained from good polynomials and the GRS codes, in the following, we
+generalize our constructions of MDS convertible codes in Section II and obtain constructions of optimal LRCCs.
+
+B. An illustrative example
+  Similar to Section II-A, we begin with the following example.
+Example III.1. In this example, we construct a (9, 4, 2)-LRC C I and a (15, 8, 2)-LRC C F over Fq = F19 , and a
+conversion procedure T from C I to C F with write access cost 3 and read access cost 4. Together, they form an
+(9, 4, 2; 15, 8, 2) optimal LRCC with optimal access cost.
+   Let A1 = {a11 , a12 , a13 } = {1, 7, 11}, A2 = {a21 , a22 , a23 } = {8, 18, 12}, B1 = {b11 , b12 , b13 } = {2, 14, 3},
+B2 = {b21 , b22 , b23 } = {16, 17, 5} and C = {c1 , c2 , c3 } = {4, 9, 6}. Let A = A1 ∪ A2 and B = B1 ∪ B2 . By Table
+I, it holds that a1j = 26(j−1) (1 ≤ j ≤ 3), A2 = 23 A1 , B1 = 2A1 , B2 = 24 A1 and C = 22 A1 .
+   Let g(x) = x3 . Then, g is constant on each Ai , Bi and C. Specifically, we have g(A1 ) = 1, g(A2 ) = 18,
+g(B1 ) = 8, g(B2 ) = 11 and g(C) = 7. Denote G1 = {g(A1 ), g(A2 )} = {1, 18} and G2 = {g(B1 ), g(B2 )} =
+{8, 11}.
+   For f ∈ SpanFq {1, x, g(x), xg(x)}, denote vf as its coefficient vector w.r.t. basis {1, x, g(x), xg(x)}. Define the
+initial code C I as the (9, 4, 2)-LRC defined by {A1 , A2 , C} and g, i.e.,
+                            C I = {(f (α), α ∈ A ∪ C) : f ∈ SpanFq {1, x, g(x), xg(x)}}.
+  Next, to define the final code C F , we need some preliminaries. Let θ1 = 5, θ2 = 15 and θ = (5, 5, 15, 15). Define
+                                                                                        −1
+                                1      1     1    1                     1    1    1     1
+                             a11 a12 a21 a22                      b11 b12 b21 b22 
+                     M=     a311 a312 a321 a322  · diag(θ) ·  b311 b312 b321 b322 
+                                                                                         
+
+                               a4 a412 a421 a422                       b411 b412 b421 b422
+                             11                
+                               10 0 16 0
+                             0 5 0 8 
+                         =  14 0 6 0  .
+                                                
+
+                                0 7 0 3
+Then, one can verify that
+  1. M · (1, bij , b3ij , b4ij )T = θi (1, aij , a3ij , a4ij )T , (i, j) ∈ [2] × [3];
+  2. M · (1, c1 , c31 , c41 )T = (8, 16, 18, 17)T = 15(1, c1 , c31 , c41 )T − 7(1, c2 , c32 , c42 )T ;
+  2. M · (1, c2 , c32 , c42 )T = (8, 17, 18, 5)T = 11(1, c1 , c31 , c41 )T − 3(1, c2 , c32 , c42 )T .
+For f ∈ SpanFq {1, x, g(x), xg(x)}, denote M (f ) as the polynomial in SpanFq {1, x, g(x), xg(x)} with coefficient
+vector vf · M w.r.t. basis {1, x, g(x), xg(x)}. Then,
+                         
+                                                                        3   4 T
+                         M (f )(bi,j ) = vf · M · (1, bij , bij , bij ) = θi f (aij ), (i, j) ∈ [2] × [3];
+                         
+                                                                      3 4 T
+                             M (f )(c1 ) = vf · M · (1, c1 , c1 , c1 ) = 15f (c1 ) − 7f (c2 );
+                         
+                             M (f )(c2 ) = vf · M · (1, c2 , c32 , c42 )T = 11f (c1 ) − 3f (c2 ).
+                         
+                                                                                                                                                 11
+
+
+
+  For f1 , f2 ∈ SpanFq {1, x, g(x), xg(x)}, define T as the following map over Fq [x]
+                                       T : (f1 , f2 ) 7−→ (hG2 ◦ g) · f1 + (hG1 ◦ g) · M (f2 ).
+Note that hG1 ◦ g = (g(x) − g(A1 ))(g(x) − g(A2 )) and hG2 ◦ g = (g(x) − g(B1 ))(g(x) − g(B2 )). Thus, we have
+                                                    T (f1 , f2 ) ∈ SpanFq {xi g j } 0≤i≤1 .                                                   (10)
+                                                                                      0≤j≤3
+
+
+Let u = (uα , α ∈ A ∪ B ∪ C) be a vector in F15
+                                             q with coordinates indexed by elements in A ∪ B ∪ C and
+                             
+                                                     −1
+                             uaij = (hG2 ◦ g)(aij ) , (i, j) ∈ [2] × [3];
+                             
+                               ubij = θi−1 (hG1 ◦ g)(bij )−1 , (i, j) ∈ [2] × [3];
+                             
+                             
+                               uci = 1, 1 ≤ i ≤ 3.
+  Now, we define the final code C F as
+                     C F = {(uα T (f1 , f2 )(α), α ∈ A ∪ B ∪ C) : f1 , f2 ∈ SpanFq {1, x, g(x), xg(x)}}.
+By (10), C F is a subcode of the optimal (15, 8, 2)-LRC defined by {A1 , A2 , B1 , B2 , C} and u. Note that
+                                                      (
+                                                        f1 (ai,j ), when α = ai,j ;
+                                 uα T (f1 , f2 )(α) =
+                                                        f2 (ai,j ), when α = bi,j .
+Thus, we have (uα T (f1 , f2 )(α), α ∈ A) = (f1 (α), α ∈ A) and (uα T (f1 , f2 )(α), α ∈ B) = (f2 (α), α ∈ A).
+This means that we can use (uα T (f1 , f2 )(α), α ∈ A) and (uα T (f1 , f2 )(α), α ∈ B) to reconstruct f1 and f2 ,
+respectively. Thus, dim(C F ) = 8. Moreover, we have
+                           (
+                              uc1 T (f1 , f2 )(c1 ) = 4f1 (c1 ) + 10 · (15f2 (c1 ) − 7f2 (c2 )),
+                              uc2 T (f1 , f2 )(c2 ) = 4f1 (c2 ) + 10 · (11f2 (c1 ) − 3f2 (c2 ))
+and by locality, uc3 T (f1 , f2 )(c3 ) is a linear combination of uc1 T (f1 , f2 )(c1 ) and uc2 T (f1 , f2 )(c2 ). Therefore, for
+any two codewords c1 = (f1 (α), α ∈ A ∪ C) and c2 = (f2 (α), α ∈ A ∪ C) in C I , the map T induces a conversion
+procedure from (c1 , c2 ) to d = (uα T (f1 , f2 )(α), α ∈ A ∪ B ∪ C) ∈ C F such that
+  1) the 6 symbols in c1 |A remain in d as d|A , and the 6 symbols in c2 |A remain in d as d|B ;
+  2) the 3 symbols in d|C are linear combinations of symbols in c1 |{c1 ,c2 } and c2 |{c1 ,c2 } .
+Therefore, the conversion procedure T has write access cost 3 and read access cost 4.
+Remark III.1. Example III.1 provides an overview of the underlying idea of our general construction. That is,
+by selecting proper evaluation points Ai = {ai,1 , . . . , ai,r+1 }, Bi = {bi,1 , . . . , bi,r+1 }, 1 ≤ i ≤ k and Ci =
+{ci,1 , . . . , ci,r+1 }, 1 ≤ i ≤ l, we can obtain a polynomial g and a surjective map T : SpanFq {xs g t } 0≤s≤r−1 ×
+                                                                                                              0≤t≤k−1
+SpanFq {xs g t } 0≤s≤r−1 → SpanFq {xs g t } 0≤s≤r−1 such that the following holds:
+                  0≤t≤k−1                          0≤t≤2k−1
+
+  1. g is a good polynomial, i.e., deg(g) = r + 1 and g is constant on each Ai , Bi and Ci .
+  2. For any f1 , f2 ∈ SpanFq {xs g t } 0≤s≤r−1 , T (f1 , f2 )(ai,j ) = αi,j f1 (ai,j ) and T (f1 , f2 )(bi,j ) = βi,j f2 (ai,j ),
+                                          0≤t≤k−1                                                                                   S
+     whereSfor each (i, j) ∈ S [k] × [r + 1], αi,j and βi,j are non-zero constants determined by A = i∈[k] Ai ,
+     B = i∈[k] Bi and C = i∈[l] Ci ;
+                                                                       P                    (1)                         (2)
+  3. For any f1 , f2 ∈ SpanFq {xs g t } 0≤s≤r−1 , T (f1 , f2 )(ci,j ) = (i′ ,j ′ )∈[l]×[r](γi,j,i′ ,j ′ f1 (ci′ ,j ′ )+γi,j,i′ ,j ′ f2 (ci′ ,j ′ )),
+                                              0≤t≤k−1
+                                                                       (1)              (2)
+    where for each (i, i′ , j, j ′ ) ∈ [l] × [l] × [r] × [r], γi,j,i′ ,j ′ and γi,j,i′ ,j ′ are constants determined by A, B and
+    C.
+Then, let C I be the ((k + l)(r + 1), kr, r)-optimal LRC defined by {A1 , . . . , Ak , C1 , . . . , Cl } and g, and define C F
+as
+                    C F = {(uα T (f1 , f2 )(α), α ∈ A ∪ B ∪ C) : f1 , f2 ∈ SpanFq {xs g t } 0≤s≤r−1 },
+                                                                                                               0≤t≤k−1
+
+                              −1
+where uai,j = α−1
+               i,j , ubi,j = βi,j and uci,j = 1. Since T
+                                                                                              F
+                                                                      is surjective, C is actually the ((2k + l)(r + 1), kr, r)-
+optimal LRC defined by {A1 , . . . , Ak , B1 , . . . , Bk , C1 , . . . , Cl }, g and vector (uα , α ∈ A ∪ B ∪ C).
+  The map T induces a conversion procedure from C I to C F , that is, codewords c1 = (f1 (α), α ∈ A∪C) and c2 =
+(f2 (α), α ∈ A ∪ C) are mapped to d = (uα T (f1 , f2 )(α), α ∈ A ∪ B ∪ C), where f1 , f2 ∈ SpanFq {xs g t } 0≤s≤r−1 .
+                                                                                                                                         0≤t≤k−1
+                                                                                                                                       12
+
+
+
+Similar to Example III.1, one can easily verify that d|AS= c1 |A , d|B = c2 |A and symbols in d|C are linear
+combinations of symbols in c1 |C̃ and c2 |C̃ , where C̃ = i∈[l] Ci \ {ci,r+1 }. This will imply that (C I , C F ) is an
+optimal LRCC with write access cost l(r + 1) and read access cost 2lr.
+Remark III.2. In Example III.1, the map T is defined as
+                                     T : (f1 , f2 ) 7−→ (hG2 ◦ g) · f1 + (hG1 ◦ g) · M (f2 ),
+where G1 = {g(A1 ), . . . , g(Ak )}, G2 = {g(B1 ), . . . , g(Bk )} and M (f2 ) ∈ SpanFq {xs g t } 0≤s≤r−1 is the polynomial
+                                                                                                  0≤t≤k−1
+with coefficient vector vf2 · M w.r.t. basis {xs g t } 0≤s≤r−1 . Note that M is a kr × kr matrix satisfying:
+                                                              0≤t≤k−1
+
+  1. For every (i, j) ∈ [k] × [r + 1], M · bi,j = θi ai,j , where ai,j = (asi,j g t (ai,j ), (s, t) ∈ [0, r − 1] × [0, k − 1])T ,
+     bi,j = (bsi,j g t (bi,j ), (s, t) ∈ [0, r − 1] × [0, k − 1])T and for each 1 ≤ i ≤ k, θi is a non-zero constant
+     determined by A, B and C;
+  2. For every (i, j) ∈ [l] × [r], M · ci,j ∈ SpanFq {ci′ ,j ′ : (i′ , j ′ ) ∈ [l] × [r]}, where ci,j = (csi,j g t (ci,j ), (s, t) ∈
+     [0, r − 1] × [0, l − 1])T .
+As we shall prove Section III-C, these properties of M ensure the map T defined above satisfying the requirements
+in Remark III.1. Thus, the crucial part of the construction is to find proper subsets A, B and C such that there
+exists a kr × kr matrix M satisfying the above requirements.
+
+C. Constructions of LRCCs with optimal access costs
+   Throughout the section, we assume that nI = (k + lI )(r + 1), nF = (k + lF )(r + 1) and lF ≤ min{k, lI }.
+Similar to Section II-B, we first assume that lF = lI = l ≤ k and present a construction of optimal LRCCs for
+this case. Then, we modify it for the general case when lF ≤ lI ≤ k.
+   Construction III: Let As,i = {as,i,1 , . . . , as,i,r+1 }, (s, i) ∈ [ζ] × [k] and Ci = {ci,1 , . . . , ci,r+1 }, 1 ≤ i ≤ l, be
+mutually disjoint (r + 1)-subsets of Fq such that the following holds:
+Condition 1 There is a polynomial g(x) ∈ Fq [x] of degree r + 1 such that g is constant on each (s, i) ∈ [ζ] × [k]
+     and Ci , 1 ≤ i ≤ l. Denote G0 = {g(C1 ), . . . , g(Cl )} and Gs = {g(As,1 ), . . . , g(As,k )}.
+Condition 2 For every 2 ≤ s ≤ ζ, there is a kr × kr matrix Ms satisfying:
+                          (
+                            Ms · as,i,j = θs,i a1,i,j , (i, j) ∈ [k] × [r + 1];
+                                                                                                                             (11)
+                            Ms · ci,j ∈ SpanFq {ci′ ,j ′ : (i′ , j ′ ) ∈ [l] × [r]}, (i, j) ∈ [l] × [r],
+
+    where as,i,j = (ats,i,j
+                       1
+                            g t2 (as,i,j ), (t1 , t2 ) ∈ [0, r − 1] × [0, k − 1])T , ci,j = (cti,j
+                                                                                                1
+                                                                                                   g t2 (ci,j ), (t1 , t2 ) ∈ [0, r − 1] ×
+               T
+    [0, l − 1]) and
+                                                           hGs ∪G0 \{g(As,i )} (g(As,i ))
+                                                   θs,i =                                 .
+                                                           hG1 ∪G0 \{g(A1,i )} (g(A1,i ))
+               Sk                 Sl                   Sζ
+Denote As = i=1 As,i , C = i=1 Ci , G = s=1 Gs and Vk,r = SpanFq {xt1 g t2 } 0≤t1 ≤r−1 . Then, define C I as
+                                                                                                       0≤t2 ≤k−1
+
+                                              I
+                                            C = {(f (α), α ∈ A1 ∪ C) : f ∈ Vk,r }.
+Let M1 = I and define the map T as
+                                        T :         (Vk,r )ζ −→ Vζk,r
+                                                                       ζ
+                                                                       X
+                                              (f1 , . . . , fζ ) 7−→         (hG\Gs ◦ g) · Ms (fs ),                                 (12)
+                                                                       s=1
+
+where Ms (fs ) ∈ Vk,r is the polynomial with coefficient vector vfs · Ms w.r.t. basis {xt1 g t2 } 0≤t1 ≤r−1 . Then, we
+                                                                                                                   0≤t2 ≤k−1
+define the final code C F as
+                                                                       ζ
+                                                                       [
+                        C F = {(uα T (f1 , . . . , fζ )(α), α ∈ (            As ) ∪ C) : fs ∈ Vk,r , 1 ≤ s ≤ ζ},                     (13)
+                                                                       s=1
+            −1 −1
+where uα = θs,i hG\Gs (g(As,i )), when α = as,i,j and uα = 1, when α = ci,j .
+                                                                                                                                                    13
+
+
+
+Theorem III.1. For positive integers ζ ≥ 2, r, k and lF = lI = l ≤ k, the (C I , C F ) given by Construction III is
+an (nI , kr, r; nF , ζkr, r) optimal LRCC with write access cost l(r + 1) and read access cost ζlr.
+Proof. Clearly, C I is the (nI , kr, r)-optimal LRC defined by {A1,i }ki=1 ∪ {Ci }li=1 and g. Let c1 , . . . , cζ ∈ C I be
+the ζ initial codewords and denote fi (x) ∈ Vk,r as the encoding polynomial of ci . Since for every 1 ≤ s ≤ ζ,
+Ms (fs ) ∈ Vk,r and                              Y
+                           (hG\Gs ◦ g)(x) =          (g(x) − α) ∈ SpanFq {g i }0≤i≤(ζ−1)k ,
+                                                  α∈G\Gs
+
+we have T (f1 , . . . , fζ ) ∈ Vζk,r . Thus, C F is a subcode of the following (nF , ζkr, r)-optimal LRC:
+                                                                    ζ
+                                                                    [
+                                    C0 = {(uα f (α), α ∈ (               As ) ∪ C) : f ∈ Vζk,r }.
+                                                                   s=1
+
+Moreover, the map T induces a conversion procedure from C I to C F , that is, c1 , . . . , cζ are converted to the
+following codeword
+                                                                    ζ
+                                                                    [
+                             d = (uα T (f1 , . . . , fζ )(α), α ∈ (   As ) ∪ C).
+                                                                                         s=1
+
+   Next, we show that the read and write access costs of the conversion procedure induced by T are ζlr and l(r +1),
+respectively. As a byproduct, we shall see that C F = C0 , which yields the result.                  Q
+   For each (s, i, j) ∈ [ζ] × [k] × [r + 1] and α = as,i,j , by g(as,i,j ) = g(As,i ) and hG\Gs (x) = w∈G\Gs (x − w),
+we have
+                                                                           ζ
+                                                                           X
+                                                −1 −1
+                  uα T (f1 , . . . , fζ )(α) = θs,i hG\Gs (g(As,i ))                hG\Gs′ (g(As,i ))(Ms′ (fs′ ))(as,i,j )
+                                                                          s′ =1
+                                             −1
+                                          = θs,i (Ms (fs ))(as,i,j )
+                                          = fs (a1,i,j ),
+where the last equality follows from (Ms (fs ))(as,i,j ) = vfs · Ms · as,i,j = θs,i fs (a1,i,j ). This leads to
+                                             d|As = cs |A1 = (fs (α), α ∈ A1 ).
+Thus, for each 1 ≤ s ≤ ζ, there are at least k(r + 1) symbols in ci that remains in d. This implies that the write
+                                                                                              F S           ζkr
+access cost is at most l(r + 1). Moreover, by C I |A1 = Fkr
+                                                         q , d|As = cs |A1 also implies that C | ζs=1 As = Fq . In
+other words, dim(C F ) ≥ ζkr. By C F ⊆ C0 , this leads to C F = C0 .
+  On the other hand, for each (i, j) ∈ [l] × [r] and α = ci,j , we have
+                                                               ζ
+                                                               X
+                                uα T (f1 , . . . , fζ )(α) =         hG\Gs (g(Ci ))(Ms (fs ))(ci,j ).                                           (14)
+                                                               s=1
+                                                                                                              P
+Since Ms · ci,j ∈ SpanFq {ci′ ,j ′ : (i′ , j ′ ) ∈ [l] × [r]}, we can assume that Ms · ci,j =                     (i′ ,j ′ )∈[l]×[r] ηs,i ,j ci ,j .
+                                                                                                                                        ′   ′   ′   ′
+
+Therefore,
+                                                                                              
+                                                                    X
+                                  (Ms (fs ))(ci,j ) = vfs ·               ηs,i′ ,j ′ ci′ ,j ′ 
+                                                                       (i′ ,j ′ )∈[l]×[r]
+                                                                  X
+                                                      =                          ηs,i′ ,j ′ fs (ci′ ,j ′ ).                                     (15)
+                                                            (i′ ,j ′ )∈[l]×[r]
+              S
+Denote C̃ = i∈[l] Ci \{ci,r+1 }. Note that fs (ci,j ) = cs |{ci,j } . Thus, (14) and (15) implies that for every 1 ≤ j ≤ l,
+symbols in d|Cj \{cj,r+1 } are linear combinations of the ζlr symbols in c1 |C̃ , . . . , cζ |C̃ . Moreover, by locality,
+d|{cj,r+1 } can be recovered by the r symbols in d|Cj \{cj,r+1 } . Therefore, all the l(r + 1) symbols of d|C can be
+constructed by the ζlr symbols in c1 |C̃ , . . . , cζ |C̃ . Thus, the read access cost is at most ζlr.
+  Now, we present the construction for the case when lF ≤ lI , which follows the same idea as Construction II.
+                                                                                                                                   14
+
+
+
+   Construction IV: Let As,i , As , Ci and g(x) be identical to those defined in Construction III. For 1 ≤ i ≤ lI −lF ,
+let Bi = {bi,1 , . . . , bi,r+1 } be mutually disjoint subsets of size r + 1 in Fq \ A1 ∪ C such that g is constant on each
+                     SlI −lF
+Bi . Denote B = i=1 Bi .4 Define C I as the following optimal (nI , kr, r)-LRC:
+                                        C I = {(f (α), α ∈ A1 ∪ C ∪ B) : f ∈ Vk,r }.
+Let T and the final code C F be the same as those defined in (12) and (13).
+  Under this construction, symbols indexed by evaluation points B of codewords in C I don’t participant the
+conversion procedure induced by T . Thus, by Theorem III.1, we have the following immediate result.
+Theorem III.2. For positive integers ζ ≥ 2, r, k, lI and lF ≤ min{k, lI }, the (C I , C F ) given by Construction IV
+is an (nI , kr, r; nF , ζkr, r) optimal LRCC with write access cost lF (r + 1) and read access cost ζlF r.
+
+D. A family of LRCCs with optimal access costs
+   From Section III-C, the key to implementing Construction III and IV lies in finding proper subsets As ’s and C
+from Fq , such that there exist matrices Ms ’s satisfying conditions 1 and 2 in Construction III. Like Section II-C,
+in the following, we first give a sufficient condition for when As ’s and C can ensure the existence of such Ms ’s.
+Then, we give an explicit construction of As,i and Ci satisfying this sufficient condition. Together with proper
+subset B, we provide an implementation of Construction IV, and obtain a family of LRCCs with optimal access
+costs.
+Lemma III.3. For positive integers ζ ≥ 2, r, k and l ≤ k, let Ai = {ai,1 , . . . , ai,r+1 }, Bi = {bi,1 , . . . , bi,r+1 },
+1 ≤ i ≤ k, and Ci = {ci,1 , . . . , ci,r+1 }, 1 ≤ i ≤ l, be mutually disjoint (r + 1)-subsets of Fq . Let g be a
+polynomial of degree r + 1 such that g is constant on each Ai , Bi and Ci . Denote G0 = {g(C1 ), . . . , g(Cl )},
+G1 = {g(A1 ), . . . , g(Ak )} and G2 = {g(B1 ), . . . , g(Bk )}. Suppose that
+                                                                     (r)        (r)
+  i) there is an invertible matrix T of order r such that Bi = TAi for every 1 ≤ i ≤ k;
+                                                                     (l)         (l)
+ ii) there is an invertibel matrix T′ of order l such that G2 = T′ G1 .
+Then, there is a kr × kr matrix M satisfying:
+                        (
+                           M · bi,j = θi ai,j , (i, j) ∈ [k] × [r + 1];
+                           M · ci,j ∈ SpanFq {ci′ ,j ′ : (i′ , j ′ ) ∈ [l] × [r]}, (i, j) ∈ [l] × [r],
+
+where ai,j = (asi,j g t (ai,j ), (s, t) ∈ [0, r − 1] × [0, k − 1])T , bi,j = (bsi,j g t (bi,j ), (s, t) ∈ [0, r − 1] × [0, k − 1])T ,
+ci,j = (csi,j g t (ci,j ), (s, t) ∈ [0, r − 1] × [0, l − 1])T and
+                                                        hG2 ∪G0 \{g(Bi )} (g(Bi ))
+                                                 θi =                              .
+                                                        hG1 ∪G0 \{g(Ai )} (g(Ai ))
+  By Lemma III.3, we have the following immediate corollary, which provides a sufficient condition for the existence
+of Ms ’s satisfying condition 2 in Construction III.
+Corollary III.1. Let ζ ≥ 2, r, k and l < k be positive integers. Let As,i = {as,i,1 , . . . , as,i,r+1 }, (s, i) ∈ [ζ]×[k] and
+Ci = {ci,1 , . . . , ci,r+1 }, 1 ≤ i ≤ l, be mutually disjoint (r + 1)-subsets of Fq . Let g be a polynomial of degree r + 1
+such that g is constant on each As,i and Ci . Denote G0 = {g(C1 ), . . . , g(Cl )} and Gs = {g(As,1 ), . . . , g(As,k )},
+1 ≤ s ≤ ζ. If for every 2 ≤ s ≤ ζ,
+                                                                     (r)        (r)
+  i) there is an invertible matrix Ts of order r such that As,i = Ts A1,i for every 1 ≤ i ≤ k;
+                                                                    (l)        (l)
+ ii) there is an invertible matrix T′s of order l such that Gs = T′s G1 .
+Then, for every 2 ≤ s ≤ ζ, there is a kr × kr matrix Ms satisfying condition 2 in Construction III.
+  Now, we present the proof of Lemma III.3.
+  4 When lI = lF , B = ∅
+                                                                                                                                                              15
+
+
+
+Proof of Lemma III.3. Denote Vk,r = SpanFq {xs g t } 0≤s≤r−1 . Denote g1,i = g(Ai ), g2,i = g(Bi ) and g0,i = g(Ci ).
+                                                                                       0≤t≤k−1
+
+Let Ãi = Ai \ {ai,r+1 } and B̃i = Bi \ {bi,r+1 }. By 1) in Lemma A.1, {ai,j } 1≤i≤k and {bi,j } 1≤i≤k form two
+                                                                                                                                   1≤j≤r            1≤j≤r
+bases of Fkr
+          q and SpanFq {ci,j : (i, j) ∈ [l] × [r]} has dimension lr. Moreover, by 2) in Lemma A.1, we also have
+                                                                                 r
+                                                                                 X hÃi \{ai,j } (ai,r+1 )
+                                                                  ai,r+1 =                                          ai,j ,                                  (16)
+                                                                                 j=1
+                                                                                         hÃi \{ai,j } (ai,j )
+                                                                                  r
+                                                                                 X      hB̃i \{bi,j } (bi,r+1 )
+                                                                  bi,r+1 =                                         bi,j                                     (17)
+                                                                                 j=1
+                                                                                         hB̃i \{bi,j } (bi,j )
+
+for every 1 ≤ i ≤ k and
+                                                                     X           hG2 \{g2,i } (g0,s ) hB̃i \{bi,j } (cs,t )
+                                                 cs,t =                                                                     bi,j                            (18)
+                                                                                 hG2 \{g2,i } (g2,i ) hB̃i \{bi,j } (bi,j )
+                                                               (i,j)∈[k]×[r]
+
+for every (s, t) ∈ [l] × [r].
+  Denote A = (a1,1 , . . . , a1,r , . . . , ak,1 , . . . , ak,r ) and B = (b1,1 , . . . , b1,r , . . . , bk,1 , . . . , bk,r ) as the kr × kr
+matrices with (i − 1)r + j-th column ai,j and bi,j , respectively. Define vector
+                                                             θ = (θ1 , . . . , θ1 , θ2 , . . . , θ2 , . . . , θk , . . . , θk ).
+                                                                  | {z } | {z }                               | {z }
+                                                                            r                r                       r
+
+Then, we define matrix M as
+                                                                           M = A · diag(θ) · B−1 .                                                          (19)
+Next, we show that M satisfies the two properties claimed in the statement of Lemma III.3.
+   Clearly, for every (i, j) ∈ [k] × [r], M · bi,j = θi ai,j . To confirm the first property, we only need to show that
+                                                              (r)       (r)
+M·bi,r+1 = θi ai,r+1 holds for every 1 ≤ i ≤ k. By Bi = TAi , we have (1, . . . , br−1             T                 r−1 T
+                                                                                            i,r+1 ) = T·(1, . . . , ai,r+1 )
+                  −1
+and T = B̃i Ãi , where Ãi and B̃i are the r × r Vandermonde matrix generated by Ãi and B̃i , respectively. Thus,
+B̃−1               r−1 T       −1               r−1 T
+  i · (1, . . . , bi,r+1 ) = Ãi · (1, . . . , ai,r+1 ) . Note that for every 1 ≤ i ≤ k and x ∈ Fq ,
+
+                                                                                     hÃi \{ai,1 } (x)                hÃi \{ai,r } (x)
+                                       Ã−1
+                                         i · (1, . . . , x
+                                                          r−1 T
+                                                             ) =(                                           ,...,                            )T ,
+                                                                                   hÃi \{ai,1 } (ai,1 )            hÃi \{ai,r } (ai,r )
+                                                                                    hB̃i \{bi,1 } (x)                hB̃i \{bi,r } (x)
+                                       B̃i−1 · (1, . . . , xr−1 )T = (                                     ,...,                            )T .            (20)
+                                                                                   hB̃i \{bi,1 } (bi,1 )            hB̃i \{bi,r } (bi,r )
+        hÃ \{a            (ai,r+1 )       hB̃ \{b           (bi,r+1 )
+           i       i,j }                     i       i,j }
+Thus,    hÃ \{a          (ai,j )      =    hB̃ \{b           (bi,j )    for every 1 ≤ j ≤ r. By (17) and (19), this implies that
+               i    i,j }                        i    i,j }
+
+                                                                                       r
+                                                                                       X     hB̃i \{bi,j } (bi,r+1 )
+                                                             M · bi,r+1 = θi                                             ai,j
+                                                                                       j=1
+                                                                                           hB̃i \{bi,j } (bi,j )
+                                                                                        r h
+                                                                                            Ãi \{ai,j } (ai,r+1 )
+                                                                                       X
+                                                                                = θi                                      ai,j .
+                                                                                       j=1
+                                                                                                 hÃi \{ai,j } (ai,j )
+
+Thus, M · bi,r+1 = θi ai,r+1 follows from (16). This confirms the first property.
+  Next, we show that for each (i, j) ∈ [l] × [r], M · ci,j ∈ SpanFq {ci′ ,j ′ : (i′ , j ′ ) ∈ [l] × [r]}.
+                                       Ql
+  Define HC (x) = (hG0 ◦ g)(x) = i=1 (g(x) − g0,i ). Then, for every f ∈ Vk−l,r , HC · f ∈ Vk,r . Denote
+vHC ·f ∈ Fkr                                                     s t
+           q as the coefficient vector of HC · f w.r.t. basis {x g } 0≤s≤r−1     . Then, for every (s, t) ∈ [l] × [r], by
+                                                                      0≤t≤k−1
+(18), we have
+                                                                    X            hG2 \{g2,i } (g0,s ) hB̃i \{bi,j } (cs,t )
+                             vHC ·f · M · cs,t =                                                                            θi (vHC ·f · ai,j )
+                                                                                 hG2 \{g2,i } (g2,i ) hB̃i \{bi,j } (bi,j )
+                                                               (i,j)∈[k]×[r]
+                                                                    X            hG2 \{g2,i } (g0,s ) hB̃i \{bi,j } (cs,t )
+                                                        =                                                                   θi (HC · f )(ai,j ).            (21)
+                                                                                 hG2 \{g2,i } (g2,i ) hB̃i \{bi,j } (bi,j )
+                                                               (i,j)∈[k]×[r]
+                                                                                                                                                         16
+
+
+             hG ∪G \{g       } (g2,i )
+Since θi = hG2 ∪G0 \{g2,i } (g1,i ) and HC (ai,j ) = hG0 (g1,i ), (21) leads to
+               1   0   1,i
+
+                                                  X             hB̃i \{bi,j } (cs,t )
+                                                                                   hG0 (g2,i )
+               vHC ·f · M · cs,t =                                                                  hG \{g } (g0,s )f (ai,j )
+                                                         h             (bi,j ) hG1 \{g1,i } (g1,i ) 2 2,i
+                                            (i,j)∈[k]×[r] B̃i \{bi,j }
+                                                                                                                                
+                                                                 X           hB̃i \{bi,j } (cs,t ) hG0 \{g0,s } (g2,i )
+                                          = −hG2 (g0,s )                                                               f (ai,j ) ,                  (22)
+                                                                             hB̃i \{bi,j } (bi,j ) hG1 \{g1,i } (g1,i )
+                                                                    (i,j)∈[k]×[r]
+
+where the 2nd equality follows from
+                                         hG0 (g2,i )hG2 \{g2,i } (g0,s ) = −hG2 (g0,s )hG0 \{g0,s } (g2,i ).
+                                                                                                   l−1
+For 1 ≤ s ≤ l, denote hG0 \{g0,s } as the coefficient vector of hG0 \{g0,s } (x) w.r.t. basis {xi }i=0 and define Hs (x) =
+                ′                  l−1 T    (l)    ′ (l)
+hG0 \{g0,s } · T · (1, x, . . . , x ) . By G2 = T G1 , we have
+                                                                         (l)                              (l)
+                                                   hG0 \{g0,s } · G2 = hG0 \{g0,s } · T′ G1 .
+Thus, hG0 \{g0,s } (g2,i ) = Hs (g1,i ) for every 1 ≤ i ≤ k. For 1 ≤ i ≤ k, let
+                                                                hÃi \{ai,1 } (cs,t )           hÃi \{ai,r } (cs,t ) T
+                                     ui = T−1 Ãi · (                                   ,...,                        ) .
+                                                                hÃi \{ai,1 } (ai,1 )           hÃi \{ai,r } (ai,r )
+                                                                      −1
+By (20), we have ui = T−1 · (1, . . . , cr−1  T
+                                         s,t ) . Note that, T = B̃i Ãi , this leads to
+
+                                                                        hÃi \{ai,1 } (cs,t )           hÃi \{ai,r } (cs,t ) T
+                             Ã−1         −1 −1
+                               i · ui = Ãi T   Ãi · (                                         ,...,                         )
+                                                                  hÃi \{ai,1 } (ai,1 )                 hÃi \{ai,r } (ai,r )
+                                                 −1               r−1 T
+                                             = B̃i · (1, . . . , cs,t )
+                                                   hB̃i \{bi,1 } (cs,t )            hB̃i \{bi,r } (cs,t ) T
+                                             =(                             ,...,                         ) .
+                                                   hB̃i \{bi,1 } (bi,1 )            hB̃i \{bi,r } (bi,r )
+
+Denote H̃s (x) = (Hs ◦ g)(x). Then, (H̃s · f )(ai,j ) = Hs (g1,i )f (ai,j ) = hG0 \{g0,s } (g2,i )f (ai,j ). Thus, the RHS of
+(22) can be simplified as
+                                                X                                                             Ã−1i · ui
+                         −hG2 (g0,s )                   ((H̃s · f )(ai,1 ), . . . , (H̃s · f )(ai,r )) ·                         .                    (23)
+                                                                                                            hG1 \{g1,i } (g1,i )
+                                                i∈[k]
+
+                                                                                                                        (k−1)r
+  Note that deg(Hs ) ≤ l − 1 and f ∈ Vk−l,r . Thus, H̃s · f ∈ Vk−1,r . Denote ṽ ∈ Fq                                             as the coefficient vector
+of H̃s · f w.r.t. basis {xs g t } 0≤s≤k−2 . Then, for 1 ≤ i ≤ k, we have
+                                     0≤t≤r−1
+
+                                                               
+                                                    Ãi
+                                          
+                                                 g1,i Ãi      
+                                                                
+                                     ṽ ·           ..          = ((H̃s · f )(ai,1 ), . . . , (H̃s · f )(ai,r )).
+                                                     .         
+                                                  k−2
+                                                 g1,i Ãi
+On the other hand, by 3) in Lemma A.1, we know that
+                                                                                                           Ã−1
+                                                                                                                             
+                                                                                                              1
+                                                                                                    hG1 \{g1,1 } (g1,1 )
+                                    Ã1                   Ã2         ···        Ãk                                        
+                                                                                                            Ã−1             
+                                g1,1 Ã1               g1,2 Ã2      ···      g1,k Ãk                     2
+                                                                                                                             
+                                                                                                   hG1 \{g1,2 } (g1,2 )
+                                    ..                    ..                      ..       ·                 ..
+                                                                                                                             
+                                                                                                                                                     (24)
+                                     .                     .                       .        
+                                                                                              
+                                                                                                                .           
+                                                                                                                             
+                                  k−2                    k−2                 k−2
+                                 g1,1 Ã1               g1,2 Ã2      · · · g1,k Ãk                        Ã−1
+                                                                                                              k
+                                                                                                      hG1 \{g1,k } (g1,k )
+                                                                                                                                                17
+
+
+                                                        P                                                              Ã−1
+                                                                                                                         i ·ui
+is an all-0 matrix of size kr × r. Then, by (24),           i∈[k] ((H̃s · f )(ai,1 ), . . . , (H̃s · f )(ai,r )) · hG1 \{g1,i } (g1,i ) equals to
+                                                                    Ã−1
+                                                                                        
+                            Ã1      ···      Ãk                        1                                           
+                                                                 hG1 \{g1,1 } (g1,1 )       u1
+                         g1,1 Ã1   ···    g1,k Ãk    
+                                                                          ..
+                                                                                        
+                      
+                 ṽ · 
+                                                        
+                                                       ·
+                                                                                         
+                                                                                        ·             ..            
+                                                                                                                       = 0.
+                             ..                 ..                         .                                 .
+                             .                  .      
+                                                                       Ã−1
+                                                                                        
+                           k−2              k−2                          k                                       uk
+                          g1,1 Ã1   · · · g1,k Ãk              hG1 \{g1,k } (g1,k )
+
+By (22) and (23), this implies vHC ·f · M · cs,t = 0 for every f ∈ Vk−l,r and (s, t) ∈ [l] × [r]. Note that
+V0 = {vHC ·f : f ∈ Vk−l,r } is a (k − l)r-dim subspace of Fkr
+                                                           q and for every (s, t) ∈ [l] × [r]
+
+                                               vHC ·f · cs,t = (HC · f )(cs,t ) = 0.
+Thus, SpanFq {ci,j : (i, j) ∈ [l] × [r]} is the dual space of V0 in Fkr q . Then, vHC ·f · M · cs,t = 0 implies that
+M · cs,t ∈ SpanFq {ci,j : (i, j) ∈ [l] × [r]}. This confirms the second property.
+   In the following, using the multiplicative group of Fq , we give an explicit construction of As,i , Ci and g(x) that
+satisfy the requirements in Corollary III.1.
+   Let ζ ≥ 2, r, k, lI and lF ≤ min{k, lI } be positive integers. Let q be a prime power such that k(r + 1)|(q − 1)
+and
+                                                                   lI
+                                     q ≥ k(r + 1) · max{ζ + 1, ⌈ ⌉ + 2} + 1.
+                                                                   k
+                                                                                              q−1
+Let β be the generator of the multiplicative group F∗q . Denote α = β k(r+1) and let G be the subgroup of F∗q
+                                                   I
+generated by α. Denote ζ0 = max{ζ, ⌈ lk ⌉ + 1}. Clearly, |G| = k(r + 1) and |F∗q /G| ≥ ζ0 + 1. For every
+(s, i, j) ∈ [0, ζ0 ] × [k] × [r + 1], let as,i,j = β s αi−1+jk . Now, we define g(x) = xr+1 and
+                                                                             Sk
+   • As,i = {as−1,i,1 , . . . , as−1,i,r+1 }, (s, i) ∈ [ζ0 ] × [k] and As =   i=1 As,i ;
+                                                     F
+                                                                 SlF
+   • Ci = {aζ0 ,i,1 , . . . , aζ0 ,i,r+1 }, 1 ≤ i ≤ l and C =       i=1 Ci .
+                                                                                                                               I        I   F
+Since Ci ⊆ β ζ0 G and As,i ⊆ β s−1 G, As,i ’s and Ci ’s are mutually disjoint. Notice that ζ0 − 1 ≥ ⌈ lk ⌉ ≥ ⌈ l −l
+                                                                                                                  k ⌉.
+Thus, (ζ0 − 1)k ≥ lI − lF and we can pick lI − lF different (r + 1)-subsets from {As,i } 2≤s≤ζ0 as B1 , . . . , BlI −lF .
+                                                                                           1≤i≤k
+             SlI −lF
+Denote B = i=1 Bi . Clearly, B1 , . . . , BlI −lF are mutually disjoint and B ∩ (A1 ∪ C) = ∅.
+  Next, we show that the As,i , Ci and g defined above satisfy the requirements in Corollary III.1:
+                                                         k(r+1)
+   • For each (s, i, j) ∈ [0, ζ0 ] × [k] × [r + 1], by α        = 1, we have
+                                                                             r+1
+                                               g(β s αi−1+jk ) = β s αi−1+jk
+                                                                          r+1
+                                                               = β s αi−1      .
+      Thus, g is constant on each As,i and Ci .
+  •   Since As+1,i = {β s αi−1+k , . . . , β s αi−1+(r+1)k }, we have
+                                                                                                                         
+                                               1                  1                     ···                  1
+                                           s i−1+k             s i−1+2k
+                       (r)
+                               
+                                       β   α                β  α                       ···         β s αi−1+(r+1)k       
+                                                                                                                          
+                     As+1,i =                 ..                 ..                                        ..            
+                                               .                  .                                         .            
+                                       (β s αi−1+k )r−1      (β s αi−1+2k )r−1          · · · (β s αi−1+(r+1)k )r−1
+                                                                               (r)
+                                = diag(1, β s−1 , . . . , β (s−1)(r−1) )A1,i .
+    Take Ts = diag(1, β s−1 , . . . , β (s−1)(r−1) ), clearly, Ts is invertible. This verifies the condition i).
+  • Let gs,i be the constant g(As,i ). Note that for every 1 ≤ s ≤ ζ,
+
+                                 Gs = {gs,1 , . . . , gs,k } = {β (s−1)(r+1) , . . . , (β (s−1) αk−1 )r+1 }.
+                                                                                                                               18
+
+
+
+     Thus, we have
+                                                                                                                   
+                                       1                        1                ···               1
+                    F
+                                β (s−1)(r+1)            (β (s−1) α)r+1          ···      (β (s−1) αk−1 )r+1        
+                G(l   )                                                                                            
+                 s      =             ..                       ..                                  ..              
+                                       .                        .                                   .              
+                                            F                           F                                   F
+                              β (s−1)(r+1)(l −1)     (β (s−1) α)(r+1)(l −1)      · · · (β (s−1) αk−1 )(r+1)(l −1)
+                                                                    F         (lF )
+                       = diag(1, β (s−1)(r+1) , . . . , β (s−1)(r+1)(l −1) )G1        .
+                                                            F
+     Take T′s = diag(1, β (s−1)(r+1) , . . . , β (s−1)(r+1)(l −1) ), clearly, T′s is invertible. This verifies the condition ii).
+Remark III.3. The sets A1 , A2 , B1 , B2 , and C in Example III.1 can be viewed as an example of the above
+construction for q = 19, k = r = 2, lI = lF = 1 and ζ = 2.
+  Clearly, the sets As,i ’s and Ci constructed above satisfy the requirements in Corollary III.1. Then, As,i , Bi and
+Ci constructed above satisfy the requirements in Construction IV. Thus, we have the following immediate corollary.
+Corollary III.2. For positive integers ζ ≥ 2, r, k, lI and lF ≤ min{k, lI }, let q be a prime power such that
+                                                         I
+k(r + 1) | (q − 1) and q ≥ k(r + 1) · max{ζ + 1, ⌈ lk ⌉ + 2} + 1. Then, there is an explicit construction of
+(nI , kr, r; nF , ζkr, r) optimal LRCCs with write access cost l(r + 1) and read access cost ζlr, where nI =
+(k + lI )(r + 1) and nF = (k + lF )(r + 1).
+
+                                       IV. L OWER BOUNDS ON THE ACCESS COST
+    In this section, we prove a general lower bound on the access cost of an (nI , k; nF , ζk) convertible code with the
+condition that C F is an r-LRC. As a consequence, the LRCCs obtained by Constructions III and IV admit optimal
+access costs.
+    Throughout the section, we need the following additional notations. Let C be an (n, k) code over Fq and m ∈ Fkq
+be a message vector, denote C(m) as the codeword in C that encodes m. Let (C I , C F ) be an (nI , k; nF , ζk)
+convertible code over Fq with conversion procedure T . For a message vector m ∈ Fζk        q and 1 ≤ i ≤ ζ, we denote
+ci = C I (m|[(i−1)k+1,ik] ) as the i-th initial codeword and denote d = C F (m) as the final codeword. For i ∈ [ζ],
+we denote Ui ⊆ [nI ] as the set of coordinates corresponding to the remaining symbols in ci and Ai ⊆ [nI ] as the
+set of coordinates corresponding to the accessed symbols in ci . We denote T (Ui ) ⊆ [nF ] as the set of coordinates
+of the symbols in d that remains from ci . Moreover, for j ∈ T (Ui ), we say the symbol d(j) is inherited from
+ci |Ui . Clearly, there is a one-to-one map between Ui and T (Ui ) and for convenience we also use T to denote this
+map. In the following, by a slight abuse of notation, we also use the coordinate j to referred to the corresponding
+codeword symbol.
+    The proof of the general lower bound consists of two parts. First, we prove a lower bound on the write access
+cost. To do this, we bound from above the number of remaining symbols in each initial codewords. Then, we prove
+a lower bound on the read access cost based on the locality of C F .
+    To start with, we prove the following upper bound on |Ui |.
+Lemma IV.1. Let (C I , C F ) be an (nI , k; nF , ζk) convertible code over Fq with conversion procedure T . Assume
+that C F has locality r and minimum distance d. Then, for every 1 ≤ i ≤ ζ, we have
+                                                                    (ζ − 1)k
+                               |Ui | = |T (Ui )| ≤ nF − d − ((ζ − 1)k + ⌈    ⌉) + 2.                                        (25)
+                                                                        r
+Proof. We only show that (25) holds for i = 1 and the proofs for cases 2 ≤ i ≤ ζ are similar.
+  Let C˜ be the subcode of C F that encodes message vectors in {m ∈ Fζkq : m|[k] = 0}, i.e.,
+
+                               C˜ = {d ∈ C F : d = C F ((0, m̃)) for some m̃ ∈ F(ζ−1)k
+                                                                                q      }.
+Denote d( ˜                            ˜ Clearly, we have d( ˜
+         C) as the minimal distance of C.                     C) ≥ d and | ˜
+                                                                          C| = q (ζ−1)k .
+  Define
+                  N = {i ∈ [nF ] : i ∈ T (U1 ), or i can be recovered by symbols in T (U1 )}.
+Denote N C = [nF ] \ N . Then, for every i ∈ N C and every recovering set Ii of i, we have Ii ∩ N C 6= ∅. Otherwise,
+assume that there is an i0 ∈ N C with a recovering set I0 ⊆ N . Then, by the definition of N , every symbol of I0
+                                                                                                                     19
+
+
+
+can be recovered by symbols in T (U1 ). Thus, i0 can also be recovered by symbols in T (U1 ). This leads to i0 ∈ N ,
+a contradiction.
+                                                                  (ζ−1)k
+   Let v0 = C I (0) and d = C F ((0, m̃)) ∈ C˜ for some m̃ ∈ Fq          . Then, d is converted from c1 = v0 and
+ci+1 = C I (m̃|[(i−1)k+1,ik] ), 1 ≤ i ≤ ζ − 1. Note that each symbol of d|T (U1 ) is from v0 |U1 and symbols in d|N
+can be recovered by symbols in d|T (U1 ) . Thus, d|N is fully determined by v0 |U1 regardless of m̃. This implies
+                                                                       ˜ N C | = q (ζ−1)kI .
+                                                                 ˜ = |C|
+     ˜ N is a constant vector determined by v0 |U1 . Therefore, |C|
+that C|
+                                                                                                    ˜ N is a constant
+   On the other hand, note that each i ∈ N C has a recovering set Ii such that Ii ∩ N C 6= ∅. Since C|
+                     ˜         ˜                ˜                              F
+vector, we have d(C) = d(C|N C ). Moreover, C|N C can be viewed as an (n − |N |, (ζ − 1)k, r)-LRC by taking
+Ii ∩ N C as the recovering set for every i ∈ N C . Thus, by Theorem I.1, we have
+
+                            ˜ = d(C|
+                         d(C)        ˜ N C ) ≤ (nF − |N |) − ((ζ − 1)k + ⌈ (ζ − 1)k ⌉) + 2.                       (26)
+                                                                               r
+Then, the result follows directly from d( ˜C) ≥ d, |U1 | ≤ |N | and (26).
+   Now, we focus on bounding the read access cost |Ai |, i.e., the number of symbols that are read from the i-th
+initial codeword during the conversion.
+Lemma IV.2. Let (C I , C F ) be the convertible code defined in Lemma IV.1. For each 1 ≤ i ≤ ζ, denote ∆i =
+                                                                              ∆i
+|Ui \ Ai | − d + 1. Let B be the largest subset of T (Ui \ Ai ) with |B| ≤ ⌊ r+1 ⌋ such that every b ∈ B has a
+recovering set Ib satisfying Ib ∩ B = ∅. Then, for each 1 ≤ i ≤ ζ, we have
+                                              (
+                                                k, if ∆i ≤ 0;
+                                      |Ai | ≥                                                             (27)
+                                                k − ∆i + |B|, otherwise.
+
+Moreover, if d > nI − k + 1, then ∆i ≤ 0 for every 1 ≤ i ≤ ζ and therefore, |Ai | ≥ k.
+Proof. Similar to the proof of Lemma IV.1, we only show that (27) holds for i = 1.
+  Let C˜ be the subcode of C F that encodes message vectors in {m ∈ Fζk
+                                                                     q : m|[k+1,ζk] = 0}, i.e.,
+
+                                C˜ = {d ∈ C F : d = C F ((m̃, 0)) for some m̃ ∈ Fkq }.
+Denote d(C)     ˜ as the minimal distance of C. ˜ Clearly, d(C)
+                                                             ˜ ≥ d and |C|      ˜ = qk .
+                                      k          F              ˜
+   Now, fix a vector m̃ ∈ Fq , let d = C ((m̃, 0)) ∈ C. Each codeword symbol of d is either inherited from
+c1 |U1 , . . . , cζ |Uζ , or is determined by symbols from c1 |A1 , . . . , cζ |Aζ . Note that for 2 ≤ i ≤ ζ,
+                                       ci = C I ((m̃, 0)|[(i−1)k+1,ik] ) = C I (0)
+is a constant vector. Therefore, the non-constant symbols of d are either inherited from c1 |U1 \A1 , or are functions
+of symbols in c1 |A1 .
+   For any (n, k) code C with distance d, we know that |C|S | = q k for any subset S ⊆ [n] of size at least n − d + 1.
+Based on this observation, we will pick a subset S ⊆ [nF ] of size at least nF − d + 1 and prove the lower bound
+by analyzing the relationships among codeword symbols in c1 |U1 \A1 , c1 |A1 and d|S .
+   • Case 1: ∆1 ≤ 0
+   Recall that there is a one-to-one map between U1 and T (U1 ), thus, ∆1 = |T (U1 \ A1 )| − d + 1 ≤ 0. In other
+words, [nF ] \ T (U1 \ A1 ) has size at least nF − d + 1 ≥ nF − d( ˜ C) + 1. Take S = [nF ] \ T (U1 \ A1 ), we have
+|˜         k
+ C|S | = q . Note that symbols in c1 |U1 \A1 are remaining as d|T (U1 \A1 ) in d. Thus, by S ∩ T (U1 \ A1 ) = ∅,
+                                                                              ˜ S | is upper bounded by q |A1 | , which
+non-constant symbols in d|S are functions of symbols in c1 |A1 . Therefore, |C|
+implies that |A1 | ≥ k.
+   • Case 2: ∆1 > 0
+             S
+   Let N = b∈B Ib . Since C F has locality r, we have |B ∪ N | ≤ |B|(r + 1) ≤ ∆1 . Note that
+                              |T (U1 \ A1 ) \ (B ∪ N )| ≥ |T (U1 \ A1 )| − |B ∪ N |
+                                                        ≥ |T (U1 \ A1 )| − ∆1 = d − 1.
+Therefore, we can obtain an (nF − d + 1)-subset S ⊆ [nF ] by removing any d − 1 elements in T (U1 \ A1 ) \ (B ∪ N )
+                                                                                                  ˜ + 1, we have
+from [nF ]. Clearly, both B ∪ N and [nF ] \ T (U1 \ A1 ) are subsets of S. By nF − d + 1 ≥ nF − d(C)
+|˜
+ C|S | = q k .
+                                                                                                                        20
+
+
+
+  Let S1 = S ∩ T (U1 \ A1 ). Then,
+                                         |S1 | = |T (U1 \ A1 )| − d + 1 = ∆1 .
+Since B ⊆ T (U1 \ A1 ) and B ∪ N ⊆ S, we have B ⊆ S1 . Moreover, by N ∩ B = ∅, we have N ⊆ S \ B.
+Thus, symbols in d|B can be recovered by symbols in d|S\B . On the other hand, note that symbols in c1 |U1 \A1 are
+remaining as d|T (U1 \A1 ) . Thus, by T (U1 \ A1 ) ∩ S = S1 , symbols in d|S that are inherited from c1 |U1 \A1 are from
+c1 |T −1 (S1 ) . This implies that non-constant symbols in d|S\B is determined by symbols in c1 |A1 and c1 |T −1 (S1 \B) .
+                                                                      ˜ S | is upper bounded by
+Thus, d|S is determined by c1 |A1 and c1 |T −1 (S1 \B) . Therefore, |C|
+                                                     −1
+                                          q |A1 ∪T        (S1 \B)|
+                                                                     = q |A1 |+|S1 |−|B| ,
+where the equality follows from T −1 (S1 \B) ⊆ U1 \A1 and (U1 \A1 )∩A1 = ∅. This leads to |A1 |+|S1 |−|B| ≥ k,
+which further implies that |A1 | ≥ k − ∆1 + |B|.
+                    I
+   • Case 3: d > n − k + 1
+  In this case, we claim that one must have ∆1 ≤ 0. Otherwise, assume that ∆1 > 0 and let C ⊆ U1 \ A1 such
+that |C| = d − 1. Let S = [nF ] \ T (C). By |S| = nF − d + 1 ≥ nF − d(C)           ˜ + 1, we have |C|
+                                                                                                    ˜ S | = q k . Note
+                   ˜
+that for each d ∈ C, the non-constant symbols of d|S are either inherited from c1 |U1 \C or determined by c1 |A1 .
+Therefore, we have |C|˜ S | = q k ≤ q |(U1 \C)∪A1 | . Since C ⊆ U1 \ A1 , we have (U1 \ C) ∪ A1 = (U1 ∪ A1 ) \ C and
+|(U1 ∪ A1 ) \ C| = |U1 ∪ A1 | − |C|. This leads to
+                                       |(U1 \ C) ∪ A1 | = |U1 ∪ A1 | − |C| ≥ k.
+On the other hand, since U1 ∪ A1 ⊆ [nI ], we have
+                                            |U1 ∪ A1 | − |C| ≤ nI − d + 1.
+This implies that d ≤ nI − k + 1, a contradiction. Thus, when d > nI − k + 1, we always have ∆1 ≤ 0 and
+therefore, |A1 | ≥ k.
+  Combining the above cases together, we can conclude the result.
+   In Lemma IV.2, the size of the special subset B affects the lower bound on the read access cost |Ai |. To get an
+                                                                                                         ∆i
+exact lower bound on |Ai |, in the following, we show that one can always find such B with |B| = ⌊ r+1      ⌋ when
+ F
+C is linear.
+   Let C be an (n, k, r)-LRC. We call a subset Ri ⊆ [n] an extended recovering set of i, if i ∈ Ri and Ri \ {i} is
+a recovering set of i.
+Lemma IV.3. Assume that C F is a linear (nF , ζk, r)-LRC. For any A ⊆ [nF ], there is a subset A′ ⊆ A of size
+  |A|
+⌈ r+1 ⌉ such that every i ∈ A′ has a recovering set Ii satisfying Ii ∩ A′ = ∅.
+                    F
+Proof. Let Γ ⊆ 2[n ] be theSfamily of all possible extended recovering
+                                                                 S      sets of C F . First, we show
+                                                                                                   S that there is a
+sub-family R ⊆ Γ such that R∈R R = [n ] and for any R ∈ R, R∈R\{R′ } R 6= [nF ]. Clearly, R∈Γ R = [nF ].
+                                          F               ′
+                                         S
+Assume that there is an R0 ∈ Γ such that R∈Γ\{R0 } R = [nF ]. Then, we can remove this R0 from Γ and obtain a
+                         S
+new family Γ1 such that R∈Γ1 R = [nF ]. Since Γ is finite, by repeating this procedure, we can obtain a sub-family
+R ⊆ Γ satisfy the required property at a certain step.
+    Denote
+                                             S = {R ∩ A : R ∈ R}.
+          S                                                          S
+Clearly, S∈S S = A. W.l.o.g., we assume that for every S ′ ∈ S, S∈S\{S ′ } S 6= A. Otherwise,S        by apply the
+elimination procedure above, we can get a sub-family S ′ ⊆ S satisfying this property and S∈S ′ S S  = A.
+    Under this assumption, each S ∈ S contains a unique element iS ∈ A which doesn’t belong to S ′ ∈S\{S} S ′ .
+By the linearity of C, for every R ∈ R and i ∈ R, R \ {i} is a recovering set of i. Therefore, for S ∈ S, we can
+take some R(S) ∈ R satisfying R(S) ∩ A = S as the extended recovering set of iS . Clearly, for any S ′ ∈ S \ {S},
+     / R(S). Let A′ = {iS : S ∈ S}. Then, we have |A′ | = |S| and every iS ∈ A′ has a recovering set R(S) \ {iS }
+iS ′ ∈
+such that R(S) ∩ A′ = {iS }. Since |R| ≤ r + 1 for each R ∈ R, |S| ≤ r + 1 for each S ∈ S. Therefore,
+                |A|
+|A′ | = |S| ≥ ⌈ r+1 ⌉.
+  Now, armed with the results above, we can obtain the following general lower bound on the access cost of the
+convertible code (C I , C F ).
+                                                                                                                   21
+
+
+
+Theorem IV.4. Let (C I , C F ) be an (nI , k; nF , ζk) convertible code over Fq with conversion procedure T . Assume
+that C F is a linear code with locality r and minimum distance d. Then, the write access cost of T is at least
+                                                                     
+                                                        (ζ − 1)k
+                                 ζ d + (ζ − 1)k + ⌈              ⌉ − 2 − (ζ − 1)nF .                             (28)
+                                                            r
+Write ∆ = nF − 2d − ((ζ − 1)k + ⌈ (ζ−1)k
+                                     r   ⌉) + 3. Then, the read access cost of T is at least
+                                       (
+                                          ζk, if ∆ ≤ 0;
+                                                  r∆
+                                                                                                                (29)
+                                          ζ(k − ⌈ r+1 ⌉), otherwise.
+Moreover, when d > nI − k + 1, the read access cost is at least ζk.
+Proof. Note that the write access cost is the number of new symbols written during the conversion procedure and
+there are nF symbols in total. Therefore, (28) follows directly from Lemma IV.1.
+  As in Lemma IV.2, for every i ∈ [ζ], assume that |Ui \ Ai | − d + 1 = ∆i . By Lemma IV.1, we have
+                                                                          (ζ − 1)k
+                            |Ui \ Ai | ≤ |Ui | ≤ nF − d − ((ζ − 1)k + ⌈            ⌉) + 2.
+                                                                              r
+This leads to,
+                                                                    (ζ − 1)k
+                        |Ui \ Ai | − d + 1 ≤ nF − 2d − ((ζ − 1)k + ⌈         ⌉) + 3 = ∆.
+                                                                        r
+Thus, we have ∆i ≤ ∆ for every 1 ≤ i ≤ ζ. On the other hand, by Lemma IV.3, we have
+                                                          ∆i
+                                   ∆i − |B| = ∆i − ⌊          ⌋
+                                                        r+1
+                                                          r        r∆
+                                              = ⌈∆i ·        ⌉≤⌈         ⌉.
+                                                       r+1        r+1
+Therefore, by Lemma IV.2, we have
+                                             (
+                                               k, if ∆ ≤ 0;
+                                     |Ai | ≥         r∆
+                                               k − ⌈ r+1 ⌉, otherwise.
+for every i ∈ [ζ]. This leads to (29).
+  When d > nI − k + 1, the results follow directly from Lemma IV.2.
+Corollary IV.1. Let (C I , C F ) be an (nI , kr, r; nF , ζkr, r) optimal LRCCs over Fq with conversion procedure T .
+Assume that (r + 1)|nI and (r + 1)|nF . Then, the write access cost of T is at least nF − ζk(r + 1) and the read
+access cost of T is at least                 (
+                                                                     nF
+                                               ζkr, if (ζ + 1)k ≤ r+1    ;
+                                                  rn F                                                         (30)
+                                               ζ( r+1 − ζkr), otherwise.
+Moreover, when nF − nI ≥ (ζ − 1)kr + ζk, the read access cost is at least ζkr.
+Remark IV.1. The LRCC obtained in Corollary III.2 attains the lower bound in (30).
+Proof. The proof is straight forward. Since C F is an optimal r-LRC, we have d = d(C F ) = nF − ζk(r + 1) + 2.
+Thus, by (28), the write access cost is at least nF − ζk(r + 1). Meanwhile, by the formula of ∆, we have
+                                                              (ζ − 1)kr
+                                 ∆ = nF − 2d − ((ζ − 1)kr + ⌈           ⌉) + 3
+                                                                  r
+                                   = 2ζk(r + 1) − 4 − nF − (ζ − 1)k(r + 1) + 3
+                                   = (ζ + 1)k(r + 1) − nF − 1.
+                             F                                          F
+                           n                  ∆
+         ∆
+Thus, ⌊ r+1 ⌋ = (ζ + 1)k − r+1 − 1 and ∆ − ⌊ r+1 ⌋ = (ζ + 1)kr − rn
+                                                                 r+1 . This leads to
+                                                                        
+                                            r∆                    ∆
+                                    kr − ⌈      ⌉ = kr − ∆ − ⌊         ⌋
+                                           r+1                   r+1
+                                                     rnF
+                                                  =       − ζkr
+                                                    r+1
+                                                                                                                       22
+
+
+
+and (30) follows directly from (29).
+   When nF − nI ≥ (ζ − 1)kr + ζk, by d = nF − ζk(r + 1) + 2, we have d ≥ nI − kr + 2. Then, the result follows
+directly from Theorem IV.4.
+  Note that (n, k) MDS codes are (n, k, k)-optimal LRCs. Thus, by Lemma IV.1 and Lemma IV.2, we can also
+obtain a proof of Theorem I.2 without assuming the linearity of C I and C F .
+Theorem IV.5. For all (nI , k; nF , ζk) MDS convertible codes, the read access cost of conversion is at least
+ζ · min{k, nF − ζk} and the write access cost is at least nF − ζk. Furthermore, if nI − k < nF − ζk, then, the
+read access cost is at least ζk.
+Proof. The proof is straight forward. Since C F has locality r = ζk, we have ⌈ (ζ−1)k
+                                                                                   r   ⌉ = 1 and the minimum
+distance of C F satisfies d = nF − ζk + 1. By substituting these two parameters into (25), we have |Ui | ≤ k for
+every 1 ≤ i ≤ ζ. Thus, the write access cost is at least nF − ζk. Meanwhile, by the definition of ∆i in Lemma
+IV.2, we have
+                                      ∆i ≤ |Ui | − d + 1 ≤ (ζ + 1)k − nF .
+When nF − ζk ≥ k, we have (ζ + 1)k − nF ≤ 0. Thus, ∆i ≤ 0 and by (27), |Ai | ≥ k. When nF − ζk < k, we
+                                                                                                   ∆i
+have 0 < (ζ + 1)k − nF ≤ k. Thus, if ∆i > 0, the requirement of |B| in Lemma IV.2 becomes |B| ≤ ⌊ r+1 ⌋ = 0.
+                                                                                 F
+Then, we can take B = ∅ in Lemma IV.2 and by (27), we have |Ai | ≥ k − ∆i ≥ n − ζk. Therefore, the read
+access cost is at least ζ · min{k, nF − ζk}.
+  Moreover, if nI − k < nF − ζk, we have d > nI − k + 1 and the result also follows directly from Lemma
+IV.2.
+
+                                    V. C ONCLUSION AND FURTHER RESEARCH
+   In this paper, we study the code conversion problem of locally repairable codes in the merge regime. First, by
+establishing proper maps among polynomials of different degrees, we provide a general construction of MDS con-
+vertible codes with optimal access costs using GRS codes. As a consequence, we obtain a family of (nI , k; nF , ζk)
+MDS convertible codes with optimal access costs over finite field of size linear in nI . Then, based on the construction
+of optimal LRCs in [11], we extend the construction of MDS convertible codes and provide a general construction
+of LRCCs. Similarly, a family of (nI , k, r; nF , ζk, r) LRCCs over finite field of size linear in nI is obtained.
+Finally, we prove a lower bound on the access cost of convertible codes with the condition that the final code is
+an LRC. This confirms that the LRCCs obtained through our construction admit optimal access costs.
+   The study presented in this paper is inspired by interesting open questions raised in [30] regarding constructions
+of low-field-size convertibles codes optimizing the conversion costs. Hence, our primary focus is on constructing
+low-field-size convertibles codes. As phrased in [30], convertible codes have significant potentials for real-world
+impact by enabling resource-efficient redundancy tuning. Although many works have been done recently in this
+topic, there are still a lot of questions left. In the following, we mention several open questions that, in our opinion,
+could improve the study of locally repairable convertible codes.
+  1. In this paper, we only focus on LRCCs in the merge regime. However, as another fundamental case, convertible
+     codes in split regime also have strong practical backgrounds. So, for LRCCs in split regime, what is the lower
+     bound on the access cost and are there any corresponding optimal constructions? Very rescently, Maturana and
+     Rashmi [9] presented a construction of convertible codes with information locality in the split regime, which
+     is a good start for the study of this question.
+  2. For general LRCCs, the initial code and the final code may have different localities. However, our construction
+     in Section III requires the initial code and the final code have the same locality. Note that our lower bound in
+     Theorem IV.4 is for the general case. Is it possible to generalize our construction and obtain convertible codes
+     with optimal access costs when the initial code and the final code have different localities?
+  3. Unlike MDS codes, for optimal locally repairable codes, it is known that the size of the field can be sub-linear
+     in the code length (e.g., see [24], [25], [27], [28]). Note that long codes over small fields are preferred in
+     practice. It’s also interesting to ask how small the field size can be to ensure the existence of LRCCs with
+     optimal access costs.
+  4. As two variations of LRCs, codes with (r, δ)-locality and LRCs with disjoint recovering sets (availability) are
+     also important storage codes, which have attracted lots of attentions these years. Therefore, the study of code
+     conversion problems for these codes are also interesting both theoretically and practically.
+                                                                                                                                            23
+
+
+
+                                                         ACKNOWLEDGEMENT
+  We thank Prof. Itzhak Tamo for his many illuminating discussions and especially, his helpful suggestions regarding
+the presentation of this paper. We also thank Prof. Xin Wang for reading and commenting the earlier version of
+the manuscript.
+
+                                                              R EFERENCES
+ [1] C. Huang, H. Simitci, Y. Xu, A. Ogus, B. Calder, P. Gopalan, J. Li, and S. Yekhanin, “Erasure coding in windows azure storage,” in
+     2012 USENIX Annual Technical Conference (USENIX ATC 12). Boston, MA: USENIX Association, Jun. 2012, pp. 15–26. [Online].
+     Available: https://www.usenix.org/conference/atc12/technical-sessions/presentation/huang
+ [2] M. Sathiamoorthy, M. Asteris, D. Papailiopoulos, A. G. Dimakis, R. Vadali, S. Chen, and D. Borthakur, “Xoring elephants:
+     Novel erasure codes for big data,” Proc. VLDB Endow., vol. 6, no. 5, pp. 325–336, mar 2013. [Online]. Available:
+     https://doi.org/10.14778/2535573.2488339
+ [3] A. S. Foundation., “Apache hadoop documentation: HDFS Erasure Coding.”                            Accessed: Jul. 25, 2023. Available:
+     https://hadoop.apache.org/docs/r3.0.0/hadoop-project-dist/hadoop-hdfs/HDFSErasureCoding.html: [Online].
+ [4] S. Kadekodi, K. V. Rashmi, and G. R. Ganger, “Cluster storage systems gotta have heart: Improving storage efficiency by exploiting
+     disk-reliability heterogeneity,” in Proceedings of the 17th USENIX Conference on File and Storage Technologies, ser. FAST’19. USA:
+     USENIX Association, 2019, pp. 345–358.
+ [5] F. Maturana and K. V. Rashmi, “Convertible codes: Enabling efficient conversion of coded data in distributed storage,” IEEE Transactions
+     on Information Theory, vol. 68, no. 7, pp. 4392–4407, 2022.
+ [6] S. Kadekodi, F. Maturana, S. J. Subramanya, J. Yang, K. V. Rashmi, and G. R. Ganger, “Pacemaker: Avoiding heart attacks in storage
+     clusters with disk-adaptive redundancy,” ser. OSDI’20. USA: USENIX Association, 2020.
+ [7] F. Maturana, V. S. C. Mukka, and K. V. Rashmi, “Access-optimal linear mds convertible codes for all parameters,” in 2020 IEEE
+     International Symposium on Information Theory (ISIT), 2020, pp. 577–582.
+ [8] F. Maturana and K. V. Rashmi, “Bandwidth cost of code conversions in distributed storage: Fundamental limits and optimal constructions,”
+     IEEE Trans. Inf. Theory, vol. 69, no. 8, pp. 4993–5008, 2023. [Online]. Available: https://doi.org/10.1109/TIT.2023.3265512
+ [9] ——, “Locally reapirable convertible codes,” in IEEE International Symposium on Information Theory, ISIT 2023, Taipei, Taiwan, China,
+     June 25 - June 30, 2023, p. to appear.
+[10] C. Huang, M. Chen, and J. Li, “Pyramid codes: Flexible schemes to trade space for access efficiency in reliable data storage systems,” in
+     Sixth IEEE International Symposium on Network Computing and Applications (NCA 2007), 2007, pp. 79–86.
+[11] I. Tamo and A. Barg, “A family of optimal locally recoverable codes,” IEEE Trans. Inf. Theory, vol. 60, no. 8, pp. 4661–4676, 2014.
+     [Online]. Available: https://doi.org/10.1109/TIT.2014.2321280
+[12] A. Barg, I. Tamo, and S. Vlădaţ, “Locally recoverable codes on algebraic curves,” IEEE Trans. Inform. Theory, vol. 63, no. 8, pp.
+     4928–4939, 2017. [Online]. Available: https://doi.org/10.1109/TIT.2017.2700859
+[13] X. Li, L. Ma, and C. Xing, “Optimal locally repairable codes via elliptic curves,” IEEE Transactions on Information Theory, vol. 65,
+     no. 1, pp. 108–117, 2019.
+[14] L. Jin, L. Ma, and C. Xing, “Construction of optimal locally repairable codes via automorphism groups of rational function fields,” IEEE
+     Transactions on Information Theory, vol. 66, no. 1, pp. 210–221, 2020.
+[15] H. Cai, C. Fan, Y. Miao, M. Schwartz, and X. Tang, “Optimal locally repairable codes: An improved bound and constructions,” IEEE
+     Trans. Inf. Theory, vol. 68, no. 8, pp. 5060–5074, 2022. [Online]. Available: https://doi.org/10.1109/TIT.2022.3161613
+[16] P. Gopalan, C. Huang, H. Simitci, and S. Yekhanin, “On the locality of codeword symbols,” IEEE Transactions on Information Theory,
+     vol. 58, no. 11, pp. 6925–6934, 2012.
+[17] I. Tamo, A. Barg, and A. Frolov, “Bounds on the parameters of locally recoverable codes,” IEEE Transactions on Information Theory,
+     vol. 62, no. 6, pp. 3070–3083, 2016.
+[18] A. Agarwal, A. Barg, S. Hu, A. Mazumdar, and I. Tamo, “Combinatorial alphabet-dependent bounds for locally recoverable codes,” IEEE
+     Transactions on Information Theory, vol. 64, no. 5, pp. 3481–3492, 2018.
+[19] J. Ma and G. Ge, “Optimal binary linear locally repairable codes with disjoint repair groups,” SIAM J. Discret. Math., vol. 33, no. 4, pp.
+     2509–2529, 2019. [Online]. Available: https://doi.org/10.1137/19M1248443
+[20] A. Wang, Z. Zhang, and D. Lin, “Bounds for binary linear locally repairable codes via a sphere-packing approach,” IEEE Transactions
+     on Information Theory, vol. 65, no. 7, pp. 4167–4179, 2019.
+[21] R. M. Roth, “Asymptotic bounds on the rate of locally repairable codes,” IEEE Transactions on Information Theory, vol. 68, no. 3, pp.
+     1581–1598, 2022.
+[22] N. Prakash, G. M. Kamath, V. Lalitha, and P. V. Kumar, “Optimal linear codes with a local-error-correction property,” in 2012 IEEE
+     International Symposium on Information Theory Proceedings, 2012, pp. 2776–2780.
+[23] A. Wang and Z. Zhang, “Repair locality with multiple erasure tolerance,” IEEE Transactions on Information Theory, vol. 60, no. 11, pp.
+     6979–6987, 2014.
+[24] V. Guruswami, C. Xing, and C. Yuan, “How long can optimal locally repairable codes be?” IEEE Transactions on Information Theory,
+     vol. 65, no. 6, pp. 3662–3670, 2019.
+[25] H. Cai, Y. Miao, M. Schwartz, and X. Tang, “On optimal locally repairable codes with super-linear length,” IEEE Transactions on
+     Information Theory, vol. 66, no. 8, pp. 4853–4868, 2020.
+[26] ——, “On optimal locally repairable codes with multiple disjoint repair sets,” IEEE Transactions on Information Theory, vol. 66, no. 4,
+     pp. 2402–2416, 2020.
+[27] X. Kong, X. Wang, and G. Ge, “New constructions of optimal locally repairable codes with super-linear length,” IEEE Transactions on
+     Information Theory, vol. 67, no. 10, pp. 6491–6506, 2021.
+[28] C. Xing and C. Yuan, “Construction of optimal (r, Î´)-locally recoverable codes and connection with graph theory,” IEEE Transactions on
+     Information Theory, vol. 68, no. 7, pp. 4320–4328, 2022.
+[29] D. S. Papailiopoulos and A. G. Dimakis, “Locally repairable codes,” IEEE Transactions on Information Theory, vol. 60, no. 10, pp.
+     5843–5855, 2014.
+[30] F. Maturana and K. V. Rashmi, “Bandwidth cost of code conversions in the split regime,” CoRR, vol. abs/2205.06793, 2022. [Online].
+     Available: https://arxiv.org/abs/2205.06793
+                                                                                                                           24
+
+
+
+                                                      A PPENDIX A
+                                             P ROPERTIES OF {xs g t (x)} 0≤s≤r−1
+                                                                                 0≤t≤k−1
+
+  Let k and r be positive integers. For 1 ≤ i ≤ k, let Ai = {ai,1 , . . . , ai,r+1 } ⊂ Fq such that Ai ∩A′i = ∅ for i 6= i′ .
+              S
+Denote A = ki=1 Ai and Ãi = Ai \ {ai,r+1 }. Let g(x) ∈ Fq [x] be a polynomial of degree r + 1 such that g is
+constant on each Ai . Denote gi as the constant g(Ai ) and denote G = {g1 , . . . , gk }. For every (i, j) ∈ [k] × [r + 1],
+define ai,j ∈ Fkr
+               q as
+                               ai,j = (asi,j g t (ai,j ), (s, t) ∈ [0, r − 1] × [0, k − 1])T .
+Lemma A.1.       1) {ai,j } 1≤i≤k are linearly independent over Fkr
+                                                                 q .
+                             1≤j≤r
+ 2) For c ∈ Fq , denote c ∈ Fkr                    s t                                      T
+                             q as the vector c = (c g (c), (s, t) ∈ [0, r − 1] × [0, k − 1]) . Then, we have
+
+                                                 X          hG\{gi } (g(c)) hÃi \{ai,j } (c)
+                                       c=                                                         ai,j .                (31)
+                                                             hG\{gi } (gi ) hÃi \{ai,j } (ai,j )
+                                            (i,j)∈[k]×[r]
+
+ 3) For every 1 ≤ i ≤ k, denote Ãi as the r × r Vandermonde matrix generated by Ãi . Then, we have
+                                                                                  
+                                                                     Ã−1
+                                                                         1
+                             Ã1       Ã2     ···      Ãk          h    1}
+                                                                    G\{g−1  (g1 ) 
+                                                                     Ã2         
+                       g1 Ã1
+                                     g 2 Ã 2 · · ·  g k Ã k     
+                                                                 hG\{g2 } (g2 ) 
+                             ..          ..              ..    ·       ..
+                                                                                    = 0kr×r .                          (32)
+                              .           .               .                     
+                                                                   
+                                                                         .        
+                                                                                   
+                          g1k−2 Ã1 g2k−2 Ã2 · · · gkk−2 Ãk          Ã−1
+                                                                         k
+                                                                                      hG\{gk } (gk )
+
+Proof. There is a one-to-one correspondence between a polynomial f in SpanFq {xs g t (x)} 0≤s≤r−1 and its coefficient
+                                                                                                           0≤t≤k−1
+vector vf ∈ Fkr                 s t
+               q w.r.t. basis {x g (x)} 0≤s≤r−1  . Clearly, for every c ∈ Fq , f (c) = vf · c. Next, we proceed to prove
+                                        0≤t≤k−1
+the three results separately.
+  1. Let A be the kr × kr matrix with ai,j as its ((i − 1)r + j)-th column. Next, we prove the first result by
+     showing that rank(A) = kr.
+     Assume that there is a vector vf ∈ Fkr q such that vf · A = 0. Thus, f (ai,j ) = 0 for every (i, j) ∈ [k] × [r].
+     For each 1 ≤ i ≤ k, denote                                            !
+                                                      Xr     Xk
+                                                                       s−1
+                                            fi (x) =             fs,j gi     xj−1 .
+                                                            j=1     s=1
+
+     Then, we have fi (ai,j ) = 0 for every (i, j) ∈ [k] × [r]. Note that fi (x) is a polynomial of degree at most r − 1.
+                                                                                                 Pk
+     Thus, by fi (ai,j ) = 0 for every 1 ≤ j ≤ r, fi is the zero polynomial. This implies that s=1 fs,j gis−1 = 0 for
+                                                Pk
+     every (i, j) ∈ [k] × [r]. Denote f˜j (x) = s=1 fs,j xs−1 . Since gi ’s are pairwise distinct and deg(f˜j ) ≤ k − 1,
+     we can obtain fs,j = 0 for every (s, j) ∈ [k]×[r]. Therefore, we can conclude that vf = 0 and rank(A) = kr.
+  2. Since {ai,j } 1≤i≤k are linearly independent over Fq , c can be uniquely expressed as a linear combination of
+                    1≤j≤r             P
+     {ai,j } 1≤i≤k . Assume that c = (i,j)∈[k]×[r] ηi,j ai,j . Next, we show that
+            1≤j≤r
+
+
+                                                  hG\{gi } (g(c)) hÃi \{ai,j } (c)
+                                              ηi,j =                                    .                            (33)
+                                                   hG\{gi } (gi ) hÃi \{ai,j } (ai,j )
+                                                                                      P
+     For any f ∈ SpanFq {xs g t (x)} 0≤s≤r−1 , f (c) = vf · cT . Thus, f (c) = (i,j)∈[k]×[r] ηi,j f (ai,j ). For (i, j) ∈
+                                     0≤t≤k−1
+     [k] × [r], define
+                                         fi,j (x) = hG\{gi } (g(x))hÃi \{ai,j } (x).
+     Then, fi,j (c) = hG\{gi } (g(c))hÃi \{ai,j } (c) and for (s, t) ∈ [k] × [r],
+                                             
+                                                 hG\{gi } (gi )hÃi \{ai,j } (ai,j ) if (s, t) = (i, j);
+                              fi,j (as,t ) =
+                                                                0                        otherwise.
+                                                      P
+     Thus, (33) follows directly from fi,j (c) = (s,t)∈[k]×[r] ηs,t fi,j (as,t ).
+                                                                                                        25
+
+
+
+3. To start with, we consider the toy case when r = 1. When r = 1, we have Ãi = (1) and
+                                                                             
+                                  Ã1     ···    Ãk            1    ···     1
+                             g1 Ã1
+                                         ···            g1
+                                                gk Ãk             ···    gk 
+                                   ..             ..   =  ..              ..  .
+                                    .              .          .            . 
+                                 k−2            k−2            k−2          k−2
+                                g1 Ã1 · · · gk Ãk           g1     · · · gk
+  Note that the RHS of the above equality is the (k − 1) × k Vandermonde matrix generated by G. Therefore,
+  by Cramer’s rule, we have
+                                                     
+                                    1    ···     1               1
+                                                                           
+                                                            hG\{g1 } (g1 )
+                               g1
+                                        ···    gk  
+                                                     
+                                                                 ..        
+                               ..               ..  ·         .
+                                                                            = 0.
+                                                                           
+                               .                 .             1
+                                 g1k−2 · · · gkk−2          hG\{gk } (gk )
+
+  This confirms (32) when r = 1.
+  For r ≥ 1, the LHS of (32) equals to
+                                                                     I         
+                                 I        I      ···    I          hG\{g1 } (g1 )
+                                                                      I         
+                            g1 I
+                                        g2 I    ···   gk I      hG\{g2 } (g2 ) 
+                                ..       ..            ..     ·
+                                                                 
+                                                                        ..
+                                                                                  .
+                                                                                  
+                                 .        .             .             .        
+                               g1k−2 I g2k−2 I · · · gkk−2 I              I
+                                                                     hG\{gk } (gk )
+
+  Then, (32) follows from the case when r = 1.
+

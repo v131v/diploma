@@ -1,0 +1,2066 @@
+     Towards Benchmarking Erasure Coding Schemes In Object Storage
+     System
+     Rezuana Imtiaz Upomab , Md. Sadiqul Islam Sakifb,c and Jannatun Noora,b
+                                                                                                                 iew
+     a Department of Computer Science and Engineering, Bangladesh University of Engineering and Technology, Dhaka, Bangladesh
+
+
+
+
+                                                                                                                     ed
+     b Computing for Sustainability and Social Good (C2SG) Research Group, School of Data and Sciences, BRAC University, Dhaka, Bangladesh
+     c mPower-Social Enterprise, Dhaka, Bangladesh
+
+
+
+     ARTICLE INFO                                        ABSTRACT
+     Keywords:                                           Erasure Coding (EC) is a security measure that eliminates the need for complete data replication by
+     Erasure Coding                                      allowing data to be reconstructed from parity pieces. This method offers increased data redundancy,
+     OpenStack Swift                                     efficiency, lowered storage costs, and enhanced fault tolerance making it a preferred alternative to
+     Reed-Solomon Codes                                  replication in Object Storage Systems. The fundamental concept behind EC is to encrypt a specific
+
+
+
+
+                                                        tp
+     Cloud Storage System                                amount of data in a manner that guarantees the transfer of all coded pieces without any loss. As
+                                                         data volumes continue to rapidly increase, the time efficiency of the EC method becomes crucial in
+                                                         ensuring optimal system performance. Various variables, including the algorithm employed, data size,
+                                                         number of storage nodes, hardware resources, and network conditions, can influence the speed of EC
+                                                         operations. Hence, we inspect the Erasure Coding algorithm known as Reed-Solomon Codes (RS). We
+
+
+
+
+                                                          ee
+                                                         explore the algorithm’s encoding speed, taking into account factors such as data size and the generation
+                                                         of parity blocks. By evaluating and enhancing existing mechanisms, our research aims to address
+                                                         time efficiency and fault tolerance challenges in cloud-based object storage systems. To enhance data
+                                                         retrieval and storage processes, we comprehensively examine time efficiency mechanisms, such as
+                                                         data placement policies and scheduling algorithms. Additionally, we investigate the time taken for
+
+
+
+
+                                                            rr
+                                                         an open-source cloud storage system, OpenStack Swift, to store data by analyzing two datasets and
+                                                         determining the duration required to store these files. Furthermore, our study assesses fault tolerance
+                                                         mechanisms, including redundancy schemes, error correction codes, and distributed data placement
+                                                         strategies, to bolster system resilience. We propose different approaches to minimize access latency,
+                                                         improve overall time efficiency, and ensure data availability, even in the presence of failures.
+
+
+
+     1. Introduction
+                                                              ev
+         Distributed Storage Systems (DSS) play a pivotal role in
+     addressing the formidable challenges posed by the unprece-
+     dented surge in data volume. They serve as indispensable
+                                                                                   user training, making it user-friendly. Examining the per-
+                                                                                   formance of Erasure Coding schemes is crucial as it en-
+                                                                                   ables companies to make informed decisions and contribute
+                                                                                   to data storage advancements. Erasure coding holds great
+                                                                                   promise in eliminating the need for redundant storage and
+     solutions for scalable and dependable data storage [1, 2].                    addressing challenges related to fault tolerance and time
+
+
+                                         no
+     Incorporating Erasure Coding (EC) [3] within DSS is imper-
+     ative, as it facilitates effective data distribution, minimizes
+     storage overhead, ensures robust data durability, and forti-
+     fies fault tolerance. Thus, EC emerges as an intellectually
+     sound choice for empowering large-scale storage systems.
+     EC is a reliable and efficient storage solution for the modern
+                                                                                   efficiency. The realm of EC research encompasses more than
+                                                                                   mere fundamental comprehension and a general survey of
+                                                                                   Erasure Coding principles. In fact, these scholarly inquiries
+                                                                                   delve into benchmarking erasure codes with an emphasis on
+                                                                                   data security and an array of benchmarking factors to assess
+                                                                                   their efficacy.
+     data-driven world. It addresses the limitations of traditional                     Moreover, researchers have devised solution-based ap-
+
+                    rin
+     methods by offering time efficiency, user-friendliness, and
+     fault tolerance. EC disperses data across multiple devices
+     and generates redundant parts, ensuring data integrity even
+
+                        t
+     in the face of device failures. This reduces the risk of data
+     loss.
+                                                                                   proaches aimed at augmenting the performance and ef-
+                                                                                   fectiveness of Erasure Coding techniques. To evaluate the
+                                                                                   Erasure coding, Atish et al. [3] evaluate popular distributed
+                                                                                   storage systems using diverse criteria and explore the inte-
+                                                                                   gration of Erasure Codes. Through a comprehensive survey,
+         Additionally, EC’s lower storage overhead improves sys-                   it highlights design principles, data models, failure handling,
+
+
+      ep
+     tem performance and user experience by providing redun-
+     dancy with a smaller footprint. Its transparent data recovery
+     eliminates the need for significant system modifications or
+             rezuana.imtiaz.upoma@g.bracu.ac.bd (R.I. Upoma);
+     md.sadiqul.islam.sakif@g.bracu.ac.bd (Md.S.I. Sakif);
+                                                                                   consistency, and security. Kevin et al. [4] investigate the
+                                                                                   potential of Erasure Codes to reduce power consumption in
+                                                                                   storage systems. The authors introduce power-aware coding,
+                                                                                   a technique that utilizes the structure of erasure codes to
+                                                                                   achieve energy savings.
+
+Pr   jannatun.noor@bracu.ac.bd (J. Noor)
+          ORCID (s): 0000-0003-3113-8603 (R.I. Upoma); 0000-0001-9669-151X
+     (J. Noor)
+                                                                                        Besides, Balaji et al. [5] examine efficient repair tech-
+                                                                                   niques in distributed storage systems, including regenerating
+                                                                                   codes, locally recoverable codes, and novel repair methods
+                                                                                   for Reed-Solomon codes. Cong et al. [6] present a flexible
+                                                                                   distributed storage integrity auditing mechanism for secure
+
+     : Preprint submitted to Elsevier                                                                                                           Page 1 of 15
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                 Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+     and dependable cloud storage, utilizing homomorphic to-             modifications or user training. This makes it user-friendly.
+     kens and distributed erasure-coded data. To enhance the per-        Examining the performance of Erasure Coding schemes is
+
+
+
+
+                                                                                                 iew
+     formance of EC, Yan et al. [7] present Coop-U, a cooperative        essential because it enables companies to make informed
+     update scheme for efficiently updating erasure-coded data in        decisions and facilitates the progress of data storage tech-
+     distributed storage systems.                                        nology.
+          To tackle the privacy issue in distributed networked               Erasure Coding has emerged as an enticing solution for
+     storage systems, Hsiao et al. [8] propose a secure decen-           the challenges of fault tolerance and time efficiency. Our
+     tralized erasure code that combines threshold public key            work aims to prioritize the identification of EC methods that
+     encryption and a variant of decentralized erasure code. The
+     resulting storage system is decentralized, robust, private,
+     and cost-effective, ensuring data privacy even when all
+     storage servers are compromised. Xiaoqiang et al. [9] pro-
+     pose Group-U, a grouped and pipelined update scheme
+     for erasure-coded storage systems. It achieves significant
+                                                                                                     ed
+                                                                         can optimize both the time efficiency and fault tolerance
+                                                                         of OpenStack Swift cloud storage systems. Among XOR-
+                                                                         based Erasure Codes [15], Fountain Codes [16], Luby Trans-
+                                                                         form (LT) Codes [17] and Reed-Solomon Codes (RS) EC
+                                                                         techniques, we choose RS codes for benchmarking because
+                                                                         of the limitations on fault tolerance, inefficiency with large
+     reductions in update overhead and time compared to existing         data sets, and error correction capability. Our work focuses
+
+
+
+                                                   tp
+     approaches, improving efficiency by dynamically adjusting
+     group size and optimizing data transmission and compu-
+     tation. Additionally, there are some papers that work on
+     Benchmarking Erasure Coding in terms of cost analysis [10],
+                                                                         on experimenting with diverse datasets to benchmark Era-
+                                                                         sure Coding (EC) schemes in Object Storage System (name
+                                                                         OpenStack Swift). This involves selecting an appropriate EC
+                                                                         technique, creating an experimental testbed, and carefully
+
+
+
+                                                     ee
+     failure repair [11], storage efficiency [[12], [10], [13]], data    choosing datasets for analysis and comparison. We experi-
+     availability and durability [14] and fault tolerance [[14],         ment with multiple implementations to analyze the data and
+     [13]]. However, none of the studies focus on finding time           achieve desired results.
+     efficiency in terms of I/O operations of EC schemes.                    Based on our study, we make the following contributions
+
+
+
+
+                                                       rr
+          Benchmarking EC is vital as it allows for the evaluation       to this paper:
+     of performance, optimization, scalability assessment, com-
+     parative analysis, and standardization. It provides insights           • At first, we investigate the time efficiency of Erasure
+     into the efficiency and speed of Erasure Coding operations,              Coding (EC) using Reed Solomon Codes in the Open-
+
+
+
+                                                         ev
+     helps identify areas for improvement, and enables the selec-             Stack Swift Object Storage System.
+     tion of the most suitable solution. By benchmarking, organi-           • Then, we measure upload, download, and deletion
+     zations can assess system performance under different work-              times for specific Erasure Coding schemes (RS (5+3),
+     loads, compare different implementations, and contribute to              RS (10+4), and RS (7+5)) [18], and provide unique
+     the development of standardized benchmarks.                              insights and a comparison of their time efficiency.
+          EC is the preferred choice among developers in vari-
+     ous scenarios. In cloud storage systems, it is favored for             • Besides, we explore the fault tolerance aspect of Era-
+                                                                              sure Coding using the SimEDC simulator and com-
+
+                                        no
+     its ability to ensure data durability and cost-effectiveness.
+     In distributed file systems, EC is implemented to enhance
+     fault tolerance and scalability. Data archiving and backup
+     solutions benefit from EC as it enables efficient storage. In
+     large-scale storage systems, it optimizes resource utilization.
+     When it comes to data center storage infrastructure, EC is
+                                                                              pare fault tolerance results with various schemes to
+                                                                              improve reliability.
+                                                                            • Moreover, we create our own Erasure Coding dataset
+                                                                              (MCSD-100) and use another benchmark dataset
+                                                                              (COCO-17) for comprehensive analysis and valida-
+     relied upon to maintain high availability. Lastly, in the realm          tion.
+
+                   rin
+     of IoT applications, Erasure Coding is utilized to guarantee
+     reliable data storage. Traditional cloud systems are facing
+     challenges in handling the rapid growth of data in today’s
+
+                       t
+     distributed application environment. While replication is
+     commonly used for redundancy, Erasure Coding emerges as
+                                                                            • Finally, we present a comparative analysis with other
+                                                                              relevant papers. Our experimentation validates the
+                                                                              uniqueness of our research and identifies opportunities
+                                                                              for enhancing time efficiency and fault tolerance in
+     a valuable alternative [3].                                              Erasure Coding.
+
+
+      ep  EC’s technique of dispersing the data over numerous
+     devices and producing redundant parts ensures that the data’s
+     integrity will be preserved even in the event that one or more
+     of those devices fails. Because of its capacity for fault toler-
+     ance, the possibility of data being lost is reduced. In addition,
+     EC’s lower storage overhead enhances both the performance
+                                                                         Overall, our contributions include in-depth time efficiency
+                                                                         analysis, fault tolerance exploration, dataset utilization, com-
+                                                                         parison with existing studies, and identification of opportu-
+                                                                         nities for improvement in Erasure Coding for cloud-based
+                                                                         object storage systems.
+
+Pr   of the system as well as the user experience. This is due
+     to the fact that it offers redundancy while maintaining a
+     smaller footprint. Because of its transparent data recovery, it
+     is easy to use since it removes the need for significant system
+                                                                             The organization of this paper is further segmented into
+                                                                         different sections. Section 2 explores related literature and
+                                                                         research papers in the field. In Section 3, the background of
+                                                                         Erasure Coding is discussed, with a focus on RS for Open-
+                                                                         Stack Swift and the SimEDC simulator used in the testbed.
+
+     : Preprint submitted to Elsevier                                                                                      Page 2 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                 Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+     Section 4 details the methodology employed, including the        (HDFS) [37] and RS code in experiments has shown shorter
+     creation of test bed environments and the selection process      times to write, read, and restore.
+
+
+
+
+                                                                                               iew
+     for Erasure Coding. It also covers the datasets used in the
+     testbed. Section 5 provides a description of the datasets        2.2. Replication and Deduplication
+     utilized. Section 6 presents the experimental evaluation and         Nandyal et al. [30] compare replication and Erasure
+     analysis of results. comparison with related works. Section      Coding (EC) algorithms in distributed file systems with an
+     7 presents the comparative analysis with related work and        emphasis on data availability and stability. They address
+     limitations.                                                     the performance issues associated with EC by proposing a
+
+
+     2. Related Work
+         In the field of Cloud Computing, there are challenges
+     in terms of developing an improved security system in
+     a distributed storage system. Many challenges with new
+                                                                                                   ed
+                                                                      buffering and combining mechanism to manage encoded I/O
+                                                                      requests and by supplying recovery strategies for decoding
+                                                                      problems in EC-based distributed file systems. Lombardo
+                                                                      et al. [20] propose a "parity data deduplication" technique
+                                                                      designed expressly for flash-based RAID [38] storage, es-
+                                                                      pecially all-flash arrays in the context of OpenStack cloud
+     technologies are being overcome one day after another. But       block storage, which reduces the need for parity data write
+
+
+
+                                                 tp
+     behind all those successes, many researchers have studied        operations. Guo et al. [21] present a deduplication scheme
+     and developed different theories and methodologies. Storing      for secure key sharing and ownership management in cloud
+     big data in OpenStack Swift [19] with the help of Erasure        storage that makes use of elliptic curve cryptography and
+     Coding (EC) has also been successful on many occasions.          broadcast encryption for enhanced security and efficiency. In
+
+
+
+
+                                                   ee
+     Those achievements were pursued as previous authors have         addition, Calheiros et al. [39] present a proactive replication
+     mentioned and came up with different ideas and techniques.       method that substantially reduces cloud data center storage
+     Such reviews are given below:                                    waste, network traffic, and energy consumption.
+
+
+
+
+                                                     rr
+     2.1. Storage System                                              2.3. Erasure Coding
+          Wang et al. [27] inspect the distributed storage systems,       Chouhan et al. [40] and Abebe et al. [41] examine era-
+     point out the problems with replication, and suggest Erasure     sure encoding techniques, specifically Reed-Solomon (RS)
+     Coding (EC) as a way to deal with security issues, data          coding, to determine optimal parameters for dependable and
+
+
+
+
+                                                       ev
+     placement, transfer costs, and the costs of keeping copied       cost-effective storage systems, taking into account storage
+     data up-to-date. Opara-Martins et al. [32] use cloud tools to    overhead, data accessibility, and retrieval. Cheng et al. [42]
+     handle big amounts of social media data. They suggest using      present StreamLEC, a fault-tolerant stream machine learning
+     a multi-node OpenStack cloud system to give Hadoop as a          system employing Erasure Coding (EC) for low-redundancy
+     service, making it easy to use within the OpenStack cloud        proactive fault tolerance and enhanced performance in fail-
+     setting. Zhang et al. [33] come up with a way to update          ure recovery and latency. Nachiappan et al. [43] propose a
+     data quickly in big-data distributed storage systems. They       recovery strategy employing Erasure Coding in data centers
+     use a protocol that uses locking and caching to make sure        to improve dependability with minimal overhead by opti-
+
+
+                                        no
+     that changes to data and code blocks are always the same.
+     Heo et al. [34] focus on SSD-based cloud storage systems
+     and present a method called “parity database reduction”
+     for OpenStack cloud storage platforms. This method lowers
+     needless parity data and extends the life of SSDs in all-flash
+                                                                      mizing data block selection for proactive replication based
+                                                                      on failure predictions, resulting in substantial reductions in
+                                                                      storage costs, network usage, and energy consumption. Qin
+                                                                      et al. [44] propose enhancing the efficacy of the Ceph [45]
+                                                                      system’s EC mode by selecting storage nodes based on re-
+     arrays.                                                          source demand and diversity, thereby enhancing read/write
+
+
+                   rin
+          Besides, Song et al. [25] suggest FACHS (File Access
+     Characteristics based Hybrid Storage), an adaptive hybrid
+     storage system that optimizes storage redundancy, parallel
+
+
+                       t
+     read/write performance, and storage capacity using a com-
+     bination of Reed-Solomon (RS) Code, multi-copy, and LRC
+                                                                      performance.
+                                                                          Moreover, Iliadis et al. [46] examine the effect of secret
+                                                                      sector defects on erasure-coded replication in large-scale
+                                                                      storage systems and emphasize the significance of accurately
+                                                                      positioning data to improve reliability. Arslan et al. [22] dis-
+     codes based on file access patterns. This improves efficiency,   cuss reliability prediction for erasure-coded storage systems
+     speed, and storage utilization. Rivera et al. [35] propose       in warm/cold storage, investigating stochastic models, a new
+
+
+      ep
+     Fulcrum coding, a hybrid coding method that uses random
+     linear network coding and systematic coding to improve
+     multicast services in different networks by improving FEC
+     efficiency, reliability, transfer speed, and decoding rates.
+     Shin et al. [36] suggest a cache-based matrix method to
+                                                                      Markov model, multi-dimensional Markov modeling, and
+                                                                      simulation modeling to address system maintenance and en-
+                                                                      hance forecasting. Chiniah et al. [3] address the difficulties of
+                                                                      managing growing data volumes in cloud systems and pro-
+                                                                      pose EC as an alternative to replication in distributed stor-
+
+Pr   improve the speed of global file systems that store large
+     amounts of data. This can be done by saving and reusing
+     matrices in cache memory, which reduces costs and im-
+     proves efficiency. Using the Hadoop Distributed File System
+                                                                      age, evaluating various storage methods and highlighting the
+                                                                      benefits of integrating EC into distributed storage systems.
+                                                                      Pu et al. [47] propose EMS, a novel UHD video streaming
+                                                                      system that combines multi-source streaming and erasure-
+                                                                      coded storage to improve the quality of UHD video in 5G
+
+     : Preprint submitted to Elsevier                                                                                    Page 3 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                 Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+                                          Purpose                    Technology
+           Reference                                                                                Brief of Findings
+                                        of the study                    used
+
+
+
+
+                                                                                            iew
+                                                                                                   Reducing parity data
+          Lombardo                   RAID storage                 All-flash arrays,
+                                                                                              write operations compared to
+       et al., 2023 [20]      frequent parity data updates     redundant parity data
+                                                                                                standard data duplication
+                                                                                                  Direct uploader-cloud
+              Guo                   Cloud encryption                Elliptic curve            service provider deduplication
+
+
+
+
+                                                                                                ed
+       et al., 2023 [21]          and title management          cryptography (ECC)            improves system security and
+                                                                                           eliminates third-party intervention
+                                   Erasure-coded warm
+             Arslan                                               Stochastic models,            Detachable drive medium
+                                 /cold storage systems’
+       et al., 2023 [22]                                            Markov models                   Markov models
+                               availability and endurance
+                                Assessing productiondual
+            Levitin                                               Probabilistic model            Optimizing production
+                                 storage system mission
+       et al., 2023 [23]                                              for MSP                      storage systems
+
+
+
+
+                                                 tp
+                               success probability (MSP)
+            Geetha               Create a reliable cloud                                            Time-based data
+                                                                   DSS encryption
+       et al., 2023 [24]              storage solution                                          forwarding re-encryption
+                                 Help distributed storage
+              Song                                                                                BPR outperforms
+
+
+
+
+                                                   ee
+                                systems to retrieve batch       Reed-Solomon code
+       et al., 2023 [25]                                                                      rPDL (Repair-by-Download).
+                               -stripe data after data loss
+                                   Optimize networked                Erasure code
+               Yin                  storage systems for         strategies, replication
+                                                                                                  System performance
+       et al., 2023 [26]            ’cold’ data storage         strategies, consistent
+
+
+
+                                                     rr
+                                  utilizingerasure codes               hashing
+                              Overcome distributed storage                                       TLRC’s data recovery
+                                                                  Three-hierarchical
+              Tang            system network transmission                                         procedure uses less
+                                                                    redundancy
+
+
+
+                                                       ev
+       et al., 2023 [21]       bandwidth constraints that                                         time and data than
+                                                                      structure
+                                prevent erasure code use                                          other erasure codes
+             Wang                         Compare                     Erasure                     DLOP-partitioning
+       et al., 2022 [27]                    DSS                       Coding                     based storage scheme
+            Tanwar                   Data partitioning          Distributed Linear               DLOP and partitioning
+       et al., 2022 [28]              and deployment          Order Partition (DLOP)             based storage scheme
+                                    Manage rapid data
+                                                                      G-Update
+             Wang               changes in heterogeneous                                            Time-based data
+       et al., 2022 [29]
+
+            Nandya
+       et al., 2021 [30]
+                                        no
+                                    wide stripe erasure
+                                  coded storage system
+                                  DFS data availability
+                                        and stability
+                                     Video surveillance
+                                                                  outperforms other
+                                                                      schemes
+                                                                   Replication and
+                                                                   Erasure Coding
+                                                                                                forwarding re-encryption
+
+                                                                                                     EC saving space
+                                                                                                     over replication
+
+            Siagian                   database system
+                                                                      OpenStack                    OpenStack in IaaS
+
+
+                   rin
+       et al., 2021 [31]
+
+
+       Our Work
+
+                       t
+                                   architecture network
+                               performance improvement
+                                   Time efficiency and
+                                      Fault Tolerance
+                                       measurement
+                                                                   Reed Solomon,
+                                                                  OpenStack Swift,
+                                                                   Erasure Coding
+                                                                                                   Less time efficient,
+                                                                                                   More fault tolerant
+
+     Table 1
+
+
+
+      ep
+     Comparison between research studies
+
+
+     networks, addressing storage and bandwidth constraints and
+     employing federated learning and a Multi-Armed Bandit
+     approach to improve service quality and user experience.
+                                                                     2.4. OpenStack Swift
+                                                                         Emu et al. [48] present an enhanced strategy for shared-
+                                                                     mode resource allocation for cloud-based load testing utiliz-
+
+Pr   Table 1 summarises the research works and compares them.        ing OpenStack Swift as the cloud server and Apache JMeter
+                                                                     as the load testing instrument. They conduct experiments
+                                                                     using a variety of scenarios and metrics to assess system
+
+
+
+     : Preprint submitted to Elsevier                                                                                Page 4 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                 Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+     behavior and determine load capacity sealing capacity. Ken-        EC helps improve data security and efficiency. In the event
+     gond et al. [49] advocate the use of cloud resources, such         that there is a data loss, the system is able to recreate the
+
+
+
+
+                                                                                               iew
+     as Amazon Web Services and OpenStack, for storing and              original data by piecing together the surviving pieces. EC
+     analyzing large data from social media. They propose a             protects OpenStack Swift data against hardware failures and
+     solution based on a multi-node OpenStack cloud system              other types of data loss. Access limitations and encryption
+     that enables Hadoop access and use within the cloud envi-          further strengthen OpenStack Swift’s already robust security
+     ronment. Siagian et al. [31] concentrate on improving the          protections.
+     architecture of a video surveillance database system utilizing
+     OpenStack Swift cloud storage in an OpenStack cluster. By
+     dynamically adjusting storage allocation for data acquisition
+     from monitoring devices, they assess the scalability and de-
+     pendability of the system for large-scale video surveillance.
+     Kulkarni et al. [50] propose the implementation of EC in
+     OpenStack Swift to improve storage efficiency, reliability,
+                                                                                                   ed
+                                                                        3.2. Reed-Solomon (RS) for OpenStack Swift
+                                                                             Cloud storage systems like OpenStack Swift employ
+                                                                        Reed-Solomon (RS) coding. RS algorithms provide dis-
+                                                                        tributed storage fault tolerance and data integrity. The Open-
+                                                                        Stack Swift system uses RS codes. RS codes secure and re-
+                                                                        trieve OpenStack Swift cloud data. OpenStack Swift divides
+     and fault tolerance in cloud storage systems, highlighting the     files into data chunks and computes parity pieces using RS
+
+
+
+                                                  tp
+     need for adaptable storage methods to meet the growing data        coding. Coding settings determine data and parity chunks.
+     storage demands.                                                   OpenStack Swift’s RS coding method permits file recon-
+                                                                        struction even if certain chunks are missing or unavailable.
+     2.5. Data Movement                                                 RS codes are ideal for cloud storage because of their fault
+
+
+
+                                                    ee
+          Tanwar et al. [28] propose the Distributed Linear Order       tolerance. OpenStack Swift uses RS decoding to rebuild the
+     Partition (DLOP) method for data partitioning and deploy-          original file after retrieving data and parity chunks from the
+     ment. To facilitate the administration of dispersed data, the      storage nodes. Mathematical procedures on chunks restore
+     authors present two partitioning strategies and an index-          lost or distorted data during decoding. OpenStack Swift
+
+
+
+
+                                                      rr
+     based data query system. The research validates the effi-          RS codes use the storage efficiently. OpenStack Swift may
+     ciency of the proposed storage strategy by demonstrating           reduce data redundancy overhead and provide fault tolerance
+     its scalability and reduced hardware needs. Zhou et al. [51]       using RS coding. Choosing data and parity pieces depending
+     present a data placement scheme that employs top-down              on fault tolerance needs maximizes efficiency.
+
+
+
+                                                        ev
+     transmission and an enhanced metaheuristic algorithm to
+     manage pipelined data transmission to increase the storage
+     network’s lifetime and reduce data insertion time. Feng et
+     al. [32] present MDTUpdate, a double tree-based approach
+     for effective multi-block updates in heterogeneous clusters,
+     which achieves quicker updates and reduced operational
+                                                                        3.3. SimEDC
+                                                                            A simulator for evaluating Erasure Coding (EC) in cloud
+                                                                        storage systems. We can evaluate EC performance with the
+                                                                        help of SimEDC [33], a Python simulator developed for
+                                                                        this purpose. It provides users with the ability to adjust EC
+     costs than previous methods. Facenda et al. [52] propose           schemes and system parameters, as well as generate syn-
+     streaming codes that are adaptable and designed particularly       thetic workloads for the purpose of evaluating system perfor-
+
+                                        no
+     for a three-node network. These codes address infrequent
+     packet loss and ensure on-time delivery by adapting to
+     loss patterns, employing symbol estimates, and encoding at
+     various rates.
+          After reading all of these studies, we can say that differ-
+                                                                        mance in a variety of contexts. Configuring the simulator’s
+                                                                        settings, such as the data center architecture, erasure codes,
+                                                                        redundancy placement, and subsystem failure patterns, is
+                                                                        necessary. SimEDC can offer dependability measures like
+                                                                        the probability of data loss, repair efficiency, and band-
+     ent storage systems were used to apply data using different        width reduction by running simulations with various con-
+
+
+                   rin
+     EC policies and EC schemes. However, to the very best of
+     our knowledge, no research studies have focused on finding
+     time efficiency in terms of I/O operations of EC schemes
+
+                       t
+     using standard datasets.
+                                                                        figurations. This enables the investigation and assessment of
+                                                                        erasure-coded network preservation in various settings and
+                                                                        scenarios.
+
+                                                                        4. Methodology
+     3. Background                                                          In our work, we experiment with different datasets for
+
+
+      ep
+     3.1. Overview of OpenStack Swift and Erasure
+          Coding
+         OpenStack Swift [53] is the component that is in charge
+     of object storage services. It offers a solution that is both
+     scalable and long-lasting for the storage of enormous vol-
+                                                                        benchmarking Erasure Coding (EC) schemes. Figure 1 illus-
+                                                                        trates the workflow of our work. Firstly, we plan to select a
+                                                                        suitable EC technique for our later experiments. Secondly,
+                                                                        we create an experimental testbed for benchmarking EC
+                                                                        schemes which is illustrated in Figure 2. Then we choose
+
+Pr   umes of unstructured data. It does this by segmenting the
+     data into blocks and spreading those blocks along with parity
+     pieces over various storage nodes. Erasure Coding (EC),
+     such as Reed-Solomon (RS) coding, is one example of this.
+                                                                        datasets which are followed by creating our own dataset and
+                                                                        using an existing one. Thirdly, our method follows different
+                                                                        implementations for our desired results ie. analyzing data.
+
+
+
+     : Preprint submitted to Elsevier                                                                                    Page 5 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                  Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+                     Setup Test-bed for                               and EC containers are created for each EC scheme (Reed-
+                      Benchmark EC                  Data Analysis     Solomon(RS) (5+3), (7+5), and (10+4)). Different VMs
+               1         Schemes            3
+
+
+
+
+                                                                                               iew
+                                                                      represent distinct EC schemes, allowing for data storage and
+                                                                      retrieval evaluation.
+        Selection of EC       2       Creation and        4               Remote Testbed EC Setup: We obtain a remote VM to
+          Technique                Selection of Dataset
+                                                                      expand the evaluation of the cloud storage system. Then we
+                                                                      install OpenStack Swift on the remote VM and configure
+                                                                      multiple storage policies to accommodate different Erasure
+
+
+                                                                                                   ed
+               Figure 1: Workflow of our proposed work
+                                                                      Coding (EC) schemes within a unified environment. Finally,
+                                                                      we create OpenStack Swift rings and EC containers for each
+     4.1. Selection from Existing Erasure Coding                      storage policy to enable comparative analysis and evaluation
+          Techniques                                                  of the performance of different EC setups.
+          Our work prioritizes selecting suitable Erasure Cod-            Simulator (SimEDC) for Testbed: We incorporate a
+     ing (EC) techniques for assessing time efficiency and fault      simulator called SimEDC into the testbed to assess the
+                                                                      fault tolerance of EC schemes. SimEDC generates synthetic
+
+
+
+                                                   tp
+     tolerance in OpenStack Swift cloud storage systems. EC
+     techniques are employed in data storage and transmission         workloads and provides reliability metrics such as the prob-
+     systems to improve reliability and fault tolerance. They offer   ability of data loss, repair efficiency, number of megabytes
+     a means to safeguard data against the loss of specific storage   of data loss, bandwidth reduction, and single-chunk repair
+     components or network links by producing supplementary           ratio. It offers flexibility to add new EC schemes and modify
+
+
+
+                                                     ee
+     redundant information. Several widely utilized erasure EC        existing ones, allowing for comprehensive system perfor-
+     techniques include XOR-based Erasure Codes [15], Foun-           mance assessment in various settings.
+     tain Codes [16], Luby Transform (LT) [17] Codes and Reed-            By utilizing these methodologies and incorporating
+     Solomon Codes (RS).                                              SimEDC, the research aims to evaluate the time efficiency
+
+
+
+
+                                                       rr
+          XOR-based erasure codes, also known as XOR-based            and fault tolerance of EC schemes in OpenStack Swift cloud
+     parity codes, belong to a category of EC techniques that         storage systems.
+     employ bit-wise XOR operations to calculate parity infor-
+                                                                      4.3. Datasets for Testbed
+
+
+
+                                                         ev
+     mation. These codes find common use in RAID (Redundant
+     Array of Independent Disks) systems, particularly RAID 5             As our analysis demands working with not only different
+     and RAID 6. While XOR-based codes are relatively simple          sizes of data but also a large number of files to benchmark
+     and efficient, they have limitations when it comes to with-      the EC schemes thoroughly. For making our needs mitigated
+     standing multiple simultaneous failures. Fountain codes,         we have created our dataset to perform data analysis. The
+     on the other hand, are a type of erasure code designed to        dataset we create, not only has a range of files we need for
+     facilitate efficient and reliable data transmission over unre-   data analysis, but it also consists of 4 different types of files
+     liable or lost networks. They excel in scenarios involving       which include text, image, video, and audio files. Secondly,
+                                                                      to mitigate the need to use a vast number of files, we are
+
+                                        no
+     smaller data sets. However, as the data size increases, the
+     efficiency of fountain codes diminishes, and other erasure
+     coding techniques, such as systematic codes like RS, may
+     deliver better performance. LT code, which is a variant of
+     fountain codes, utilizes a random binary generator matrix to
+                                                                      using a benchmark dataset named COCO-17 [54].
+
+                                                                      4.4. Approaches for Data Analysis
+                                                                          For our desired result we analyze the dataset with a
+                                                                      different approach. For instance, to check the time efficiency
+     generate encoded packets. While LT codes offer a limited er-
+                                                                      of EC we try to upload data on the cloud-based storage
+     ror correction capability, they are not as powerful as erasure
+
+                   rin
+     coding techniques like RS codes. We follow specific criteria
+     to ensure a fair evaluation, considering popularity, extensive
+
+
+                       t
+     use, and compatibility with OpenStack Swift infrastructure.
+     RS codes are chosen as the EC technique due to their
+     vital role in providing fault tolerance and data integrity in
+                                                                      system OpenStack Swift. We then download and delete files
+                                                                      from OpenStack Swift. For each function, we measure the
+                                                                      time to upload, download and delete time. We repeat this
+                                                                      method for three EC schemes which are based on Reed-
+                                                                      Solomon (RS) (5+3), (7+5), and (10+4). We try these func-
+                                                                      tionalities both for remote and local testbeds. The testbed
+     OpenStack Swift. By adhering to these selection criteria and
+                                                                      also includes simulator SimEDC which gives us the result
+
+      ep
+     leveraging Reed-Solomon codes, we aim to assess EC algo-
+     rithms relevant to OpenStack Swift’s cloud storage system,
+     emphasizing high availability, durability, and reliability.
+
+     4.2. Methods Used to Setup the Testbed
+                                                                      for fault tolerance of EC for various EC schemes.
+
+                                                                      5. Dataset
+                                                                          A dataset refers to a structured collection of data that is
+
+Pr        Environment
+         Local Testbed EC Setup: We set up the local testbed
+     environment by installing OpenStack Swift on virtual ma-
+     chines (VMs) and configuring Erasure Coding (EC) schemes.
+     Storage policies are defined, OpenStack Swift rings are built,
+                                                                      organized and stored for specific purposes such as analysis,
+                                                                      research, or information retrieval. It can be composed of var-
+                                                                      ious types of data, including text, numerical values, images,
+                                                                      audio, or video. We use two different datasets to work on our
+
+
+     : Preprint submitted to Elsevier                                                                                    Page 6 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                 Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+     problem. One is our own created dataset named MCSD-100
+     [55] and another one named COCO-17.
+
+     5.1. Multitype Cloud Storage Dataset
+          (MCSD-100): A Comprehensive Collection of
+          100 Text, Audio, Image, and Video Files
+          We create MCSD-100 [55] to solve the task that we work
+                                                                                                iew
+                                                                                                    ed
+     on in this paper. The aim of creating a dataset for object
+     storage performance testing is to establish a baseline result.
+     In a previous study, Noor et al.[56] used the MSCOCO
+     dataset and semEval2017 dataset for object storage opti-
+     mization. However, there are no existing datasets to evaluate
+     object storage performance. Most literature shows tests with
+     different file sizes and data types but lacks file references or
+     data used. This inspired the creation of a dataset containing
+
+
+
+                                                  tp
+     all file sizes and data types for resource allocation and opti-
+     mization tests. This self-created dataset is carefully curated
+     to evaluate the performance of the OpenStack Swift cloud
+     storage system, specifically regarding its Erasure Coding
+
+
+
+                                                    ee
+     (EC) policy and fragmentation capabilities. We face chal-
+     lenges in finding an existing dataset that meets our criteria.
+     So we compile a diverse range of data types and sizes,
+     representing real-world scenarios. The dataset includes 25
+
+
+
+                                                      rr
+     files each of text, mp3, jpeg, and mp4 formats, with sizes
+     reflecting common file size distributions encountered in
+     cloud storage environments. By analyzing the behavior of
+
+
+
+
+                                                        ev
+     these files under different EC schemes, we gain valuable
+     insights into OpenStack Swift’s storage mechanisms. The                        Figure 2: Testbed environment setup
+     dataset is openly available for reproducibility and further
+     studies. Our findings highlight OpenStack Swift’s efficiency
+     in handling different file types and sizes, making it suit-        analyze the results from the output. We also used a simulator
+     able for enterprise data management, multimedia content            to measure the fault tolerance of EC.
+     platforms, image hosting, long-term data preservation, and              Testbed Environment Setup: To set up Erasure Coding
+     collaborative content creation.                                    (EC) in OpenStack Swift, we installed OpenStack Swift
+
+
+                                        no
+     5.2. COCO-17 (Common Objects in Context-17)
+          The COCO-17 [54] dataset is widely used in computer
+     vision, providing annotated photos across 17 categories for
+     object identification and picture interpretation tasks. It of-
+     fers diverse real-world scenarios, accurate annotations and
+                                                                        locally and created an EC policy [57] description file. The
+                                                                        file specifies the EC method, the number of data and par-
+                                                                        ity fragments, and the object segment size. We used the
+                                                                        OpenStack Swift ring [58] builder to create a ring for each
+                                                                        policy, which defines the cluster layout and ensures the even
+                                                                        distribution of fragments. The ring builder also determines
+     serves as a benchmark for performance comparisons. We              the number of copies needed for data availability. After
+
+
+                   rin
+     utilized a subset of 3000 photos for our investigation, en-
+     hancing our analysis while managing resources. COCO-17
+     improves our understanding of object storage systems and
+
+                       t
+     contributes to advancements in the field of data management
+     and storage.
+                                                                        distributing the ring file to storage nodes, we prepare and
+                                                                        sent the data to the OpenStack Swift object storage system
+                                                                        using the OpenStack Swift API. Additionally, we implement
+                                                                        our benchmark data (COCO-17) and our dataset on a remote
+                                                                        server using SSH for network access. This secure connection
+                                                                        allowed us to configure OpenStack Swift and EC on the
+
+
+      ep
+     6. Experimental Evaluation
+     6.1. Experimental Setup
+         The experimental setup consists of two testbed environ-
+     ment setups, datasets for the testbeds, and testbed simu-
+     lations implementation. For the testbed environment after
+                                                                        remote server. By modifying the Swift.conf file, we define
+                                                                        three distinct EC policies (10+4, 7+5, and 5+3) with differ-
+                                                                        ent parameters. We specifically choose 10+4, 7+5, and 5+3
+                                                                        as for swift’s replication number. In our SAIO (Swift All In
+                                                                        One) we use 3 replicators and also consist of 1 original. As
+                                                                        for the 10+4 scheme, we can have 10 data fragments and 4
+
+Pr   installing OpenStack Swift for both the local and remote
+     testbed, we set up EC for both environments. Then for the
+     setup dataset for the testbed, we use some pipeline to upload,
+     download, and delete data on OpenStack Swift and then
+                                                                        parity fragments to reconstruct any data, if it gets lost. Swift
+                                                                        uses most cases 3-4 replicators for data backup and disaster
+                                                                        recovery, where erasure coding is used for reconstructing
+                                                                        data from the incident. In these 3-4 replicators persist with at
+
+     : Preprint submitted to Elsevier                                                                                     Page 7 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                 Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+     least one parity node of EC to reconstruct the data. Which is
+                                                                                             Benchmark Dataset Upload Time Analysis (COCO-17)
+     the first thing to choose not more than 5 and less than 3 parity                                                    Remote Swift Server
+
+
+
+
+                                                                                                                        iew
+     fragments based Scheme. Using the OpenStack Swift API                                                               10+4         7+5       5+3
+     or command-line tools, we can now assign these policies to                              0.15
+
+     specific storage containers or objects, providing flexibility
+     based on our data needs. Following, the environment has
+
+                                                                          Upload Time (S)
+                                                                                             0.10
+
+     been set up in two kinds of servers. One in local and one in
+     remote. The local server consists of a 4-core CPU along with
+
+
+                                                                                                                            ed
+                                                                                             0.05
+
+
+     8GB of RAM with HDD for storage, on the other hand, the
+     remote server consists of a 2-core CPU with 4GB of RAM
+                                                                                             0.00
+                                                                                                    0 KB - 150      151 KB - 250 251 KB - 350 351 KB - 450 451 KB - 550
+
+     and SSD for storage.                                                                              KB               KB           KB           KB           KB
+
+         Datasets for Testbed: We analyze the behavior of differ-                                                                   Size range (KB)
+
+     ent data types with various EC regulations for upload, down-
+     load, and deletion time frames. We set up EC policies in our       Figure 3: Benchmark dataset (COCO-17 remote OpenStack
+     OpenStack Swift server and created an OpenStack Swift ring         Swift server)
+
+
+
+
+                                                  tp
+     to determine storage locations. An AUTH token is generated
+     using the curl command for authentication. We establish an
+     EC container to manage data and organize it. We develop
+     Python scripts for analyzing upload, download, and delete
+                                                                                             Benchmark Dataset Upload Time Analysis (COCO-17)
+                                                                                                                          Local Swift Server
+
+
+
+
+                                                    ee
+                                                                                                                         10+4         7+5       5+3
+     times. OpenStack swift API works with the Python script                                 0.25
+     and data pipeline maintained with this. The upload script
+                                                                                             0.20
+     uses the curl command to upload files and measure the time
+
+                                                                          Average Time (S)
+     taken. The download script downloads files from OpenStack
+                                                                                             0.15
+
+
+
+
+                                                      rr
+     Swift and calculates the download time. The delete script                               0.10
+
+     removes files from OpenStack Swift and measures the time                                0.05
+
+     taken. These scripts allow us to analyze data locally and                               0.00
+                                                                                                    0 KB - 150 KB    151 KB - 250     251 KB - 350    351 KB - 450   451KB - 550KB
+     remotely based on time. After fetching the data to the object
+
+
+
+                                                        ev
+                                                                                                                         KB               KB              KB
+
+
+     server, EC stores the data by dividing it into fragments and                                                                   Size range (KB)
+
+     turning it into hash and stores.
+         Testbed Simulator Setup: SimEDC is a discrete-event            Figure 4: Benchmark dataset (COCO-17 local OpenStack
+     simulator designed for analyzing erasure-coded data center         Swift server)
+     storage reliability. It follows a process involving config-
+     uration, initialization, event scheduling, event processing,
+     repair and redundancy techniques, data loss metrics collec-            Figure 4 analyzes the upload time of a benchmark dataset
+
+
+                                        no
+     tion, simulation termination, and result analysis. SimEDC
+     allows researchers to customize simulations and evaluate
+     the dependability of erasure-coded storage under various
+     scenarios.
+
+     6.2. Experimental Results on Upload, Download,
+                                                                        (COCO-17) on a local OpenStack Swift server, with the x-
+                                                                        axis representing the average time in seconds and the y-axis
+                                                                        indicating the size range in KB. The bars, red and yellow
+                                                                        for 7+5 and 5+3 data fragmentation respectively, and blue
+                                                                        for 10+4, demonstrate the relationship between upload time
+                                                                        and size range. Within the range of 0 KB to 150 KB, the
+          and Deletion                                                  10+4 bar exhibits the longest upload time, while the red
+
+
+                   rin
+         Figure 3 analyzes the upload time of a benchmark dataset
+     (COCO-17) on a remote OpenStack Swift server. The x-axis
+     represents upload time in seconds, and the y-axis shows the
+
+                       t
+     size range in KB. Three bars are present: blue for 10+4 data
+     fragmentation, red for 7+5, and yellow for 5+3. Within the
+                                                                        and yellow bars show shorter times. This pattern persists
+                                                                        across other ranges, except for the range of 451 KB to 550
+                                                                        KB where the time for 10+4 decreases slightly. The 7+5 data
+                                                                        fragmentation consistently shows the shortest time, followed
+                                                                        by 5+3. Overall, the graph indicates that 10+4 takes the
+     0 KB to 150 KB range, the 10+4 bar exhibits the longest            longest time up to the range of 450 KB, with a slight decrease
+
+
+      ep
+     upload time, approximately 0.10 seconds, while the red and
+     yellow bars take around 0.07 and 0.05 seconds, respectively.
+     This relationship holds across other ranges as well. The
+     10+4 data fragmentation consistently takes the longest time,
+     while 5+3 takes the shortest. The upload time increases with
+     larger data size ranges. Overall, the graph demonstrates the
+                                                                        in the 451-550 KB range, while 5+3 exhibits the shortest
+                                                                        time. However, it is seen
+
+                                                                            In Figures 3 and 4, the non-linear increase in perfor-
+                                                                        mance with file size is primarily attributed to bandwidth
+                                                                        limitations, indicating a bottleneck in data transfer. To look
+
+Pr   relationship between upload time and data size range, with
+     10+4 taking the longest time and 5+3 taking the shortest.
+                                                                        out for the bottleneck, we find out that, while we populate
+                                                                        the enormous files, the upload time increases. It occurs as
+                                                                        a result of the bottleneck caused by the local testbed’s low
+                                                                        physical hardware performance and restricted bandwidth.
+
+
+     : Preprint submitted to Elsevier                                                                                                                                Page 8 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                            Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+
+                           Upload Time Analysis for Local Server                                                       Delete Time Analysis for Local Server
+                                         5+3       7+5       10+4                                                                    5+3     7+5      10+4
+
+
+
+
+       Time (s)
+                  60
+
+
+
+                  40
+
+
+                                                                                                  Time (s)
+                                                                                                             0.8
+
+
+                                                                                                             0.6
+
+
+                                                                                                             0.4
+                                                                                                                                     iew
+                                                                                                                                         ed
+                  20
+                                                                                                             0.2
+
+
+                   0                                                                                         0.0
+                       0           250000               500000            750000      1000000                           50000   100000     150000    200000   250000   300000    350000
+
+                                                  File Size (KB)                                                                             File Size (KB)
+
+
+
+                               Figure 5: Upload time analysis                                                             Figure 7: Delete time analysis
+
+
+
+         Figure 5 compares upload times for our dataset (MCSD-
+     100) on a local server, ranging in size from 100 KB to
+     10,00,000 KB, for the 5+3, 7+5, and 10+4 EC policies.                tp                    The x-axis represents file sizes in KB, and the y-axis repre-
+                                                                                                sents delete time in seconds. Each data point corresponds
+                                                                                                to the delete time for a specific file size. Analyzing the
+     The x-axis represents the average time in seconds, and the
+     y-axis represents the size range in KB. The graph reveals
+     that upload time increases as the data file size grows for all
+     three policies. Comparing the lines for the three policies, it         ee                  graph’s data, it observes that the average deletion time for
+                                                                                                files on OpenStack Swift using these three EC policies is
+                                                                                                approximately 0.0952 seconds.
+
+
+
+
+                                                                              rr
+     is evident that higher fragmentation leads to longer upload
+     times which decreases the time efficiency of OpenStack                                                  Upload Time Comparison Graph for Remote Server
+     Swift.                                                                                                                          5+3     7+5      10+4
+
+
+
+
+                                                                                ev
+                                                                                                              20
+
+
+                                                                                                              15
+                           Download Time Analysis for Local Server
+
+                                                                                                  Time (s)
+                                         5+3       7+5       10+4                                             10
+                  12
+
+                  10                                                                                           5
+
+                   8
+                                                                                                               0
+
+       Time (s)
+                                                                                                                   0        200000         400000         600000        800000
+                   6
+
+                   4
+
+                   2
+
+                   0
+                       0         50000
+                                                    no
+                                               100000
+
+                                                  File Size (KB)
+                                                                 150000      200000   250000
+                                                                                                                                            File Size (KB)
+
+
+
+                                                                                                                       Figure 8: Upload time comparison
+
+
+                                                                                                    Figure 8 compares upload times for our dataset MCSD-
+
+
+                             rin
+                             Figure 6: Download time analysis
+
+
+
+
+                                 t
+          Figure 6 compares the download times of three erasure
+     coding (EC) policies—5+3, 7+5, and 10+4—across a range
+     of file sizes from 100 KB to 2,50,000 KB. The x-axis repre-
+                                                                                                100, ranging from 100 KB to 8,00,000 KB, on a remote
+                                                                                                server using the 5+3, 7+5, and 10+4 EC policies. The x-axis
+                                                                                                represents file sizes in KB, and the y-axis shows upload time
+                                                                                                in seconds. Increasing file sizes result in longer upload times
+                                                                                                for all three policies. Comparing the line graphs reveals that
+                                                                                                larger data fragmentation leads to extended upload times on
+     sents the average time in seconds, and the y-axis represents                               the OpenStack Swift storage system.
+
+
+      ep
+     the size range in KB. As file size increases, download time
+     increases for all three policies. Comparing the line graphs,
+     it is clear that higher fragmentation levels (10+4) result
+     in longer download times on the OpenStack Swift storage
+     system in comparison to the lower fragment.
+                                                                                                    Figure 9 compares download times for 100 files ranging
+                                                                                                from 100 KB to 2,50,000 KB on a remote server using
+                                                                                                the 5+3, 7+5, and 10+4 EC policies. The y-axis represents
+                                                                                                time in seconds, and the x-axis represents file sizes in KB.
+                                                                                                Download times increase as file sizes increase for all three
+
+Pr       Figure 7 compares the delete timings of three erasure
+     coding (EC) policies—5+3, 7+5, and 10+4—across a range
+     of file sizes from 100 KB to 3,50,000 KB on a local server.
+                                                                                                policies. Comparing the line graphs reveals that higher levels
+                                                                                                of fragmentation (10+4) result in longer download times.
+                                                                                                    Figure 10 compares delete times for 100 files ranging
+                                                                                                from 100 KB to 1,50,000 KB on a remote server using
+                                                                                                the 5+3, 7+5, and 10+4 EC policies. The y-axis represents
+
+     : Preprint submitted to Elsevier                                                                                                                                  Page 9 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                                Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+                   Download Time Comparison Graph for Remote Server
+                                                                                                to study waiting times. According to the results from the
+                                              5+3       7+5     10+4
+                                                                                                table, we can plot the waiting time. Figure 11 demonstrates
+
+
+
+
+                                                                                                                                     iew
+                      6
+                                                                                                how waiting times grow exponentially as size increases.
+                                                                                                Therefore, larger files require greater waiting time.
+                      4
+
+
+        Time (s)
+                                                                                                                                  Waiting Time Analysis
+                      2                                                                                              25
+
+
+
+                      0
+                           0        50000           100000      150000
+
+
+                                                       File Size (KB)
+
+
+
+                               Figure 9: Download time comparison
+                                                                         200000        250000
+
+
+
+                                                                                                  Waiting Time (S)
+                                                                                                                     20
+
+
+                                                                                                                     15
+
+
+                                                                                                                     10
+
+
+                                                                                                                      5
+                                                                                                                                         ed
+                                                                         tp
+                                                                                                                      0
+                                                                                                                            100        200          300       400        500
+
+                    Delete Time Comparison Graph for Remote Server                                                                           FIle Size (MB)
+                                              5+3       7+5     10+4
+
+                    0.15
+                                                                                                                          Figure 11: Waiting time analysis
+
+
+
+       Time (s)
+                    0.10
+
+
+
+                    0.05                                                   ee                   6.4. Results from Testbed Simulator: SimEDC
+                                                                                                    Table 3 we project output which is generated by exe-
+
+                    0.00
+                           0                50000               100000
+
+
+                                                                             rr
+                                                                              150000
+                                                                                                cuting the Python script simedc.py with various arguments.
+                                                                                                This script is designed to simulate EC along with storage
+                                                                                                systems by taking into account various parameters such as
+
+
+
+
+                                                                               ev
+                                                       File Size (KB)
+                                                                                                the quantity of data chunks, parity chunks, and the coding
+                                                                                                scheme utilized. The absence of patterns with a probability
+                                Figure 10: Delete time comparison                               of zero indicates that there were no instances where the
+                                                                                                loss of data was certain. A reduced PDL value indicates
+                                                                                                a decreased probability of data loss within the simulated
+     delete time in seconds, and the x-axis represents file sizes in                            system. A greater value of the RE metric signifies a wider
+     KB. Each data point on the graph corresponds to the deletion                               range of potential error and suggests that the estimated mean
+     time of a specific file size. Upon analyzing the data, it was                              may lack precision. A reduced Non-Overlapping Maximum-
+
+
+                                                             no
+     found that the average delete time for the three EC policies
+     on the OpenStack Swift storage system is approximately
+     0.0481 seconds. If we compare the two downloading time
+     analyses of local and remote servers, it is visible that, the
+     ratio of 5+3, 7+5, and 10+4 schemes to download data
+                                                                                                Distance-to-Loss (NOMDL) value denotes an enhanced effi-
+                                                                                                cacy in the utilization of storage capacity while encountering
+                                                                                                data loss. In a system devoid of any obstructed requests, all
+                                                                                                data and repair requests were effectively attended to, and
+                                                                                                no instances were observed where the requested data was
+     differences is similar from one to another. On the other                                   either unavailable or inaccessible. A reduced repair ratio for
+     hand, the ratio of these schemes to write data or download
+
+                                rin
+     data differences has a huge time gap for the bigger scheme
+     (10+5), which is 3.8 seconds. where in remote it is less than
+
+
+                                    t
+     0.75 seconds. This analysis is crucial to find out hardware
+     and I/O impacts in reconstruction. Downloading data is
+     synonymous with writing data to a storage system. We try
+                                                                                                a single chunk implies that the system is capable of effec-
+                                                                                                tively restoring and retrieving data without necessitating the
+                                                                                                reconstruction of individual chunks.
+
+                                                                                                6.5. Results from Scenario generated test:
+                                                                                                     The simulator shows some results based on the imag-
+     download time analysis in our system to measure network                                    inary scene which are related to power outrage, broken
+
+
+      ep
+     and storage capacity, and it is clear in Figure 7 and Figure 10
+     that bandwidth and storage device variances have an impact
+     on data writing as well as data reconstruction. Which is an
+     impactful finding for fault tolerance.
+                                                                                                pipelines, rack fails, rack repair, node fail, node transient
+                                                                                                fail, node transient repair, disk fail, and disk repair mostly.
+                                                                                                We try to create similar events in our VM to test out the
+                                                                                                data recovery process to trigger the EC reconstruction. We
+                                                                                                remove objects from the outside, instead of using the Open-
+
+
+Pr   6.3. Data Analysis of Waiting Time for Remote
+          Testbed
+         Table 2 displays the real-time, user time, system time,
+     and waiting time for each of the 20 data files that we trans-
+     ferred to OpenStack Swift from a distant virtual machine
+                                                                                                Stack CLI or API to create an event. We also delete nodes
+                                                                                                and remove nodes from the designed proxy and network for
+                                                                                                logging missing in the OpenStack. After that, we trigger the
+                                                                                                OpenStack Swift auditor to find out the missing. later on,
+                                                                                                we manually trigger reconstruction.py from the swift run
+
+     : Preprint submitted to Elsevier                                                                                                                               Page 10 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                 Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+       Data size (MB)                   Real time (s)              User time (s)                  System time (s)       Waiting time (s)
+       1.2                              0.459                      0.009                          0.031                 0.419
+
+
+
+
+                                                                                                     iew
+       4.4                              0.392                      0                              0.024                 0.368
+       10.5                             0.595                      0.012                          0.021                 0.562
+       15.7                             0.64                       0.008                          0.033                 0.599
+       20.8                             0.948                      0.004                          0.049                 0.895
+       26.5                             0.967                      0.038                          0.028                 0.901
+
+
+
+                                                                                                         ed
+       30.8                             1.155                      0.026                          0.071                 1.058
+       39.9                             1.477                      0.016                          0.083                 1.378
+       42.2                             1.486                      0.042                          0.077                 1.367
+       57.4                             1.781                      0.037                          0.096                 0.648
+       66.1                             2.15                       0.029                          0.114                 2.007
+       70.6                             2.551                      0.036                          0.115                 2.4
+       85.2                             3.496                      0.078                          0.102                 3.316
+
+
+
+
+                                                    tp
+       98.1                             4.579                      0.051                          0.163                 4.365
+       118.4                            4.713                      0.071                          0.166                 4.476
+       233.5                            12.845                     0.145                          0.428                 12.272
+       321.5                            12.758                     0.171                          0.565                 12.022
+
+
+
+
+                                                      ee
+       417.5                            13.913                     0.187                          0.817                 12.909
+       514.7                            22.926                     0.268                          0.896                 21.762
+       560.9                            22.341                     0.31                           0.926                 21.105
+
+
+
+
+                                                        rr
+     Table 2
+     Upload time, real-time, user time, system time, and waiting time for different size data
+
+                     Data                                                 VARIABLES
+
+
+
+
+                                                          ev
+                     Fragment                                                                                  Single- chunk
+                                  Num zero      PDL           RE          NOMDL (bytes)      BR
+                                                                                                               repair ratio
+                     5+3          0             4.719e-06     158.90      1.931e-06          0.00000e+00       0.000
+                     6+4          0             1.959e-06     142.23      2.503e-06          0.00000e+00       0.000
+                     7+5          0             1.131e-06     166.43      1.532e-06          0.00000e+00       0.000
+                     8+7          0             7.203e-10     164.03      1.271e-06          0.00000e+00       0.000
+                     9+6          0             1.068e-26     196.03      1.430e-06          0.00000e+00       0.000
+                     10+4         0             4.643e-84     195.80      2.253e-06          0.00000e+00       0.000
+
+
+
+
+     Table 3
+                     10+7
+                     11+8
+                     12+9
+                                  0
+                                  0
+                                  0
+
+
+     Output simulation table of SimEDC
+                                         no     2.506e-12
+                                                3.955e-07
+                                                1.222e-08
+                                                              195.93
+                                                              187.13
+                                                              181.83
+                                                                          1.716e-06
+                                                                          1.820e-06
+                                                                          1.192e-06
+                                                                                             0.00000e+00
+                                                                                             0.00000e+00
+                                                                                             0.00000e+00
+                                                                                                               0.000
+                                                                                                               0.000
+                                                                                                               0.000
+
+
+
+
+                   rin
+     to reconstruct the data and rebalance the ring with remake
+     rings from the swift bin. We run the unit test and functional
+     test to verify the functionality of workable OpenStack Swift
+
+                       t
+     without the missing nodes in the server.
+                                                                            data sets demonstrates several key benefits - reduced proba-
+                                                                            bility of data loss, optimal storage utilization, effective repair
+                                                                            mechanisms, and absence of obstructed requests.
+
+                                                                            7.1. Comparative Analysis
+                                                                                 Table 5 and 6 show the work on different distributed
+     7. Experimental Findings
+
+      ep  After analyzing the results of our experiments from
+     Table 4, we can conclude that there is a tradeoff between
+     data and parity fragments in terms of time efficiency. As
+     the number of data and parity fragments increases, the time
+                                                                            storage systems along with our work. It also highlights how
+                                                                            our work is different than any other paperwork. Yunnan
+                                                                            et al. [12] worked on Improving Security and Storage Ef-
+                                                                            ficiency on HDFS. This paper presents a novel approach
+                                                                            utilizing HDFS, network coding, and multi-node reading
+     efficiency of the EC schemes decreases. We observe that the            to enhance the security and storage efficiency of the dis-
+
+Pr   waiting time increases with the size of the file. As the file size
+     grows larger, it takes more time to process and handle the
+     file. Furthermore, the outcome summary of the remaining
+                                                                            tributed file system. Through experimentation, the approach
+                                                                            demonstrates significant enhancements in file transfer and
+                                                                            storage safety. Additionally, compared to the original HDFS
+                                                                            model, the proposed method achieves a threefold increase
+
+     : Preprint submitted to Elsevier                                                                                          Page 11 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                 Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+                                                              LOCAL SERVER
+                                               Percentage of              Percentage of                      Percentage of
+                                   Upload                       Download                       Delete
+
+
+
+
+                                                                                               iew
+                   EC Schemes                 Increased Time             Increased Time                     Increased Time
+                                  Time (s)                      Time (s)                      Time (s)
+                                                for Upload                for Download                         for Delete
+                       5+3          3.832            -           0.713          -               0.09                -
+                       7+5          4.671         21.89%         0.924       29.60%             0.09               0%
+                       10+4         4.921         28.41%         0.944       32.38%             0.09               0%
+                                                             REMOTE SERVER
+
+
+
+
+                                                                                                   ed
+                       5+3          1.259            -           0.998          -               0.05               -
+                       7+5          1.767         40.32%         1.362       36.47%             0.05              0%
+                       10+4         1.823         44.76%         1.984       98.80%             0.05              0%
+     Table 4
+     Server performance analysis using average time for upload, download and delete
+
+                                              Object
+
+
+
+
+                                                  tp
+                                                               Testbed                                        Benchmark               File
+      Name                Worked on           Storage                        Techniques         Simulator
+                                                             Environment                                       Testing              Analysis
+                                              System
+                            Failure repair                                     Erasure
+      Xiaolu et al.,
+                          in erasure-coded    HDFS           X               Coding (RS,        X             X                     X
+       2022 [11]
+
+
+
+
+                                                    ee
+                               storage                                       Azure-LRC)
+                             Capacity
+      Ra et al.,                                 Ceph
+                           planning and                      VM              X                  X             FIO                   X
+      2018 [10]                               (OpenStack)
+                          cost analyzing
+                                                                              Erasure                         TestDFSIO,
+
+
+
+
+                                                      rr
+      Yehia et al.,                           HDFS and
+                          Fault Tolerance                    X                Coding,           X               Rados               X
+       2018 [13]                                Ceph
+                                                                             Replication                        Bench
+                             Performance
+                                                                             Replication,                                            Files:
+      Akintoye et al.,       evaluation of    OpenStack
+
+
+
+
+                                                        ev
+                                                             X                  RS,             X             X                     50 MB,
+        2018 [59]         lightweight cloud     Swift
+                                                                             and FMSR                                               102 MB
+                           storage systems
+                                                                  Four
+                          Security and
+      Yannan et al.,                                         servers under   Network
+                            storage           HDFS                                              X             X                     0 - 16 GB
+        2015 [12]                                              the public    Coding
+                           efficiency
+                                                                network
+                                                             LDAP and
+      Robert et al.,      Data availability
+                                              HDFS            Kerberos       X                  X             X                     X
+       2012 [14]           and durability
+
+
+
+      Our work
+                                        no
+                          Time efficiency
+                            and fault
+                            tolerance
+                                              OpenStack
+                                                Swift
+                                                               servers
+
+
+                                                               Remote
+                                                              server and
+                                                             local server
+                                                                                Erasure
+                                                                                 Coding
+                                                                             (Reed-Solomon
+                                                                                 Code)
+                                                                                                SimEDC
+                                                                                                                  COCO-17,
+                                                                                                                     Own
+                                                                                                                   dataset
+                                                                                                               (MCSD-100) and
+                                                                                                              scenario generated
+                                                                                                                                    100 KB -
+                                                                                                                                      1 GB
+
+                                                                                                                      test
+     Table 5
+
+                    rin
+     Comparative analysis of related works for content comparison and used modules comparison
+
+
+
+                        t
+     in file reading speed. Xiaolu et al. [11] introduce FastPR,       block to check the data availability and durability of HDFS.
+     a proactive repair solution that efficiently combines two         Comes up with the conclusion that HDFS is (almost) always
+
+
+      ep
+     repair techniques, migration, and reconstruction, to paral-
+     lelize the repair process across the storage cluster. FastPR
+     optimally coordinates the relocation of STF node chunks
+     and the decoding of chunks using Erasure Coding. This
+     integration enables a fast and parallelized repair operation.
+     Robert et al. [14] analyze data availability and durability
+                                                                       available and (almost) never loses data.
+                                                                           Ra et al. [10] seek to address inquiries by conducting
+                                                                       thorough microbenchmarks, aiming to gain a deeper under-
+                                                                       standing of Ceph’s performance in a hyper-converged cloud
+                                                                       environment utilizing all-flash storage. Yehia et al. [13] eval-
+                                                                       uate the fault tolerance performance of Hadoop Distributed
+
+Pr   with the Hadoop Distributed File System. He worked on
+     a few parameters like GC (Garbage Collection), Execute
+     Absence, Bugs, Space/object Exhausted, User Application,
+     others(unknown), Block loss, and Probability of losing a
+                                                                       File System (HDFS) [37] and Ceph, focusing on the use of
+                                                                       Erasure Coding (EC). It introduces a new EC policy called
+                                                                       Dynamic Erasure Coding Policy Allocation (DECPA) to
+                                                                       minimize stripes and storage usage. The authors explain how
+
+
+     : Preprint submitted to Elsevier                                                                                   Page 12 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                    Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+                              Time               Cost               Storage                               Data Availability         Fault
+            Name                                                                       Failure Repair
+                            Efficiency         Analyzing           Efficiency                              and durability         Tolerance
+                                                                                        Significantly
+
+        Xiaolu et al.,
+         2022 [11]
+                                X                  X
+
+
+
+                                           Write operations
+                                                                       X
+                                                                                           reduces
+                                                                                       the repair time
+                                                                                       for packet size
+                                                                                       by 37.7-52.3%
+                                                                                       and 1.9-24.7%
+                                                                                                          iew    X                    X
+
+
+
+
+                                                                                                              ed
+                                                are more
+                                             expensive than
+                                            read operations,       61%72% of
+       Ra et al.,
+                                X             especially for        total CPU                X                   X                    X
+       2018 [10]
+                                           smaller block size     consumption
+                                              and solution
+                                           shows significant
+                                             cost reduction
+
+
+
+
+                                                       tp
+                                                                    EC is more
+                                                                                                                              Read performance
+                                                                  space-efficient
+                                                                                                                                 in replication
+                                                                     (storage
+       Yehia et al.,                                                                                                                is better
+                                X                  X             requirement for             X                   X
+       2018 [13]                                                                                                              since EC consumes
+                                                                EC are only 66%
+                                                                                                                                   more time
+
+
+
+
+                                                         ee
+                                                                    of that of
+                                                                                                                                  in decoding
+                                                                 3X replication)
+                                                                                        FMSR codes
+                                                                                     have less response
+                                                                                      time in repairing
+       Akintoye et al.,
+
+
+
+
+                                                           rr
+                                X                  X                   X                a single cloud           X                    X
+       2018 [59]
+                                                                                      failure compares
+                                                                                            to RS
+                                                                                       and Replication
+                                                                  File storage
+
+
+
+
+                                                             ev
+       Yannan et al.,                                              time was
+                                X                  X                                         X                   X                    X
+       2015 [12]                                                   extended
+                                                                 by about 25%
+                                                                                                              HDFS is
+                                                                                                                                Probability of
+                                                                                                          (almost) always
+                                                                                                                              losing a block on
+       Robert et al.,                                                                                         available
+                                X                  X                   X                     X                                 a large cluster is
+       2012 [14]                                                                                           and (almost)
+                                                                                                                                   2.1*10e-4
+                                                                                                                never
+                                                                                                                                  in 365 days
+                                                                                                             loses data.
+
+
+
+
+       Our work
+                            Upload and
+                          download time
+                          increases with
+                            increasing
+                            fragments
+                             (44.78%
+                           and 98.60%
+                                         no        X                   X                     X                   X
+                                                                                                                                     EC is
+                                                                                                                                fault tolerant
+                                                                                                                                   based on
+                                                                                                                                  simulation
+
+                           respectively)
+
+     Table 6
+                       rin
+     Result analysis of related work for different benchmark parameters such as time efficiency, cost analyzing, storage efficiency, failure
+
+
+
+                           t
+     repair, data availability and fault tolerance
+
+
+     EC works in both systems, including data chunking and re-                  Storage Regenerating (FMSR) codes. Using a dataset of ran-
+
+
+      ep
+     construction after node failures. Tests using TestDFSIO and
+     Rados Bench benchmarks are conducted to measure read and
+     write performance and evaluate fault tolerance mechanisms.
+     Results show that HDFS replication outperforms EC in read
+     performance but requires more storage, while Ceph shows
+     similar trends with EC performing better in write operations
+                                                                                domly generated files, they measured response times for file
+                                                                                upload, download, and repair operations. The paper presents
+                                                                                numerical comparisons of these times, revealing that RS
+                                                                                had an average upload time of 33.17 seconds for a 50 MB
+                                                                                file, while FMSR took 35.02 seconds and Replication took
+                                                                                65.26 seconds. The authors discuss the impact of emulation
+
+Pr   and requiring less storage.
+         Akintoye et al. [59] conduct a thorough performance
+     evaluation of lightweight cloud storage systems, comparing
+     Replication, Reed-Solomon (RS), and Functional-Minimum
+                                                                                on the results, noting that although emulation yields shorter
+                                                                                response times, it can still be useful for predicting real-world
+                                                                                experimentation outcomes. Additionally, the paper includes
+
+
+
+     : Preprint submitted to Elsevier                                                                                             Page 13 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                 Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+     a review and survey of multiple cloud storage systems,           infrastructure scalability, efforts should be made to reduce
+     providing context for the performance evaluation.                waiting times in OpenStack Swift. By putting these ideas
+
+
+
+
+                                                                                                   iew
+         Our paper addresses the challenges of time efficiency and    into practice, waiting times in OpenStack Swift may be
+     fault tolerance in cloud-based object storage systems, specif-   decreased, improving system speed, lowering latency, better
+     ically focusing on EC. We analyze existing mechanisms            resource use, and improving user experience.
+     and propose innovative strategies to improve time efficiency          Organizing and storing data efficiently in a distributed
+     through caching, data placement, and scheduling optimiza-        storage system has been a challenging task. Through EC,
+     tions. We also explore techniques to enhance fault tolerance     it involves dividing the data into multiple parts using par-
+     and ensure data availability. The goal is to minimize access
+     latency and improve overall system performance. Our paper
+     contributes to the field by proposing new approaches for en-
+     hanced performance in cloud-based object storage systems.
+
+     7.2. Limitation
+                                                                                                       ed
+                                                                      ity bits on partitioned disks. To further enhance the data
+                                                                      structure, a tree structure data model can be employed,
+                                                                      which offers a hierarchical and non-linear organization. This
+                                                                      approach improves data insertion practicality and efficiency
+                                                                      in the disks and allows for flexibility in node sizes.
+
+          Our research work encounters several limitations that
+
+
+
+                                                 tp
+     affect the scope and outcomes of our study. The limitation       References
+     is the inability to integrate our test bed environment with       [1] J. Noor, M. N. H. Shanto, J. J. Mondal, M. G. Hossain, S. Chellappan,
+     the simulator, which is intended to demonstrate the fault             A. A. Al Islam, Orchestrating image retrieval and storage over a cloud
+                                                                           system, IEEE Transactions on Cloud Computing (2022).
+     tolerance capabilities of Erasure Coding. Due to technical
+
+
+
+
+                                                   ee
+                                                                       [2] J. Noor, S. I. Salim, A. A. Al Islam, Strategizing secured image storing
+     constraints, we cannot effectively apply our test bed environ-        and efficient image retrieval through a new cloud framework, Journal
+     ment to the simulator, limiting our ability to conduct com-           of Network and Computer Applications 192 (2021) 103167.
+     prehensive experiments and gather data on Erasure Coding          [3] A. Chiniah, A. Mungur, On the adoption of erasure code for cloud
+     performance in a simulated setting. Additionally, we face a           storage by major distributed storage systems, EAI Endorsed Transac-
+
+
+
+
+                                                     rr
+                                                                           tions on Cloud Systems 7 (21) (2022) e1–e1.
+     limitation in finding appropriate solutions to improve time
+                                                                       [4] K. M. Greenan, D. D. Long, E. L. Miller, T. J. Schwarz, J. J. Wylie,
+     efficiency within our proposed system. Despite an exten-              A spin-up saved is energy earned: Achieving power-efficient, erasure-
+     sive literature review, there is a scarcity of research papers        coded storage., in: HotDep, 2008.
+     addressing this specific aspect. This limitation hinders our      [5] S. Balaji, M. N. Krishnan, M. Vajha, V. Ramkumar, B. Sasidharan,
+
+
+
+
+                                                       ev
+     ability to implement novel approaches for reducing time               P. V. Kumar, Erasure coding for distributed storage: An overview,
+                                                                           Science China Information Sciences 61 (2018) 1–45.
+     inefficiencies. However, these limitations also provide valu-
+                                                                       [6] C. Wang, Q. Wang, K. Ren, N. Cao, W. Lou, Toward secure and
+     able insights for future work. Areas for future exploration           dependable storage services in cloud computing, IEEE transactions
+     include investigating storage scalability for handling larger         on Services Computing 5 (2) (2011) 220–232.
+     files, developing a more robust test bed environment for          [7] Y. Dong, Coop-u: a cooperative update scheme for erasure-coded
+     simulating Erasure Coding performance, and conducting                 storage systems, Arabian Journal for Science and Engineering 43 (12)
+                                                                           (2018) 7385–7396.
+     further research on innovative approaches to enhance time
+                                                                       [8] H.-Y. Lin, W.-G. Tzeng, A secure decentralized erasure code for
+     efficiency.
+
+     8. Conclusion and Future Work      no
+          Our analysis reveals that as the data fragment size in-
+     creases, the processing time in the cloud storage system also
+                                                                           distributed networked storage, IEEE transactions on Parallel and
+                                                                           Distributed Systems 21 (11) (2010) 1586–1594.
+                                                                       [9] X. Pei, Y. Wang, X. Ma, F. Xu, Efficient in-place update with grouped
+                                                                           and pipelined data transmission in erasure-coded storage systems,
+                                                                           Future Generation Computer Systems 69 (2017) 24–40.
+                                                                      [10] M.-R. Ra, Understanding the performance of ceph block storage
+                                                                           for hyper-converged cloud with all flash storage, arXiv preprint
+     increases, leading to delays in our system. Our primary goal          arXiv:1802.08102 (2018).
+
+
+
+                   rin
+     is to enhance time efficiency by minimizing the processing
+     time for files. Additionally, our examination of fault toler-
+     ance data uncovered relative errors in every implemented
+
+
+                       t
+     scheme which can improve by implementing load balanc-
+     ing, scaling, effective resource allocation, and algorithmic
+                                                                      [11] X. Li, K. Cheng, Z. Shen, P. P. Lee, Fast proactive repair in erasure-
+                                                                           coded storage: Analysis, design, and implementation, IEEE Transac-
+                                                                           tions on Parallel and Distributed Systems 33 (12) (2022) 3400–3414.
+                                                                      [12] Y. Ma, Y. Zhou, Y. Yu, C. Peng, Z. Wang, S. Du, A novel approach for
+                                                                           improving security and storage efficiency on hdfs, Procedia Computer
+                                                                           Science 52 (2015) 631–635.
+     optimizations. These measures aim to reduce fault tolerance      [13] Y. Arafa, A. Barai, M. Zheng, A.-H. A. Badawy, Fault tolerance
+     and enhance the overall reliability and performance of our            performance evaluation of large-scale distributed storage systems
+
+
+      ep
+     system. Also, we make our dataset, MCSD-100 public which
+     promotes accessibility and enables future research and col-
+     laboration in the field of cloud storage and data management.
+          OpenStack Swift’s object storage system’s speed and
+     user experience can suffer from prolonged waiting times in
+                                                                           hdfs and ceph case study, in: 2018 IEEE High Performance extreme
+                                                                           Computing Conference (HPEC), IEEE, 2018, pp. 1–7.
+                                                                      [14] R. J. Chansler, Data availability and durability with the hadoop
+                                                                           distributed file system, The USENIX Magazine 37 (1) (2012) 16–22.
+                                                                      [15] J. J. Wylie, R. Swaminathan, Determining fault tolerance of xor-based
+                                                                           erasure codes efficiently, in: 37th Annual IEEE/IFIP International
+
+
+Pr   several ways. In system design and optimization, waiting
+     times must be kept to a minimum. Reducing waiting times
+     can boost system responsiveness, resource efficiency, and
+     total system throughput. Through efficient resource manage-
+     ment, load balancing, improved scheduling algorithms, and
+                                                                           Conference on Dependable Systems and Networks (DSN’07), IEEE,
+                                                                           2007, pp. 206–215.
+                                                                      [16] D. J. MacKay, Fountain codes, IEE Proceedings-Communications
+                                                                           152 (6) (2005) 1062–1068.
+                                                                      [17] F. Uyeda, H. Xia, A. A. Chien, Evaluation of a high performance
+                                                                           erasure code implementation (2004).
+
+     : Preprint submitted to Elsevier                                                                                            Page 14 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+                                     Towards Benchmarking Erasure Coding Schemes In Object Storage System
+
+     [18] S. Ardalan, K. Raahemifar, F. Yuan, V. Geurkov, Reed-solomon              [39] R. Nachiappan, R. N. Calheiros, K. Matawie, B. Javadi, Enhancing ef-
+          encoder & decoder design, simulation and synthesis, in: CCECE                  ficiency of proactive recovery in erasure-coded cloud storage systems,
+          2003-Canadian Conference on Electrical and Computer Engineering.               Available at SSRN 4123756.
+          Toward a Caring and Humane Technology (Cat. No. 03CH37436),
+          Vol. 1, IEEE, 2003, pp. 255–258.
+     [19] J. Arnold, Openstack swift: Using, administering, and developing for
+          swift object storage, " O’Reilly Media, Inc.", 2014.
+     [20] F. Lombardo, S. Salsano, A. Abdelsalam, D. Bernier, C. Filsfils,
+          Extending kubernetes networking to make use of segment routing
+                                                                                                                 iew
+                                                                                    [40] V. Chouhan, S. K. Peddoju, Investigation of optimal data encoding
+                                                                                         parameters based on user preference for cloud storage, IEEE Access
+                                                                                         8 (2020) 75105–75118.
+                                                                                    [41] M. Abebe, K. Daudjee, B. Glasbergen, Y. Tian, Ec-store: Bridging the
+                                                                                         gap between storage and latency in distributed erasure coded systems,
+                                                                                         in: 2018 IEEE 38th international conference on distributed computing
+          over ipv6 (srv6), arXiv preprint arXiv:2301.01178 (2023).
+     [21] C. Guo, L. Wang, X. Tang, B. Feng, G. Zhang, Two-party interactive
+          secure deduplication with efficient data ownership management in
+          cloud storage, J. Inf. Secur. Appl. 73 (103426) (2023) 103426.
+     [22] S. S. Arslan, Durability and availability of erasure-coded storage sys-
+          tems with concurrent maintenance, arXiv preprint arXiv:2301.09057
+          (2023).
+                                                                                                                     ed
+                                                                                         systems (ICDCS), IEEE, 2018, pp. 255–266.
+                                                                                    [42] Z. Cheng, L. Tang, Q. Huang, P. P. Lee, Enabling low-redundancy
+                                                                                         proactive fault tolerance for stream machine learning via erasure
+                                                                                         coding: Design and evaluation, Available at SSRN 4192493.
+                                                                                    [43] R. Nachiappan, R. N. Calheiros, K. M. Matawie, B. Javadi, Optimized
+                                                                                         proactive recovery in erasure-coded cloud storage systems, IEEE
+                                                                                         Access (2023).
+     [23] G. Levitin, L. Xing, Y. Dai, Optimizing uploading and downloading         [44] M. Qin, Z. Fu, A heterogeneous hybrid storage method based on ceph
+
+
+
+
+                                                           tp
+          pace distribution in system with two non-identical storage units,              erasure code, in: 2021 Asia-Pacific Conference on Communications
+          Reliability Engineering & System Safety 231 (2023) 109017.                     Technology and Computer Science (ACCTCS), IEEE, 2021, pp. 182–
+     [24] D. GEETHA, R. SIVASHANKAR, Time-based proxy-encryption for                     186.
+          secure erasure code based cloud storage system.                           [45] D. Manini, M. Gribaudo, M. Iacono, Modeling replication and erasure
+     [25] Y. Song, Q. Zhang, B. Wang, Fachs: Adaptive hybrid storage strategy            coding in large scale distributed storage systems based on ceph,
+
+
+
+
+                                                             ee
+          based on file access characteristics, IEEE Access 11 (2023) 16855–             in: Digitally Supported Innovation: A Multi-Disciplinary View on
+          16862.                                                                         Enterprise, Public Sector and User Innovation, Springer, 2016, pp.
+     [26] C. Yin, Z. Xu, W. Li, T. Li, S. Yuan, Y. Liu, Erasure codes for cold           273–284.
+          data in distributed storage systems, Applied Sciences 13 (4) (2023)       [46] I. Iliadis, Reliability evaluation of erasure-coded storage systems with
+          2170.                                                                          latent errors, ACM Transactions on Storage 19 (1) (2023) 1–47.
+
+
+
+
+                                                               rr
+     [27] Q. Wang, X. Ye, X. Luo, L. Li, H. Chen, A distributed data storage        [47] L. Pu, J. Shi, X. Yuan, X. Chen, L. Jiao, T. Zhang, J. Xu, Ems: Erasure-
+          strategy based on lops, Arabian Journal for Science and Engineering            coded multi-source streaming for uhd videos within cloud native 5g
+          47 (8) (2022) 9767–9779.                                                       networks, IEEE Transactions on Mobile Computing (2023).
+     [28] J. Tanwar, T. Kumar, A. A. Mohamed, P. Sharma, S. Lalar, I. Keshta,       [48] M. Emu, A. Haque, M. Mahmood, M. M. Asif, A. R. Tanvir, R. S.
+          V. Garg, Project management for cloud compute and storage deploy-              Joyeeta, Designing a new scalable load test system for distributed
+
+
+
+
+                                                                 ev
+          ment: B2b model, Processes 11 (1) (2022) 7.                                    environment, Ph.D. thesis, Brac University (2022).
+     [29] X. Zhao, B. Zhu, Z. Zeng, W. Wang, K. W. Shum, G-update: A                [49] S. Kengond, D. Narayan, M. M. Mulla, Hadoop as a service in
+          group-based update scheme for heterogenous erasure-coded stor-                 openstack, in: Emerging Research in Electronics, Computer Science
+          age systems, in: 2022 IEEE 24th Int Conf on High Performance                   and Technology: Proceedings of International Conference, ICERECT
+          Computing & Communications; 8th Int Conf on Data Science                       2018, Springer, 2019, pp. 223–233.
+          & Systems; 20th Int Conf on Smart City; 8th Int Conf on De-               [50] B. Kulkarni, V. Bhosale, Efficient storage utilization using erasure
+          pendability in Sensor, Cloud & Big Data Systems & Application                  codes in openstack cloud, in: 2016 International Conference on In-
+          (HPCC/DSS/SmartCity/DependSys), IEEE, 2022, pp. 1135–1140.                     ventive Computation Technologies (ICICT), Vol. 3, IEEE, 2016, pp.
+     [30] A. B. Nandyal, M. Rafi, M. Siddappa, B. B. Sathish, Improving data             1–5.
+
+
+
+                                            no
+          services of mobile cloud storage with support for large data objects
+          using openstack swift, International Journal of Advanced Computer
+          Science and Applications 12 (6) (2021).
+     [31] P. Siagian, E. Fernando, The design and implementation of a dash-
+          board web-based video surveillance in openstack swift, Procedia
+          Computer Science 179 (2021) 448–457.
+                                                                                    [51] A. Zhou, B. Yi, L. Luo, Tree-structured data placement scheme
+                                                                                         with cluster-aided top-down transmission in erasure-coded distributed
+                                                                                         storage systems, Computer Networks 204 (2022) 108714.
+                                                                                    [52] G. K. Facenda, M. N. Krishnan, E. Domanovitz, S. L. Fong, A. Khisti,
+                                                                                         W.-T. Tan, J. Apostolopoulos, Adaptive relaying for streaming erasure
+                                                                                         codes in a three node relay network, IEEE Transactions on Informa-
+     [32] J. Opara-Martins, R. Sahandi, F. Tian, Critical review of vendor lock-         tion Theory (2023).
+          in and its impact on adoption of cloud computing, in: International       [53] O. Sefraoui, M. Aissaoui, M. Eleuldj, et al., Openstack: toward an
+
+
+                     rin
+          Conference on Information Society (i-Society 2014), IEEE, 2014, pp.
+          92–97.
+     [33] M. Zhang, S. Han, P. P. Lee, Simedc: A simulator for the reliability
+
+
+
+                         t
+          analysis of erasure-coded data centers, IEEE Transactions on Parallel
+          and Distributed Systems 30 (12) (2019) 2836–2848.
+     [34] H. Heo, C. Ahn, D.-H. Kim, Parity data de-duplication in all flash
+                                                                                         open-source solution for cloud computing, International Journal of
+                                                                                         Computer Applications 55 (3) (2012) 38–42.
+                                                                                    [54] T.-Y. Lin, M. Maire, S. Belongie, L. Bourdev, R. Girshick, J. Hays,
+                                                                                         P. Perona, D. Ramanan, C. L. Zitnick, P. Dollár, Microsoft COCO:
+                                                                                         Common objects in context (2014). arXiv:1405.0312.
+                                                                                    [55] Mcsd-100 - google drive, https://drive.google.com/drive/folders/
+          array-based openstack cloud block storage, IEICE TRANSACTIONS                  1V9wciqi9hHwfv9FFRInWS-v7csBLWNkb (2023).
+          on Information and Systems 99 (5) (2016) 1384–1387.                       [56] J. Noor, R. H. Ratul, M. R. A. Uday, J. J. Mondal, M. S. I. Sakif, A. B.
+
+
+      ep
+     [35] Y. Rivera, I. Gutierrez, J. Marquez, Fulcrum rateless multicast dis-
+          tributed coding design, IEEE Access (2023).
+     [36] D.-J. Shin, J.-J. Kim, Cache-based matrix technology for efficient
+          write and recovery in erasure coding distributed file systems, Sym-
+          metry 15 (4) (2023) 872.
+     [37] J. Darrous, S. Ibrahim, Understanding the performance of erasure
+                                                                                         M. A. A. Islam, Sherlock in oss: A novel approach of content-based
+                                                                                         searching in object storage system (2023). arXiv:2303.02105.
+                                                                                    [57] C. L. A. OpenInfra, Storage policies — swift 2.32.0.dev119 documen-
+                                                                                         tation, https://docs.openstack.org/swift/latest/overview_policies.
+                                                                                         html, accessed: 2023-5-30.
+                                                                                    [58] C.       L.      A.      OpenInfra,       The     rings     —      swift
+
+
+Pr        codes in hadoop distributed file system, in: Proceedings of the Work-
+          shop on Challenges and Opportunities of Efficient and Performant
+          Storage Systems, 2022, pp. 24–32.
+     [38] P. M. Chen, E. K. Lee, G. A. Gibson, R. H. Katz, D. A. Patterson,
+          Raid: High-performance, reliable secondary storage, ACM Comput-
+          ing Surveys (CSUR) 26 (2) (1994) 145–185.
+                                                                                         2.32.0.dev112                 documentation,
+                                                                                         openstack.org/swift/latest/overview_ring.html?fbclid=
+                                                                                                                                                    https://docs.
+
+                                                                                         IwAR1VEB7woEEnuX1wdoD5QhW5M8-QB0fX3KcaTFd-EvHxivKmxR-Dm4o-s1o,
+                                                                                         accessed: 2023-5-22.
+                                                                                    [59] S. Akintoye, A. Bagula, Lightweight cloud storage systems: Analysis
+                                                                                         and performance evaluation.
+
+     : Preprint submitted to Elsevier                                                                                                          Page 15 of 15
+
+This preprint research paper has not been peer reviewed. Electronic copy available at: https://ssrn.com/abstract=4713329
+

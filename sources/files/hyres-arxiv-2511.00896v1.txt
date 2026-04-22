@@ -1,0 +1,225 @@
+Title: HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage
+
+URL Source: https://arxiv.org/html/2511.00896v1
+
+Markdown Content:
+###### Abstract
+
+Reliability in distributed storage systems has typically focused on the design and deployment of data replication or erasure coding techniques. Although some scenarios have considered the use of replication for _hot_ data and erasure coding for _cold_ data in the same system, each is designed in isolation. We propose HyRES, a hybrid scheme incorporates the best characteristics of each scheme, thus, resulting in additional design flexibility and better potential performance for the system. We show that HyRES generalizes previously proposed hybrid schemes. We characterize the theoretical performance of HyRES as well as that of replication and erasure coding considering the effects of the size of the storage networks. We validate our theoretical results using simulations. These results show that HyRES can yield simultaneously lower storage costs than replication, lower probabilities of file loss than replication and erasure coding with similar worst case performance, and even lower effective repair traffic than replication when considering the network size.
+
+## I Introduction
+
+Over the course of the past decades, research focused on distributed storage systems has provided a rich set of solutions to address different system requirements and delivering efficient and reliable operation. In particular, the state-of-the-art on reliable storage has focused on two main alternatives: data replication and erasure coding. The former is usually a good alternative for _hot data_, where the ability to provide fast access (no computation, potential to perform load balancing) and efficient loss repair as a fragment lost can be repaired by creating a new copy from the remaining replicas. However, these benefits come at the cost of additional storage. The latter is usually a good alternative for _cold data_, where reducing the cost of storage by (potentially) increasing response time and increasing loss repair costs may be acceptable. Various code designs to reduce repair costs under various system considerations have been introduced, e.g.,[[1](https://arxiv.org/html/2511.00896v1#bib.bib1), [2](https://arxiv.org/html/2511.00896v1#bib.bib2), [3](https://arxiv.org/html/2511.00896v1#bib.bib3), [4](https://arxiv.org/html/2511.00896v1#bib.bib4), [5](https://arxiv.org/html/2511.00896v1#bib.bib5)]. Recently, distributed systems requiring cost-effective security and reliability have incorporated erasure coded solutions, e.g.,[[6](https://arxiv.org/html/2511.00896v1#bib.bib6), [7](https://arxiv.org/html/2511.00896v1#bib.bib7)].
+
+Many practical systems typically select one or the other due to operational simplicity or match to the particular use case. Operating both approaches in the same system have also been pursued in practical settings, but usually to handle different data sizes, e.g., erasure codes for large data and replication for small metadata and keys in Cocytus[[8](https://arxiv.org/html/2511.00896v1#bib.bib8)], or optimized for specific workloads in distributed Cloud storage systems, e.g., [[9](https://arxiv.org/html/2511.00896v1#bib.bib9)]. Comparisons of these schemes based on their worst-case reliability (e.g., minimum number of nodes lost that causes loss of data), storage costs, or repair costs based on the occurrence of one (or more) losses have been carried out. However, the state-of-the-art generally lacks a fair cost-benefit comparison between these two approaches that accounts for network size, number of losses experienced by the system, and allocation policies.
+
+![Image 1: Refer to caption](https://arxiv.org/html/2511.00896v1/x1.png)
+
+Figure 1:  Repair Traffic versus Storage Costs for a single node loss of various schemes. Files are split into k=10 k=10 in the case of replication, XORBAS, Reed-Solomon, and the proposed Hybrid scheme before introducing redundancy. MBR and MSR points of regenerating codes consider the equivalent redundancy of Reed-Solomon code. 
+
+Hybrid approaches, where replicas of fragments and coded fragments are part of the same storage policy have been considered in the literature. For example, [[10](https://arxiv.org/html/2511.00896v1#bib.bib10), [11](https://arxiv.org/html/2511.00896v1#bib.bib11), [12](https://arxiv.org/html/2511.00896v1#bib.bib12)] all considered systems that could manage, hot, warm and cold data, where hybrid approaches were used to manage _warm data_. These hybrid schemes considered each fragment of the original file to have a number of replicas while additional erasure coded fragments using random linear network coding[[13](https://arxiv.org/html/2511.00896v1#bib.bib13)] or Reed-Solomon codes where added to reduce storage costs. These schemes also allow for the system to support smoother transitions between the three data states. The work in[[14](https://arxiv.org/html/2511.00896v1#bib.bib14)] considered its application to two-layer wireless heterogeneous storage networks considering access frequency and repair bandwidth as key focus points. In contrast to previous proposals, DR-MDS[[15](https://arxiv.org/html/2511.00896v1#bib.bib15)] provided a scheme that created a Maximum Distance Separable (MDS) code and replicated every piece, including the erasure coded ones. This provided an advantage for repair costs, particularly, if few losses occur at a given time. However, a mathematical characterization and understanding of hybrid schemes, their potential, and fair comparison to erasure coded and replication-based storage systems is still missing.
+
+This paper’s goal is two-fold. First, we propose a new family of hybrid schemes, called HyRES, to trade-off storage and repair costs by combining replication, erasure coding, and concepts of local repairability inspired in part by[[16](https://arxiv.org/html/2511.00896v1#bib.bib16)]. Second, we provide a mathematical framework to compare erasure coded, replication and hybrid schemes considering the effect of network size and occurrence of loss events in the network. The framework allows for the use of various models for loss probability of the nodes and the special case of i.i.d loss probability per node is further analysed. Our simulation results and used to validate the theoretical models 1 1 1 Note that Fig.[1](https://arxiv.org/html/2511.00896v1#S1.F1 "Figure 1 ‣ I Introduction ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") depicts the MBR and MSR schemes for a specific configuration. These are chosen to capture an equivalent worst case node loss protection granted by the hybrid scheme. . They show that hybrid schemes can reduce 30 30% or more the overall storage cost of the system while only increasing 13 13% of network use with respect pure data replication when studied in isolation. Additionally, these schemes are shown to have a much lower loss probability for the entire file as either replication or erasure coding with comparable conditions.
+
+The paper is organized as follows. We describe the system model in Section[II](https://arxiv.org/html/2511.00896v1#S2 "II System Model ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"). Section [III](https://arxiv.org/html/2511.00896v1#S3 "III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") introduces HyRES and characterizes its performance, while Section[IV](https://arxiv.org/html/2511.00896v1#S4 "IV Performance of Replication and MDS Codes ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") provides mathematical analysis to characterize the behaviour of replication and erasure coding techniques to provide a fair comparison to HyRES. This analysis incorporates the size of the network in the repair cost of the various systems. We validate our mathematical analysis with simulations in Section[V](https://arxiv.org/html/2511.00896v1#S5 "V Numerical Results ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"). Section[VI](https://arxiv.org/html/2511.00896v1#S6 "VI Conclusions ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") summarizes our findings.
+
+## II System Model
+
+In this work, we will make some key assumptions for our system model. We aim to compare different distributed storage schemes fairly by applying equivalent considerations to each one. This means that our system model will not be limited only to the network or node loss model, but also to aspects of file fragmentation and storage allocation policies for those fragments. We breakdown these aspects in the following.
+
+Network: We consider a distributed storage system of N N nodes. Each node can communicate to all others. As our focus is on the storage and repair policies, we do not estipulate where the workloads for ingestion of files or redundancy generation are carried out.
+
+File Fragmentation and Redundacy: Each file is stored by first dividing it into k k equally-sized fragments 2 2 2 Zero-padding is used in case the the original data size is not divisible by k k. Splitting files into fragments increases read and write speeds due to parallelization and greatly increases flexibility of placement and handling for very large files. Depending on the storage policy, the fragments may be replicated R R times, erasure coded, or a combination of the two. This generates a total of n n fragments per file, where n>k n>k for all cases of interest for reliable storage.
+
+Storage Policy: Each node stores fragments, coded or not, of multiple files. However, we assume no node stores more than one fragment of the n n corresponding to each file. Thus, N≥n N\geq n nodes are required to satisfy this condition.
+
+Node Loss: We assume nodes have the same probability of loss when a loss event occurs (e.g. due to disk failures or individual node failures). This model can be used to consider time varying and time-invariant loss probability models. We provide analytical results for the latter for simplicity.
+
+## III HyRES - Hybrid Redundancy Scheme
+
+![Image 2: Refer to caption](https://arxiv.org/html/2511.00896v1/figures/ExampleHyRES.png)
+
+Figure 2:  Example of HyRES (2,2,1,10)(2,2,1,10) illustrating two replicas of the original fragments, two MDS erasure coded fragments, and a locally repairable linear combination of the two MDS erasure coded fragments
+
+This section proposes HyRES, a hybrid scheme that combines three core ideas on files that are split into equal sized fragments. First, replicating the fragments across nodes, which allows fast and zero-compute recovery when any of them are lost. Second, the use of MDS erasure codes to generate additional coded fragments that can be leveraged if all replicas of one or several fragments are lost. Third, the use of local repairability for the erasure coded fragments, in order to reduce the amount of traffic generated when losing one of them. If two or more coded fragments are lost, this will require the system to revert to decoding missing fragments prior to repairing. In the following, we define our hybrid scheme and analyze its key characteristics. We also discuss how HyRes generalizes and encompasses previous schemes proposed in the state of the art.
+
+###### Definition 1.
+
+A HyRES (R,e,l,k)(R,e,l,k) scheme divides each file in k≥2 k\geq 2 fragments to create R≥2 R\geq 2 replicas in total of each fragment. It also generates e≥2 e\geq 2 erasure coded fragments generated using an MDS code that takes as input the original k k fragments. There are also l l coded fragments that are linear combinations of l l disjoint subsets of the e e erasure coded fragments. Special considerations are taken for the following corner cases (a) l=0 l=0 where no additional coded fragments are generated beyond the original e e; (b) l=1 l=1, where the newly generated fragment is setup to produce an MDS code with respect to the original k k fragments when removing any of the e e MDS coded fragments; and (c) l=e l=e which produces (R−1)(R-1) direct copies of each of the e e MDS erasure coded fragments.
+
+The total number of fragments generated from the original k k fragments is then R⋅k+e+l R\cdot k+e+l fragments. Our focus on the cases of l=0,1,e l=0,1,e. Prior work in[[10](https://arxiv.org/html/2511.00896v1#bib.bib10), [11](https://arxiv.org/html/2511.00896v1#bib.bib11), [12](https://arxiv.org/html/2511.00896v1#bib.bib12)] corresponds to l=0 l=0, while l=e l=e represents a generalization of the DR-MDS scheme. Finally, the l=1 l=1 case provides a simple and efficient approach for local repairs while keeping good recovery performance. Figure[2](https://arxiv.org/html/2511.00896v1#S3.F2 "Figure 2 ‣ III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") provides an example of HyRES (2,2,1,10)(2,2,1,10).
+
+Worst Case Loss Performance: Lemmas[1](https://arxiv.org/html/2511.00896v1#Thmtheorem1 "Lemma 1. ‣ III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") and[2](https://arxiv.org/html/2511.00896v1#Thmtheorem2 "Lemma 2. ‣ III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") discuss the worst case loss scenario of the scheme for l=0,1 l=0,1 and l=e l=e, respectively.
+
+###### Lemma 1.
+
+The worst case number of lost fragments to cause file loss in a HyRES (R,e,1,k)(R,e,1,k) and HyRES (R,e+1,0,k)(R,e+1,0,k) schemes is R+e+1 R+e+1, i.e., no loss occurs if fewer than R+e R+e fragments are lost. This worst case loss occurs when R R copies of a single fragment are lost and all e+1 e+1 coded fragments are also lost.
+
+###### Proof Sketch.
+
+It can be verified that the worst case scenario described results in the loss of the file as R≥2 R\geq 2 and e≥2 e\geq 2 by Definition[1](https://arxiv.org/html/2511.00896v1#Thmdefinition1 "Definition 1. ‣ III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"). For any other loss pattern having R+e+1 R+e+1 losses, this requires that one or more of the coded fragments is not lost. If L∈1,2,…​e L\in{1,2,...e} coded fragments remain, this requires that R⋅L R\cdot L or more replicated fragments are lost in order to generate an equivalent loss of L L erasure coded fragments. This requires a larger number of losses by Definition[1](https://arxiv.org/html/2511.00896v1#Thmdefinition1 "Definition 1. ‣ III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"). For the case of l=1 l=1, if all erasure coded fragments are not loss, given that one of them is linearly dependent of the other e e, the system requires at least R⋅e R\cdot e fragment losses to cause an equivalent loss of the e+1 e+1 coded fragments. But e+1≤R⋅e e+1\leq R\cdot e for the conditions given in Definition[1](https://arxiv.org/html/2511.00896v1#Thmdefinition1 "Definition 1. ‣ III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"). For the case of l=0 l=0, the system would require at least R⋅(e+1)R\cdot(e+1) fragment losses for the equivalent loss of the same e+1 e+1. Using the same argument as for l=1 l=1, we see that the described loss pattern requires the fewest losses to cause a loss of the file. ∎
+
+###### Lemma 2.
+
+The worst case number of lost fragments to cause file loss in a HyRES (R,e,e,k)(R,e,e,k) schemes is R⋅(e+1)R\cdot(e+1). This worst case loss occurs when R R copies of any combination of e+1 e+1 coded or original fragments are lost.
+
+###### Proof Sketch.
+
+As coded fragments as also copied, there is no inherent difference/advantage between losing R R copies of a coded or uncoded fragment. In contrast to the proof of Lemma[1](https://arxiv.org/html/2511.00896v1#Thmtheorem1 "Lemma 1. ‣ III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"), there is no benefit from keeping additional coded fragments beyond the original e e. Thus, any combination that results in a complete loss of e+1 e+1 fragments coded or original results in a loss. ∎
+
+Remark: The DR-MDS[[15](https://arxiv.org/html/2511.00896v1#bib.bib15)] corresponds to a HyRES (2,e,e,k)(2,e,e,k) scheme. When compared to Hybrid schemes with the same number of overall coded fragments, such as HyRES (2,2​e−1,1,k)(2,2e-1,1,k) or HyRES (2,2​e,0,k)(2,2e,0,k), we see that the worst case loss is 2​e+2 2e+2 in all cases with the same number of total coded fragments, namely, 2​e 2e. However, there are far more loss patterns that cause this worst case scenario due to the fact that the replicating the erasure coded fragments generates a less robust. In fact, there are k k loss patterns for HyRES (2,2​e−1,1,k)(2,2e-1,1,k) or HyRES (2,2​e,0,k)(2,2e,0,k) that cause the worst case loss, while there are (k+e e+1)\binom{k+e}{e+1} patterns for DR-MDS.
+
+Example: For the case k=10 k=10, e=2 e=2 there will be 220 220 loss patterns of the worst case while the other schemes would have 10 10 loss patterns creating the worst case.
+
+Repair Costs: In the event of losses, if the file is recoverable, HyRES will prioritize transmissions that requires fewest fragments to be accessed for repairing each fragment. We define these repair costs in terms of the fraction of the size of the original file that needs to be transmitted by the system. For a given number of lost fragments, we will consider the mean repair costs under the node loss assumption of Section[II](https://arxiv.org/html/2511.00896v1#S2 "II System Model ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage").
+
+###### Lemma 3.
+
+The mean repair cost of HyRES for a single fragment loss as a fraction of the original file is (a) 1/k 1/k for HyRES (R,e,e,k)(R,e,e,k), (b) R+(e+1)⋅e/k R⋅k+e+1\frac{R+(e+1)\cdot e/k}{R\cdot k+e+1} for HyRES (R,e,1,k)(R,e,1,k), and (c) R+e+1 R⋅k+e+1\frac{R+e+1}{R\cdot k+e+1} for HyRES (R,e+1,0,k)(R,e+1,0,k).
+
+File Loss Probability: In the event of L L losses in a network of N N nodes, an individual file may be lost with a given probability depending on whether the nodes lost correspond to nodes storing a fragment the HyRES protected file and on whether the overall loss experienced by those fragments renders the file unrecoverable. Theorems[4](https://arxiv.org/html/2511.00896v1#Thmtheorem4 "Theorem 4. ‣ III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"),[5](https://arxiv.org/html/2511.00896v1#Thmtheorem5 "Theorem 5. ‣ III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") and[6](https://arxiv.org/html/2511.00896v1#Thmtheorem6 "Theorem 6. ‣ III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") provide the probability of file loss conditioned on L L losses on the network for the key cases of interest in HyRES. This conditional probability can be used with various distributions for loss probability with the assumption that the placement of fragments and node losses are independent. In the following, 𝟙 A\mathds{1}_{A} represents the indicator function, which is one for condition A A.
+
+###### Theorem 4.
+
+For the network described in Section[II](https://arxiv.org/html/2511.00896v1#S2 "II System Model ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"), the probability of losing a file using a HyRES (R,e−1,1,k)(R,e-1,1,k), an event called F l=1 F_{l=1}, when L L nodes are lost is
+
+𝒫 H​y​R​E​S,l=1​(R,e,k|L)=ℙ​(F l=1|ℒ=L;R,e,k)\displaystyle{\cal P}_{HyRES,l=1}(R,e,k|L)=\mathds{P}(F_{l=1}|{\cal L}=L;R,e,k)
+=1−∑(x 1,..,x k,y e,y l,z)∈S F l=1(N x 1,…,x k,y e,y l,z)(N L)\displaystyle=1-\frac{\sum_{(x_{1},..,x_{k},y_{e},y_{l},z)\in S_{F_{l=1}}}\binom{N}{x_{1},...,x_{k},y_{e},y_{l},z}}{\binom{N}{L}}(1)
+
+where x i∈{0,..,R}∀i∈{1,…,k}x_{i}\in\{0,..,R\}\forall i\in\{1,...,k\}, y e∈{0,..,e−1}y_{e}\in\{0,..,e-1\}, y l∈{0,1}y_{l}\in\{0,1\}, z∈{0,…,N−R​k−e}z\in\{0,...,N-Rk-e\}, and S F l=1=C 0∪C 1 S_{F_{l=1}}=C_{0}\cup C_{1} identifies all patterns of L L node losses that do not result in file loss where C 0={(x 1,…,x k,y e,y l,z)|∑i=1 k 𝟙{x i=0}≤y e+y l<e,∑i=1 k x i+y e+y l+z=N−L}C_{0}=\{(x_{1},...,x_{k},y_{e},y_{l},z)|\sum_{i=1}^{k}\mathds{1}_{\{x_{i}=0\}}\leq y_{e}+y_{l}<e,\sum_{i=1}^{k}x_{i}+y_{e}+y_{l}+z=N-L\} and C 1={(x 1,…,x k,y e,y l,z)|∑i=1 k 𝟙{x i=0}<y e+y l=e,∑i=1 k x i+y e+y l+z=N−L}C_{1}=\{(x_{1},...,x_{k},y_{e},y_{l},z)|\sum_{i=1}^{k}\mathds{1}_{\{x_{i}=0\}}<y_{e}+y_{l}=e,\sum_{i=1}^{k}x_{i}+y_{e}+y_{l}+z=N-L\}.
+
+The proof follows a combinatorial argument, where the x i x_{i} factors represent the number of remaining replicas of the i i-th original fragment, y e y_{e} represents the remaining MDS erasure coded fragments, y l=1 y_{l}=1 indicates the presence of the additional coded fragment for local repair, and z z indicates the number of remaining nodes in the network no storing the file. Using similar considerations, the Theorems[5](https://arxiv.org/html/2511.00896v1#Thmtheorem5 "Theorem 5. ‣ III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") and[6](https://arxiv.org/html/2511.00896v1#Thmtheorem6 "Theorem 6. ‣ III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") describe the file loss probability for l=0 l=0 and l=e l=e.
+
+###### Theorem 5.
+
+For the network described in Section[II](https://arxiv.org/html/2511.00896v1#S2 "II System Model ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"), the probability of the event F l=0 F_{l=0} of losing a file using a HyRES (R,e,0,k)(R,e,0,k) given L L node losses is
+
+𝒫 H​y​R​E​S,l=0​(R,e,k|L)=ℙ​(F l=0|ℒ=L;R,e,k)\displaystyle{\cal P}_{HyRES,l=0}(R,e,k|L)=\mathds{P}(F_{l=0}|{\cal L}=L;R,e,k)
+=1−∑(x 1,..,x k,y e,z)∈S F l=0(N x 1,…,x k,y e,z)(N L)\displaystyle=1-\frac{\sum_{(x_{1},..,x_{k},y_{e},z)\in S_{F_{l=0}}}\binom{N}{x_{1},...,x_{k},y_{e},z}}{\binom{N}{L}}(2)
+
+where x i∈{0,..,R}∀i∈{1,…,k}x_{i}\in\{0,..,R\}\forall i\in\{1,...,k\}, y e∈{0,..,e}y_{e}\in\{0,..,e\}, z∈{0,…,N−R​k−e}z\in\{0,...,N-Rk-e\}, and S F l=0={(x 1,…,x k,y e,z)|∑i=1 k 𝟙{x i=0}≤y e,∑i=1 k x i+y e+z=N−L}S_{F_{l=0}}=\{(x_{1},...,x_{k},y_{e},z)|\sum_{i=1}^{k}\mathds{1}_{\{x_{i}=0\}}\leq y_{e},\sum_{i=1}^{k}x_{i}+y_{e}+z=N-L\}.
+
+###### Theorem 6.
+
+For the network described in Section[II](https://arxiv.org/html/2511.00896v1#S2 "II System Model ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"), the probability of the event F l=e F_{l=e} of losing a file using a HyRES (R,e,e,k)(R,e,e,k) given L L node losses is
+
+𝒫 H​y​R​E​S,l=e​(R,e,k|L)=ℙ​(F l=e|ℒ=L;R,e,k)\displaystyle{\cal P}_{HyRES,l=e}(R,e,k|L)=\mathds{P}(F_{l=e}|{\cal L}=L;R,e,k)
+=1−∑(x 1,..,x k,y 1,…,y e,z)∈S F l=e(N x 1,…,x k,y 1,…,y e,z)(N L)\displaystyle=1-\frac{\sum_{(x_{1},..,x_{k},y_{1},...,y_{e},z)\in S_{F_{l=e}}}\binom{N}{x_{1},...,x_{k},y_{1},...,y_{e},z}}{\binom{N}{L}}(3)
+
+where x i∈{0,..,R}∀i∈{1,…,k}x_{i}\in\{0,..,R\}\forall i\in\{1,...,k\}, y j∈{0,..,R}∀j={1,…,e}y_{j}\in\{0,..,R\}\forall j=\{1,...,e\}, z∈{0,…,N−R​k−R​e}z\in\{0,...,N-Rk-Re\}, and S F l=e={(x 1,…,x k,y 1,…,y e,z)|∑i=1 k 𝟙{x i=0}≤∑j=1 e 𝟙{y j=0},∑i=1 k x i+∑j=1 k y j+z=N−L}S_{F_{l=e}}=\{(x_{1},...,x_{k},y_{1},...,y_{e},z)|\sum_{i=1}^{k}\mathds{1}_{\{x_{i}=0\}}\leq\sum_{j=1}^{e}\mathds{1}_{\{y_{j}=0\}},\sum_{i=1}^{k}x_{i}+\sum_{j=1}^{k}y_{j}+z=N-L\}
+
+## IV Performance of Replication and MDS Codes
+
+This section analyses the conditional file loss performance for R R-way replication and MDS codes. As in Section[III](https://arxiv.org/html/2511.00896v1#S3 "III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"), exact replication results rely on combinatorial arguments, although a simple upper bound is also developed. For MDS codes, there exists a simple, closed-form solution for the problem.
+
+### IV-A Replication
+
+In the case of replication, we consider that each fragment is replicated a total of R R times. Let us calculate the probability of irreperably losing a file, i.e., all replicas are lost for one or more fragments. Theorem[7](https://arxiv.org/html/2511.00896v1#Thmtheorem7 "Theorem 7. ‣ IV-A Replication ‣ IV Performance of Replication and MDS Codes ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") provides an exact result, based on a combinatorial argument as in Section[III](https://arxiv.org/html/2511.00896v1#S3 "III HyRES - Hybrid Redundancy Scheme ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage").
+
+###### Theorem 7.
+
+For the network described in Section[II](https://arxiv.org/html/2511.00896v1#S2 "II System Model ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"), the probability of losing a file using R R replicas per fragment is
+
+𝒫 r​(R|L)=ℙ​(F R|ℒ=L;R)\displaystyle{\cal P}_{r}(R|L)=\mathds{P}(F_{R}|{\cal L}=L;R)
+=1−∑(x 1,..,x k,z)∈S F(N x 1,…,x k,z)(N L)\displaystyle=1-\frac{\sum_{(x_{1},..,x_{k},z)\in S_{F}}\binom{N}{x_{1},...,x_{k},z}}{\binom{N}{L}}(4)
+
+where x i∈{0,..,R}for i={1,…,k},z∈{0,..,N−R k}x_{i}\in\{0,..,R\}\text{ for }i=\{1,...,k\},z\in\{0,..,N-Rk\}, and S F={(x 1,…,x k,z)|∑i=1 k 𝟙{x i=0}=0,∑i=1 k x i+z=N−L}S_{F}=\{(x_{1},...,x_{k},z)|\sum_{i=1}^{k}\mathds{1}_{\{x_{i}=0\}}=0,\sum_{i=1}^{k}x_{i}+z=N-L\}
+
+For simplicity, we will calculate a simple upperbound. We consider the probability of losing a fragment given L L lost nodes in Lemma[8](https://arxiv.org/html/2511.00896v1#Thmtheorem8 "Lemma 8. ‣ IV-A Replication ‣ IV Performance of Replication and MDS Codes ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") and use this result to compute an upper bound on the file loss probability in Theorem[9](https://arxiv.org/html/2511.00896v1#Thmtheorem9 "Theorem 9. ‣ IV-A Replication ‣ IV Performance of Replication and MDS Codes ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage").
+
+###### Lemma 8.
+
+For a network with N N nodes and equal loss probability among nodes, then the probability of the event A A of a fragment being irreperably lost when using R R replicas, conditioned a number of nodes lost ℒ=L{\cal L}=L, is
+
+ℙ​(A|ℒ=L;R)=(L R)(N R)\mathds{P}\left(A|{\cal L}=L;R\right)=\frac{\binom{L}{R}}{\binom{N}{R}}(5)
+
+for L≥R L\geq R and zero otherwise.
+
+###### Proof Sketch.
+
+Using the concepts of copysets from[[17](https://arxiv.org/html/2511.00896v1#bib.bib17)], we consider all possible copysets for choosing R R replicas from N N nodes. The number of copysets with irreversible failures means choosing R R elements from the L L lost elements. ∎
+
+###### Theorem 9.
+
+For the network described in Section[II](https://arxiv.org/html/2511.00896v1#S2 "II System Model ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"), the probability of the event F R F_{R} of losing a file using R R replicas per fragment is upperbounded by
+
+𝒫 r​(R|L)=ℙ​(F R|ℒ=L;R)≤k​(L R)(N R){\cal P}_{r}(R|L)=\mathds{P}(F_{R}|{\cal L}=L;R)\leq k\frac{\binom{L}{R}}{\binom{N}{R}}(6)
+
+for L≥R L\geq R and zero otherwise.
+
+###### Proof.
+
+Considering event of losing fragment i i is A i A_{i}, then the probability of losing a file is ℙ​(F R|ℒ=L;R)=ℙ​(∪i=1 k A i|ℒ=L;R)≤∑i=1 k ℙ​(A i|ℒ=L;R)=k​ℙ​(A|ℒ=L;R)\mathds{P}(F_{R}|{\cal L}=L;R)=\mathds{P}\left(\cup_{i=1}^{k}A_{i}|{\cal L}=L;R\right)\leq\sum_{i=1}^{k}\mathds{P}\left(A_{i}|{\cal L}=L;R\right)=k\mathds{P}\left(A|{\cal L}=L;R\right) as the probability of losing any fragment is the same. Using Lemma[8](https://arxiv.org/html/2511.00896v1#Thmtheorem8 "Lemma 8. ‣ IV-A Replication ‣ IV Performance of Replication and MDS Codes ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") completes the proof. ∎
+
+### IV-B MDS Codes
+
+In contrast to the replication case, we can provide a closed-form, combinatorial solution to the problem of a lost file. We consider a (n,k)(n,k) MDS code, e.g., a Reed Solomon code, which has r=n−k r=n-k additional coded fragments.
+
+###### Theorem 10.
+
+For the network described in Section[II](https://arxiv.org/html/2511.00896v1#S2 "II System Model ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"), the probability of the event F e​c F_{ec} of losing a file using a (n,k)(n,k) MDS code is
+
+𝒫 e​c​(n,k|L)\displaystyle{\cal P}_{ec}(n,k|L)=\displaystyle=ℙ​(F e​c|ℒ=L;n,k)\displaystyle\mathds{P}(F_{ec}|{\cal L}=L;n,k)(7)
+=\displaystyle=1(N L)​∑l=n−k+1 L(n l)​(N−n L−l)\displaystyle\frac{1}{\binom{N}{L}}\sum_{l=n-k+1}^{L}\binom{n}{l}\binom{N-n}{L-l}(8)
+
+for L≥n−k+1 L\geq n-k+1 and zero otherwise.
+
+###### Proof.
+
+The total number of _deletion sets_ is (N L)\binom{N}{L} which may cause deletion of a file only if L≥n−k+1 L\geq n-k+1 as a (n,k)(n,k) MDS code can tolerate up to n−k n-k deletions. As the losses may involve nodes with and without fragments for the given file, counting the losses requires to consider the number of scenarios where n−k+1 n-k+1 or more node losses involve nodes containing a fragment and the remaining L−l L-l are placed in those without fragments. For only l l out of L L losses affecting the file fragments, there are (n l)​(N−n L−l)\binom{n}{l}\binom{N-n}{L-l} options. The proof concludes by adding all cases of L≥l≥n−k+1 L\geq l\geq n-k+1 and dividing by the total number of deletion sets. ∎
+
+## V Numerical Results
+
+In this section we analyze various performance metrics of the HyRES scheme and compare it to replication and Reed Solomon code (an MDS code). We also validate analytical results with simulations.
+
+![Image 3: Refer to caption](https://arxiv.org/html/2511.00896v1/x2.png)
+
+(a)Network Size N=30 N=30 nodes
+
+![Image 4: Refer to caption](https://arxiv.org/html/2511.00896v1/x3.png)
+
+(b)Network Size N=40 N=40 nodes
+
+Figure 3: File loss probability for different node losses
+
+Network Size and Node Loss Effects on Loss Probability: We study first the file loss probability of the HyRES (2,2,1,10)(2,2,1,10) scheme compared to a (14,10)(14,10) MDS code and 3 3-way replication for different network sizes and node losses in the network in Figure[3](https://arxiv.org/html/2511.00896v1#S5.F3 "Figure 3 ‣ V Numerical Results ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage"). Figures[3(a)](https://arxiv.org/html/2511.00896v1#S5.F3.sf1 "In Figure 3 ‣ V Numerical Results ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") and[3(b)](https://arxiv.org/html/2511.00896v1#S5.F3.sf2 "In Figure 3 ‣ V Numerical Results ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") show performance for networks with N=30 N=30 and N=40 N=40 nodes, respectively. These results show that the loss probability of HyRES is much lower compared to classical approaches for all L L node losses in each of the networks. Our results also show that the MDS scheme with the same worst case loss performance is significantly worse than both replication and HyRES. These simulation results also verify our theoretical calculations and show that the upper bound derived for the replication scheme is tight for small node losses compared.
+
+Network Size Effect on Repair Costs for a Single Node Loss: Although our analysis shows that HyRES schemes have repair traffic that is equal or higher than the repair traffic of a replication scheme with the same k k fragments per file, the mean repair cost due to a single node loss in the network is a more adequate comparison for all schemes under the same loss event. Figure[4](https://arxiv.org/html/2511.00896v1#S5.F4 "Figure 4 ‣ V Numerical Results ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") shows the average repair traffic for simulations when a single node is lost in the network. In this case, this traffic is lower the larger the N N for all schemes, which is reasonable given the fact that the likelihood of losing a node containing a fragment from the given file is also lowered. However, Figure[4](https://arxiv.org/html/2511.00896v1#S5.F4 "Figure 4 ‣ V Numerical Results ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") also shows that HyRES (2,2,1,10)(2,2,1,10) provides a lower mean repair traffic compared to replication with R=3 R=3. This is due to the fact that replication will use a total of 30 30 nodes to store the file in this scenario, while HyRES would use only 23 23. Finally, Figure[4](https://arxiv.org/html/2511.00896v1#S5.F4 "Figure 4 ‣ V Numerical Results ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") also shows for comparison the repair traffic measured in the event that a node loss triggers a fragment loss.
+
+![Image 5: Refer to caption](https://arxiv.org/html/2511.00896v1/x4.png)
+
+Figure 4:  Measured repair traffic for a single node loss in the network considering different network sizes
+
+Node Loss Effects on Repair Traffic: As simultaneous node losses increase, multiple fragments need to be recovered. This could be achieved by repairing from another replica of the same fragment or by collecting k k distinct fragments (original or coded) to decode and re-encode the missing fragments in a given node. If more than one original or coded fragment needs to be recovered, additional single fragment transmissions to the respective nodes will be carried out after decoding. In the event of a file loss, no repair traffic is triggered. Thus, schemes that provide more protection against file losses are likely to experience larger repair traffic under simultaneous losses. Figure[5](https://arxiv.org/html/2511.00896v1#S5.F5 "Figure 5 ‣ V Numerical Results ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") supports this observation. For example, the HyRES scheme has a low repair traffic for low node losses, while its repair traffic grows beyond all other schemes for large number of losses. The MDS erasure codes tested for L=10 L=10 node losses reduces significantly its repair traffic with respect to 6 6 node losses due to the fact that a file has probability higher than 1/2 1/2 to be lost in this scenario. Figure[5](https://arxiv.org/html/2511.00896v1#S5.F5 "Figure 5 ‣ V Numerical Results ‣ HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage") shows that the HyRES scheme still incurs in average only a cost of around 0.14 0.14 per lost node at 6 6 and 10 10 losses, while the replication scheme would always incur a cost 0.1 0.1 per lost node when it can recover the file in this scenario. Thus, the average repair cost of the scheme per node even for a large number of simultaneous losses is relatively low.
+
+![Image 6: Refer to caption](https://arxiv.org/html/2511.00896v1/x5.png)
+
+Figure 5:  Average Repair Traffic per File and File Loss Probability for N=30 N=30 nodes for various node losses 
+
+## VI Conclusions
+
+This work proposed and analyzed HyRES, a family of hybrid schemes for distributed storage to deliver better overall performance in terms of repair traffic, robustness and storage costs. We showed that HyRES generalizes previously proposed hybrid schemes and proposes novel alternatives with great practical potential. Our work also advocates for studying various schemes considering the network size and number of nodes used by each scheme to achieve a more fair performance analysis. Using mathematical analysis, performance bounds and simulations, we show that some variants of HyRES can outperform equivalent replication and MDS erasure coded schemes in robustness (file loss probability) and repair traffics, while also providing storage costs considerable improvements with respect to replication. Future work may consider heterogeneous characteristics of nodes in the storage system, e.g., different probability of loss for different nodes, or potential structures and hierarcheis in the network, e.g., systems using racks dividing network costs in terms of intra-rack and inter-rack traffic for repair.
+
+## VII Acknowledgement
+
+This work was financed in part by the Innovation Fund Denmark GreenCOM project under grant number 2079-00040B and by the EU research project EMPYREAN (101136024).
+
+## References
+
+*   [1] A.G. Dimakis _et al._, “Network coding for distributed storage systems,” _IEEE Transactions on Information Theory_, vol.56, no.9, pp. 4539–4551, 2010. 
+*   [2] H.Hou _et al._, “Rack-aware regenerating codes for data centers,” _IEEE Transactions on Information Theory_, vol.65, no.8, pp. 4730–4745, 2019. 
+*   [3] X.Zhao _et al._, “A leader improves things: Reducing signaling and complexity in optimal iot storage,” _IEEE Communications Letters_, vol.23, no.4, pp. 696–699, 2019. 
+*   [4] A.Patra _et al._, “Node repair on connected graphs,” _IEEE Transactions on Information Theory_, vol.68, no.5, pp. 3081–3095, 2022. 
+*   [5] ——, “Generalized regenerating codes and node repair on graphs,” _IEEE Transactions on Information Theory_, vol.71, no.3, pp. 1613–1630, 2025. 
+*   [6] A.Kretsis _et al._, “Serrano: Transparent application deployment in a secure, accelerated and cognitive cloud continuum,” in _2021 IEEE International Mediterranean Conference on Communications and Networking (MeditCom)_, 2021, pp. 55–60. 
+*   [7] ——, “Integrating heterogeneous hardware and software platforms towards the edge-cloud-hpc continuum,” _IEEE Communications Standards Magazine_, pp. 1–1, 2025. 
+*   [8] H.Chen _et al._, “Efficient and available in-memory kv-store with hybrid erasure coding and replication,” _ACM Trans. Storage_, vol.13, no.3, Sep. 2017. [Online]. Available: https://doi.org/10.1145/3129900 
+*   [9] H.Zare _et al._, “Legostore: a linearizable geo-distributed store combining replication and erasure coding,” _Proc. VLDB Endow._, vol.15, no.10, p. 2201–2215, Jun. 2022. [Online]. Available: https://doi.org/10.14778/3547305.3547323 
+*   [10] M.Feher _et al._, “Secure and scalable key value storage for managing big data in smart cities using intel sgx,” in _2018 IEEE International Conference on Smart Cloud (SmartCloud)_, 2018, pp. 70–76. 
+*   [11] A.Brito _et al._, “Secure end-to-end processing of smart metering data,” _Journal of Cloud Computing_, vol.8, no.1, 2019. 
+*   [12] Z.Li _et al._, “Er-store: A hybrid storage mechanism with erasure coding and replication in distributed database systems,” _Scientific Programming_, vol. 2021, no.1, p. 9910942, 2021. [Online]. Available: https://onlinelibrary.wiley.com/doi/abs/10.1155/2021/9910942 
+*   [13] T.Ho _et al._, “A random linear network coding approach to multicast,” _IEEE Transactions on Information Theory_, vol.52, no.10, pp. 4413–4430, 2006. 
+*   [14] A.Zhou _et al._, “A cost-efficient hybrid redundancy coding scheme for wireless storage systems,” _Computer Communications_, vol. 203, pp. 226–237, 2023. [Online]. Available: https://www.sciencedirect.com/science/article/pii/S0140366423000944 
+*   [15] S.Gu _et al._, “Dr-mds: An energy-efficient coding scheme in d2d distributed storage network for the internet of things,” _IEEE Access_, vol.7, pp. 24 179–24 191, 2019. 
+*   [16] M.Sathiamoorthy _et al._, “Xoring elephants: novel erasure codes for big data,” _Proc. VLDB Endow._, vol.6, no.5, p. 325–336, Mar. 2013. [Online]. Available: https://doi.org/10.14778/2535573.2488339 
+*   [17] A.Cidon _et al._, “Copysets: reducing the frequency of data loss in cloud storage,” in _Proceedings of the 2013 USENIX Conference on Annual Technical Conference_, ser. USENIX ATC’13. USA: USENIX Association, 2013, p. 37–48.

@@ -1,0 +1,1068 @@
+Hindawi
+Scientiﬁc Programming
+Volume 2021, Article ID 9910942, 13 pages
+https://doi.org/10.1155/2021/9910942
+
+
+
+
+Research Article
+ER-Store: A Hybrid Storage Mechanism with Erasure Coding and
+Replication in Distributed Database Systems
+
+          Zijian Li         and Chuqiao Xiao
+          School of Software Engineering, East China Normal University, Shanghai 200062, China
+
+          Correspondence should be addressed to Zijian Li; 51194501053@stu.ecnu.edu.cn
+
+          Received 22 March 2021; Revised 12 July 2021; Accepted 26 July 2021; Published 10 September 2021
+
+          Academic Editor: Jiangbo Qian
+
+          Copyright © 2021 Zijian Li and Chuqiao Xiao. -is is an open access article distributed under the Creative Commons Attribution
+          License, which permits unrestricted use, distribution, and reproduction in any medium, provided the original work is
+          properly cited.
+          In distributed database systems, as cluster scales grow, eﬃciency and availability become critical considerations. In a cluster, a
+          common approach to high availability is using replication, but this is ineﬃcient due to its low storage utilization. Erasure coding
+          can provide data reliability while ensuring high storage utilization. However, due to the large number of coding and decoding
+          operations required by the CPU, it is not suitable for some frequently updated data. In order to optimize the storage eﬃciency of
+          the data in the distributed system without aﬀecting the availability of the data, this paper proposes a data temperature recognition
+          algorithm that can distinguish data tablets and divides data tablets into three types, cold, warm, and hot, according to the
+          frequency of access. Combining three replicas and erasure coding technology, ER-store is proposed, a hybrid storage mechanism
+          for diﬀerent data types. At the same time, we combined the read-write separation architecture of the distributed database system to
+          design the data temperature conversion cycle, which reduces the computational overhead caused by frequent updates of erasure
+          coding technology. We have implemented this design on the CBase database system based on the read-write separation ar-
+          chitecture, and the experimental results show that it can save 14.6%–18.3% of the storage space while meeting the eﬃcient access
+          performance of the system.
+
+
+
+
+1. Introduction                                                              In recent years, with the improvement of CPU com-
+                                                                         puting power and the slow development of storage, erasure
+With the rapid development of technologies such as big data,             coding has attracted people’s interest as a new storage so-
+cloud computing, and the Internet of -ings, as well as the               lution [8–11]. By dividing the original data object into blocks
+diversiﬁcation of data collection technologies, the amount of            and encoding them to generate parity blocks, erasure coding
+data has grown dramatically, which has made data storage                 can produce lower storage overhead while providing the
+methods biased towards distributed storage [1]. However,                 same storage reliability. For example, in Facebook’s warm
+hardware failures and software upgrades of cheap storage                 storage system F4 [12], the system uses RS (K � 10 and M � 4)
+devices often lead to storage node failures, which bring about           erasure coding technology to encode and store data.
+data storage reliability problems [2, 3].                                Compared with the traditional replication solution, this
+    In order to ensure the reliability of the data, the common           technology increases the fault tolerance of the system from 2
+redundancy mechanism of distributed storage systems is the               to 4 and reduces the storage overhead of the system by about
+multiple replica strategy [4–6]. For example, Google’s GFS [7]           1.6X. However, the complex erasure coding technology itself
+creates three replicas of each data chunk and ensures that all           has many problems, such as a large amount of CPU com-
+replicas of each chunk are not distributed on the same rack.             puting overhead brought to the system when encoding and
+Although this strategy of replication fully guarantees high              decoding data and the need to re-encode and calculate all the
+availability of the data, it requires M + 1 times storage space to       fragment contents when updating data. -ese problems not
+tolerate M failures. -is brings enormous storage overhead.               only increase the latency of data access requests but also
+                                                                                                                                                    5192, 2021, 1, Downloaded from https://onlinelibrary.wiley.com/doi/10.1155/2021/9910942 by Cochrane Russian Federation, Wiley Online Library on [08/04/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+2                                                                                                                     Scientiﬁc Programming
+
+cause excessive network resource consumption and hard                 (iii) A thorough evaluation is completed to conﬁrm ER-
+disk I/O overhead. -erefore, erasure coding technology is                   store eﬃciency and availability
+mainly applied in distributed storage systems for storing
+                                                                      -e rest of this article is organized as follows. In Section
+videos, music, and archived data [13].
+                                                                  2, we, respectively, introduce the characteristics and appli-
+     Additionally, with the continuous growth of cluster data,
+                                                                  cable scenarios of replication and erasure coding and in-
+there are huge diﬀerences in the access frequency between
+                                                                  troduce the infrastructure of the CBase database system.
+data [14]. For example, in the ﬁeld of social media, the access
+                                                                  Section 3 describes the design of ER-store. In the design, we
+frequency of recently written data is much higher than that
+                                                                  introduce how to select diﬀerent storage strategies based on
+of the data produced long ago. -ese data are considered hot
+                                                                  data temperature. In Section 4, we propose two diﬀerent data
+data. -rough analysis, we can ﬁnd that, as time goes by, the
+                                                                  update algorithms. In Section 5, we conduct experiments to
+access frequency of data that are considered hot data will
+                                                                  compare the diﬀerence between ER-store and the three-
+gradually decrease. When accessed only a few times a week,
+                                                                  replica mechanism in transaction processing performance
+the data become warm. In the following months, if the
+                                                                  and storage eﬃciency. Section 6 concludes the paper.
+frequency of data access continues to decrease, these data are
+called cold data [15].
+     Understanding the hot and cold laws of data and              2. Background
+choosing appropriate storage strategies are the focus of
+research in the ﬁeld of distributed storage. Zhang et al. [16]    2.1. Replication. Replication is a commonly used solution to
+distinguished between hot and cold data by ﬁle size, using        provide high availability [23, 24]. By duplicating multiple
+erasure coding for big-byte data and using three copies for       copies of the stored data in a system, in the event of data loss,
+small-byte data. Mao et al. [17] used the citations of data       other copies can be used to provide services, and the sur-
+blocks to judge the popularity of data access. -eir research      viving copies can be used to repair the data. -e replication
+showed that the higher the citations, the higher the popu-        mechanism ensures high availability of the data in a dis-
+larity of data access.                                            tributed system.
+     Inspired by previous studies, we realize that, for data at        -e replication solution is simple to implement. By
+diﬀerent temperatures, we can combine the characteristics         evenly distributing the copies on each node, we can not only
+of replication and erasure coding to adopt corresponding          improve the parallel read performance of the system but also
+redundant storage solutions for diﬀerent data. For hot            achieve load balancing of the system. However, this is at the
+data, which are frequently accessed, replication strategy         cost of high data redundancy, requiring M + 1 copies to
+can be applied to ensure read-write performance; for              tolerate the data loss of M. For example, by introducing three
+warm data, a hybrid strategy of replication and erasure           copies to tolerate the loss of two data blocks, the storage
+coding is used to balance storage eﬃciency and perfor-            utilization rate of the system is only 33.3%.
+mance [18, 19]; for cold data that are rarely accessed, an
+erasure coding mechanism is used to improve storage
+                                                                  2.2. Erasure Coding. As a redundant storage solution that
+utilization [20].
+                                                                  can eﬀectively improve storage utilization, erasure coding
+     -is article proposes a novel hybrid storage scheme on        divides the original ﬁle into blocks and encodes the data
+the CBase database [21]. -e scheme divides data objects           blocks to generate parity blocks [25, 26]. After the data are
+into tablets, using a data temperature diﬀerentiation algo-       lost, the parity blocks and the remaining data blocks are used
+rithm based on Newton’s cooling law [22]. By collecting the       to repair the data [27–29]. A common erasure coding is
+access frequency of the tablets, the system divides the           Reed–Solomon code (RS-code) [30]. RS-code is based on
+temperature of the tablets. In order to ensure the storage        polynomial calculation performed on Galois ﬁeld GF (2w ).
+eﬃciency of the system, diﬀerent storage strategies are           We usually use two tuples (K and M) to represent the se-
+adopted for data at diﬀerent temperatures. In addition,           lection of RS-code parameters, where K refers to the number
+combined with the characteristics of CBase’s read-write           of data blocks in a stripe and M refers to the number of parity
+separation architecture, we propose two diﬀerent data up-         blocks in a stripe. -e fault tolerance of the stripe is M. As
+date algorithms.                                                  shown in (1), RS-code uses the Vandermonde matrix and
+     In summary, the key contributions of this paper include      data blocks to perform matrix operations to obtain parity
+the following:                                                    blocks.
+     (i) A data temperature diﬀerentiation algorithm based                                1   1 ··· 1                D1            P1
+         on Newton’s cooling law, which can eﬀectively                       ⎡⎢⎢⎢                            ⎤⎥⎡⎢       ⎤⎥ ⎡⎢         ⎤⎥
+                                                                                ⎢⎢⎢ 1 a1 · · · aK−1 ⎥⎥⎥⎥⎥⎢⎢⎢⎢⎢ D2 ⎥⎥⎥⎥⎥ ⎢⎢⎢⎢⎢ P2 ⎥⎥⎥⎥⎥
+         distinguish the temperature of the tablets and                           ⎢⎢⎢          1         1    ⎥⎥⎥⎢⎢⎢     ⎥⎥⎥ � ⎢⎢⎢     ⎥⎥⎥.
+                                                                                    ⎢⎢⎢                         ⎥⎢         ⎥ ⎢           ⎥    (1)
+         perform dynamic data temperature conversion, is                              ⎢⎢⎣ ⋮ ⋮ ⋱ ⋮ ⎥⎥⎥⎥⎦⎢⎢⎢⎢⎣ ⋮ ⎥⎥⎥⎥⎦ ⎢⎢⎢⎢⎣ ⋮ ⎥⎥⎥⎥⎦
+         introduced
+                                                                                          1 a1M−1 · · · aK−1
+                                                                                                         M−1         DK            PM
+    (ii) A hybrid storage mechanism is proposed to choose
+         corresponding storage strategies for data at diﬀerent        In the RS-code, the node where the data update occurs
+         temperatures, which improves the storage utiliza-        broadcasts the incremental data to the node where the parity
+         tion of the system while ensuring the read-write         block is located. As shown in (2), P′i and D′i are obtained after
+         performance of the system                                updating Pi and Di , respectively. Δ D is the delta data
+                                                                                                                                                                               5192, 2021, 1, Downloaded from https://onlinelibrary.wiley.com/doi/10.1155/2021/9910942 by Cochrane Russian Federation, Wiley Online Library on [08/04/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+Scientiﬁc Programming                                                                                                                                                     3
+
+obtained by the XOR operation of D′i and Di . A is the                                                        ER-store, the hot tablets use the traditional three-replica
+Vandermonde matrix in (1).                                                                                    strategy, and the cold tablets adopt the RS-code (K � 4 and
+                               D1                                                                             M � 2) technology to improve the storage utilization of the
+         D1
+       ⎢
+       ⎡
+       ⎢        ⎥⎤⎥⎥     ⎢
+                         ⎡
+                         ⎢            ⎥⎤⎥⎥                                                                    system. For the warm tablet, we adopt a compromise scheme
+       ⎢
+       ⎢
+       ⎢ ⋮         ⎥
+                   ⎥     ⎢
+                         ⎢
+                         ⎢     ⋮         ⎥⎥⎥
+       ⎢
+       ⎢
+       ⎢           ⎥
+                   ⎥⎥⎥   ⎢
+                         ⎢
+                         ⎢                 ⎥⎥⎥                                                                of two replicas and RS-code (K � 4 and M � 1) and ﬁnd a
+       ⎢
+       ⎢             ⎥   ⎢
+                         ⎢                   ⎥⎥⎥
+     A∗⎢
+       ⎢
+       ⎢
+       ⎢ D′i ⎥⎥⎥⎥ � A ∗ ⎢⎢
+                         ⎢
+                         ⎢ D   + ΔD            ⎥⎥⎥                                                            tradeoﬀ between the system’s read-write performance and
+       ⎢
+       ⎢
+       ⎢             ⎥
+                     ⎥
+                     ⎥⎥⎥ ⎢
+                         ⎢
+                         ⎢
+                             i      i            ⎥⎥⎥                                                          storage utilization. At the same time, taking the combination
+       ⎢
+       ⎢
+       ⎢               ⎥ ⎢
+                         ⎢
+                         ⎢                         ⎥⎥⎥
+       ⎢
+       ⎢
+       ⎣ ⋮             ⎥
+                       ⎥
+                       ⎦ ⎢
+                         ⎢
+                         ⎣     ⋮                     ⎥⎦                                                       of baseline data and incremental data in the CBase system as
+         DK                    DK                                                                             a cycle, the data temperature diﬀerentiation algorithm is
+                                                                                                        (2)   used to calculate the temperature of the tablets, and tablets’
+                               P1                      1                                  P1′
+                             ⎡⎢⎢⎢             ⎥⎤ ⎡    ⎢        ⎤⎥⎥               ⎢
+                                                                                 ⎡      ⎤⎥⎥⎥                  temperature is dynamically converted.
+                                ⎢⎢⎢ ⋮ ⎥⎥⎥⎥⎥ ⎢         ⎢
+                                                      ⎢  ⋮ ⎥⎥⎥⎥⎥
+                                                                                 ⎢
+                                                                                 ⎢
+                                                                                 ⎢ ⋮ ⎥⎥⎥⎥
+                                  ⎢⎢⎢          ⎥⎥⎥ ⎢  ⎢
+                                                      ⎢
+                                                      ⎢          ⎥
+                                                                 ⎥⎥
+                                                                                 ⎢
+                                                                                 ⎢
+                                                                                 ⎢
+                                                                                 ⎢         ⎥⎥⎥
+                                                                                                                  As shown in Figure 2, the design of ER-store does not
+                                    ⎢            ⎥ ⎢  ⎢   i−1 ⎥
+                                                                                 ⎢
+                                                                                 ⎢                            change the overall architecture of CBase, but increases the
+                       � ⎢⎢⎢⎢⎢ Pi ⎥⎥⎥⎥⎥ + ⎢           ⎢
+                                                      ⎢ a         ⎥
+                                                                  ⎥
+                                                                  ⎥⎥⎥    ∗ ΔD  � ⎢
+                                                                                 ⎢
+                                                                                 ⎢ P′i ⎥
+                                                                                             ⎥⎥.
+                                                                                              ⎥⎥⎥
+                                    ⎢⎢⎢          ⎥⎥⎥ ⎢⎢
+                                                      ⎢
+                                                      ⎢
+                                                          i
+                                                                    ⎥
+                                                                    ⎥⎥⎥
+                                                                              i ⎢⎢
+                                                                                 ⎢
+                                                                                 ⎢              ⎥⎥⎥           tasks of each module and changes the data structure
+                                      ⎢⎢⎢ ⋮ ⎥⎥⎥ ⎢     ⎢
+                                                      ⎢
+                                                      ⎢  ⋮            ⎥
+                                                                                 ⎢
+                                                                                 ⎢
+                                                                                 ⎢
+                                                                                 ⎢ ⋮              ⎥⎥⎥
+                                        ⎢⎣         ⎥⎦ ⎢
+                                                      ⎣               ⎥⎦         ⎢
+                                                                                 ⎣                  ⎦         maintained.
+                                           PM            i−1
+                                                        PM−1                       PM′                            -e RS node is responsible for monitoring the status of
+                                                                                                              each cluster and storing the metainformation of the tablets.
+                                                                                                              As shown in Table 1, in order to add the data temperature
+                                                                                                              recognition function, we modiﬁed the data structure of the
+2.3. CBase Database System. CBase database is a distributed                                                   original RootTable. -e TS and t ﬁelds, respectively,
+relational database developed by Bank of Communications.                                                      identify the temperature status and value of the tablet; the
+As shown in Figure 1, CBase can be divided into four                                                          SS identiﬁes the redundant storage scheme of the tablet in
+modules, RootServer (RS), UpdateServer (UPS), Chunk-                                                          the CS, and the RI records the location of the tablet and the
+Server (CS), and MergeServer (MS). In CBase, the data are                                                     data distribution of the code stripe where the tablet is
+divided into baseline data and incremental data according to                                                  located. RS determines the data temperature of each tablet
+the timeline. -e baseline data are read-only. All modiﬁ-                                                      through the access frequency of each tablet in the current
+cations are updated to the incremental data, and the in-                                                      period and the data temperature of each tablet in the
+cremental data and baseline data are merged in the system                                                     previous period.
+through regular merging. -e following brieﬂy introduces                                                           -e CS node stores the baseline data and divides the
+the basic functions of the four modules:                                                                      baseline data into tablets of equal size through the primary
+     RS: it manages all servers in the cluster, stores meta-                                                  key. When the system goes online, CS starts to count the
+     information about the distribution of tablets, and                                                       access frequency of each tablet. Before the data undergo
+     manages copies. RS is generally divided into a primary                                                   temperature conversion, the access frequency information of
+     node and a backup node, and strong data consistency                                                      the tablets is sent to RS. -en, RS uses the access frequency
+     [31] is ensured between the primary and standby nodes.                                                   information of each tablet, combined with the temperature
+                                                                                                              diﬀerentiation algorithm, to recalculate the temperature of
+     UPS: it is the only module in the cluster that can
+                                                                                                              each tablet. Subsequently, by comparing the original tem-
+     perform write operations, and it stores incremental
+                                                                                                              perature with the tablets, RS generates a temperature con-
+     data. UPS accepts update operations, writes them into
+                                                                                                              version table. -en, RS notiﬁes CS to copy and encode the
+     memory, and periodically merges with baseline data.
+                                                                                                              tablets to be converted and stores each tablet on diﬀerent
+     UPS is also divided into a primary node and a backup
+                                                                                                              nodes according to the new load balancing strategy. We
+     node. During deployment, the UPS process and the RS
+                                                                                                              attempt to adopt a regenerative code coding strategy for the
+     process often share a physical server.
+                                                                                                              cold tablets, which can eﬀectively reduce the huge network
+     CS: it stores baseline data. In CBase, the baseline data                                                 IO that exists during data recovery due to the use of erasure
+     are sorted according to the primary key and are divided                                                  coding technology systems. For the warm tablets, it is an
+     into data objects with roughly the same amount of data,                                                  intermediate state that allows the hot tablets and the cold
+     called tablets. -e baseline data are generally stored in                                                 tablets to perform smooth and dynamic conversion. It uses
+     the form of three replicas.                                                                              two copies and a parity block to provide the same fault
+     MS: it accepts and parses the sql queries and forwards                                                   tolerance while ensuring the concurrent read performance
+     the parsed sql query to CS and UPS.                                                                      of the system.
+                                                                                                                  -e UPS node is still used to store and manage incre-
+3. The Hybrid Storage Mechanism                                                                               mental data. All data update operations do not immediately
+                                                                                                              change the baseline data, but are written to the memory
+3.1. ER-Store Design. Combining the characteristics of                                                        table, which is called memtable in UPS. -e UPS realizes the
+multiple replicas and erasure coding technologies that we                                                     separation of baseline data and incremental data and updates
+analyzed in Section 2, we designed an ER-store hybrid                                                         the parity blocks when the baseline data and incremental
+storage solution. Based on the CBase system architecture,                                                     data are merged, which can eliminate the write request and
+this paper changes the original three-replica storage strategy                                                update delay caused by erasure coding technology and save
+and uses data temperature to distinguish each tablet. In                                                      the system CPU computing resources.
+                                                                                                                                                                                             5192, 2021, 1, Downloaded from https://onlinelibrary.wiley.com/doi/10.1155/2021/9910942 by Cochrane Russian Federation, Wiley Online Library on [08/04/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+4                                                                                                                                                                  Scientiﬁc Programming
+
+
+        Divided by primary key             ree copies per tablet
+
+            (min,                           T11     T12      T13
+             100)
+
+            [200,
+                                            T21     T22      T23
+            300)
+
+            [300,
+            max)                            T31     T32      T33
+
+
+                                                                                                                            (③)
+                                                                                                                            (②)
+
+
+                                                                    CS1   CS2    CS3   ...
+                                                                    CS2   CS3    CS4   ...                      Query                     Query                  Query
+                                                                    CS3   CS4    CS5   ...                      Engine                    Engine                 Engine
+                                                                    CSi   CSj    CSk   ...
+
+                                                                                                                  MS                        MS                     MS              (①)
+                                                                            RS
+                                                                                               (8)
+                      Frozen     Active                                                              (9)                                                                  ⑧ (10)
+           Frozen               Memtable
+                     Memtable
+          Memtable
+
+                                                                                                                                                 (④)         (④) (⑦)
+                                                                                                                     NetWork                                                       Client
+
+                                                                                                                                                       (⑦)
+           Export                                                                                                (5)(6)
+                                Log
+            File
+                       UPS
+
+
+                                                                                                                                           ...
+
+
+
+                                                                          CS1                                      CS2
+
+                                                                     ⑤
+
+                                                                    ⑥
+
+    (①) e client sends a query/update request to MS.                                        (5)(6) CS obtains baseline data.                                                 Query/Update
+    (②)(③) MS obtains data distribution information from RS.                                 (7) CS sends data to MS.                                                         Query
+    (④) MS sends a request to the relevant CS node.                                          (8) MS submits update operation to UPS.                                          Update
+    ⑤⑥ CS pulls incremental data from UPS.                                                   (9) Aer the transaction is submitted, UPS informs the MS.
+    ⑦ CS returns the fused data to the MS.                                                   (10) MS notiﬁes the client.
+    ⑧ MS merges query results and return to the user.
+
+Figure 1: CBase architecture. As shown in the upper left ﬁgure, original data are divided into tablets according to the primary key, and the
+three-replica strategy is used to store tablets. -e middle part describes the query process and update process in CBase. -e dotted line
+represents the common operation of query update. -e solid line represents the data update operation, and the dashed solid line represents
+the data query operation.
+
+
+    -e MS node is mainly responsible for the parsing and                                                          At the beginning of the period T, each CS node counts
+forwarding of sql queries. Because the cold tablets and the                                                   the access frequency of the stored tablets. Before the start of
+warm tablets are stored using erasure coding technology, the                                                  the new period T + 1, each CS node sends the access fre-
+number of copies for processing data access requests is                                                       quency information of each tablet in the period T to the RS.
+reduced, which reduces the transaction processing perfor-                                                     -en, RS updates the temperature of each tablet and resets
+mance of the system. We have eﬀectively solved this problem                                                   the ﬁeld t in the RootTable. After obtaining the new tem-
+through reasonable data temperature distinction.                                                              perature of all the tablets, RS sorts all the tablets’ temper-
+                                                                                                              atures and uses the temperature ratio threshold set by the
+                                                                                                              system to redetermine the temperature type of each tablet.
+3.2. Data Temperature Recognition Algorithm. As mentioned                                                     RS can obtain the data temperature conversion table (TCT)
+previously, ER-store uses corresponding redundant storage                                                     by comparing the new temperature type of each tablet with
+strategies for data tablets of diﬀerent temperatures. -ere-                                                   the original RootTable ﬁeld TS. Subsequently, RS resets the
+fore, the accurate determination of the tablet temperature                                                    ﬁeld TS and modiﬁes the redundant storage information of
+and the dynamic conversion of the tablet temperature di-                                                      the corresponding tablet in the new period. In the storage
+rectly aﬀect storage eﬃciency and system performance. In                                                      information of each type of the tablet, (CSi , CSj , CSk )
+this section, we introduce the data temperature recognition                                                   represents the location information of CS nodes where each
+algorithm.                                                                                                    copy of the hot tablets exists. (Tid, CSm , CSn , K) represents
+                                                                                                                                                                                                                                                                                                  5192, 2021, 1, Downloaded from https://onlinelibrary.wiley.com/doi/10.1155/2021/9910942 by Cochrane Russian Federation, Wiley Online Library on [08/04/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+Scientiﬁc Programming                                                                                                                                                                                                                                                                        5
+
+
+                                                                                                                                                                         TableID    TID Storage Scheme   Temperature                 Redundant information
+                                                                      Hot T bl
+                                                                           ablets
+                               H1          H1     H1    H1                                                                                                               1              1         0         13.8                         (CS1 , CS3 , CS5)
+                                                                    (ree-replicas)
+                               W1          W1     W2        ···   Wk             P                                                                                       1              2         1          7.2       (5 , CS2 , CS4 , 1) (8 , CS4 , CS6 , 2) ··· (P , CSx , k)
+
+        Divided by                                                                                      Warm Tablets                                                     2              3         2          2.3           (4 , CS5 , 1) (7 , CS7 , 2) ··· (Pi , CS3 , k+i)
+                               ···
+        primary key                                                                                 (Two-replicas+RS-code)
+                                                                                                                                                                         2              4         2          1.2           (3 , CS3 , 0) (7 , CS7 , 2) ··· (Pi , CS3 , k+i)
+                               Wk          W1     W2        ···   Wk
+                                                                                                                                                                         2              5         1          6.8       (2 , CS0 , CS2 , 0) (8 , CS4 , CS6 , 2) ··· (P , CSx , k)
+                                                                                                                     Cold Tablets
+                               C1          C1     C2        ···   Cm         P1                  P2                                                                      3              6         0         15.5                         (CS2 , CS4 , CS6)
+                                                                                                                      (RS-code)
+                                                                                                                                                                         ···         ···          ···        ···                                  ···
+                                                       ··     RS-code stripe                                                                                             k              n         2          0.8           (i , CSm , 0) (j , CSq , 1) ··· (Pc , CSq , k+i)
+
+                                                                                                 (3)
+
+                                                                       Storage Scheme Temperature                    Redundant information
+                                                                             0           13.8                             (CS1 , CS3 , CS5)
+                                                                             1
+                                                                             2
+                                                                                           7.2
+                                                                                           2.3
+                                                                                                       (5 , CS2 , CS4 , 1) (8 , CS4 , CS6 , 2) ··· (P , CSx , k)
+                                                                                                            (4 , CS5 , 1) (7 , CS7 , 2) ··· (Pi , CS3 , k+i)
+                                                                                                                                                                               Query                        Query                               Query
+                                                                             2
+                                                                             1
+                                                                                           1.2
+                                                                                           6.8
+                                                                                                            (3 , CS3 , 0) (7 , CS7 , 2) ··· (Pi , CS3 , k+i)
+                                                                                                       (2 , CS0 , CS2 , 0) (8 , CS4 , CS6 , 2) ··· (P , CSx , k)
+                                                                                                                                                                               Engine                       Engine                              Engine
+                                                                             0           15.5                             (CS2 , CS4 , CS6)
+                                                                            ···            ···                                    ···
+                                                                             2             0.8              (i , CSm , 0) (j , CSq , 1) ··· (Pc , CSq , k+i)
+
+                                                                                                                                                                                   MS                         MS                                  MS
+                                                                                                  RS
+
+                     Frozen      Active
+          Frozen                Memtable
+                    Memtable
+         Memtable
+
+
+                                                                           (2)              (4)                                              (4) (2)                           (2) Net Work (4)                                                                                    Client
+
+
+          Export                Log
+           File
+                      UPS                                                            (5)                                                                                                    (5)                                           (5)
+
+
+                                                                                                                                                                                                             ...
+
+
+
+                                                                                            CS1                                                                                    CS2                                                    CSn
+                                                (1)
+
+
+
+                                                                        (1)
+                                                                                                                                                     (1)
+
+    (1) CBase starts to merge regularly, and each CS node pulls incremental information from UPS.
+    (2) Each CS node sends the access frequency information of each tablet to the RS.
+    (3) RS uses the temperature recognition algorithm to recalculate the temperature of each tablet
+    and generates a temperature conversion table.
+    (4) RS sends the temperature conversion table to each CS node.
+    (5) Each CS node changes the storage scheme of tablets according to the temperature conversion
+    table to complete the tablets temperature conversion.
+
+Figure 2: -e hybrid scheme of ER-store in CBase. As shown in the upper left ﬁgure, the data are divided into tablets according to the
+primary key. -e three-replica strategy is used for the hot tablets; the two replicas + RS-code are used for the warm tablets, and the RS-code is
+used for the cold tablets. -e upper right corner describes the new RootTable in RS after the introduction of ER-store. -e middle part
+describes the calculation process of the tablet’s temperatures and the conversion process of the storage scheme when the data are regularly
+merged in the ER-store.
+
+
+the IDs of other tablets, the position information of the CS                                                                                                                        -e left side represents the decreasing speed of the
+nodes of the copy, and the sequence number in the coding                                                                                                                        object’s temperature, the right side T (t) represents the
+stripe where the warm tablet exists. (Tid, CSd , N) represents                                                                                                                  object’s temperature, E represents the environmental tem-
+the position information of other tablets in the coding stripe                                                                                                                  perature, and k represents the proportional coeﬃcient of the
+where the cold tablet is located and the sequence number in                                                                                                                     object’s temperature change speed and the object’s envi-
+the stripe. Algorithm 1 describes the details for recognizing                                                                                                                   ronment temperature diﬀerence. Solving the diﬀerential
+the temperature of the data tablet.                                                                                                                                             equation, derivation (4) of Newton’s cooling law can be
+    Based on Newton’s cooling law in the physics world, we                                                                                                                      obtained, and the object’s temperature can be obtained by
+designed the tablet temperature formula related to the                                                                                                                          the following formula:
+creation time and access frequency in ER-store. Newton’s
+cooling law is used to describe the change in temperature of                                                                                                                                                   T(t) � T0 − E􏼁e− kt + E.                                                     (4)
+an object over time in a physical environment. -at is, the                                                                                                                          -e application scenario of Newton’s cooling law is
+decreasing speed of the object’s temperature is proportional                                                                                                                    aimed at the physical environment. In the design of ER-
+to the diﬀerence between the ambient temperature and the                                                                                                                        store, we modiﬁed it to distinguish the temperature of the
+object’s temperature, as shown in the following:                                                                                                                                data tablet. In the system, the temperature changes between
+                                     dT(t)                                                                                                                                      the data tablets are independent and are determined by the
+                                           � −k(T(t) − E).                                                                                                         (3)
+                                      dt                                                                                                                                        creation time and access frequency of the data tablets. When
+                                                                                                                                              5192, 2021, 1, Downloaded from https://onlinelibrary.wiley.com/doi/10.1155/2021/9910942 by Cochrane Russian Federation, Wiley Online Library on [08/04/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+6                                                                                                                  Scientiﬁc Programming
+
+                                                        Table 1: New RootTable ﬁelds.
+Name                                                                                                                      Deﬁnitions
+TableID                                                                                                                    Table ID
+PK                                                                                                                    Primary key range
+Tid                                                                                                                        Tablet ID
+SS (0 is 3 replicas, 1 is 2 replicas + EC, 2 is EC)                                                                     Storage scheme
+t                                                                                                                        Temperature
+TS                                                                                                                    Temperature status
+RI                                                                                                                  Redundant information
+Tidsum                                                                                                                    Tablet size
+v                                                                                                                    Baseline data version
+
+
+the data tablets exist longer and the corresponding access                                   k−1
+frequency is lower, the temperature of the data tablet is                               P’j � 􏽘 Gji Di + Gjk Dk′
+lower. -erefore, when calculating the change of the tablet                                    i�1
+temperature with time, the ambient temperature E is ig-                                      k−1
+nored, and the proportional coeﬃcient Theat , which repre-                                 � 􏽘 Gji Di + Gjk − Gjk + Gjk Dk′
+sents the incremental temperature of the tablet and the                                       i�1                                      (6)
+access frequency, is introduced. -e temperature calculation                                   k
+formula of the data tablet is shown in (5); T(tn ) represents                              � 􏽘 Gji Di + Gjk ΔDk
+the data temperature of the data tablet in the period n; α                                    i�1
+represents the cooling coeﬃcient; and Fn−1 represents the                                  � Pj + Gjk D′i − Di 􏼁, j ∈ [1, m].
+access frequency of the tablet in the n − 1 period.
+
+          T tn 􏼁 � T tn−1 􏼁e− α(tn − tn−1 ) + Theat ∗ Fn−1 .    (5)
+                                                                        4.1. Re-Encoding Algorithm. -e encoding rules are used to
+                                                                        read out the data tablets of the entire stripe and re-encode
+                                                                        them to generate the latest parity tablets. -is method is
+3.3. Data Temperature Conversion Algorithm. -e temper-                  suitable for scenarios where most data tablets in the stripe
+ature conversion of the data tablet occurs when the                     are updated.
+baseline data and incremental data are merged in the                         As shown in Figure 3, in the stripe coded with RS (k, m),
+CBase system. As shown in Figure 2, after the RS obtains                the data tablet D1 merges with the incremental update data
+the data temperature conversion table in period T, the RS               from UPS to become D1′ (1), and then the system reads out
+traverses the temperature conversion table. -e table                    other data tablets D2 , D3 , . . .,Dk in the stripe from the
+temperature is classiﬁed to generate a set of hot, warm,                corresponding node (2). -en, these tablets and D1′ are used
+and cold tablets, and corresponding redundant storage                   to regenerate m new parity tablets P1′, P2′, . . .,Pn′ according to
+information is generated according to the load balancing                the encoding rules (3). Finally, D1′ and m new parity tablets
+strategy. -en, RS sends the generated redundant storage                 are stored on the corresponding node (4). In this process, a
+information to each CS node. Each CS node copies and                    total of k + m times of network I/O are consumed. -ese are
+encodes the tablet according to the redundant storage                   k − 1 times of hard disk reads and m + 1 times of hard disk
+information. After all node operations have been com-                   writes.
+pleted, the RS node is notiﬁed to update the RI ﬁeld in the
+RootTable and complete the data temperature conversion
+of the tablet. -e details of tablet temperature conversion              4.2. Incremental Encoding Algorithm. -e second method to
+are shown in Algorithm 2.                                               update the parity tablets is incremental update, which is
+                                                                        suitable for scenarios where a small number of data tablets in
+                                                                        a stripe are updated. It can be seen from (1) that
+4. Regularly Updated                                                    Pj � 􏽐ki�1 Gji Di ; when the UPS updates data tablets Dk to
+                                                                        Dk′, the formula can be derived to obtain the second update
+As previously mentioned, ER-store uses an erasure coding                parity tablets (6). It can be seen from (6) that the value of the
+strategy to encode the warm data tablet and the cold data               new parity tablet Pj′ is only related to the old parity tablet Pj
+tablet and stores the encoded parity tablet and data tablet on          and the data tablet increment ΔDk . -erefore, an incre-
+the CS node. When the CBase system merges incremental                   mental update method can be derived, which updates the
+data and baseline data, the data tablet is updated, and the             parity fragments by calculating the incremental information
+parity block in the code stripe must be updated synchro-                of the data fragments.
+nously to meet data availability. In order to adapt to diﬀerent             Figure 4 shows the process of ER-store using the in-
+update scenarios, we have designed two algorithms for                   cremental update method to update a data tablet in a stripe.
+updating the check block: re-encoding algorithm and in-                 After the CS node where the data tablet Di is located obtains
+cremental encoding algorithm.                                           the incremental update data of tablet Di from the UPS, the
+                                                                                                                                      5192, 2021, 1, Downloaded from https://onlinelibrary.wiley.com/doi/10.1155/2021/9910942 by Cochrane Russian Federation, Wiley Online Library on [08/04/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+Scientiﬁc Programming                                                                                                            7
+
+
+
+                      Require:
+                        T(tn−1 ), F(tn−1 ) of each tablet, Theat � 1, α;
+                        -resholds of each temperature-type tablet set by the system, Tdhot , Tdwarm , Tdcold ;
+                      Ensure:
+                        -e data temperature conversion table in n period, TCT;
+                      (1) : Initialize Tidsum is the sum of tablets;
+                      (2) : Initialize Tid is the ID of the tablet;
+                      (3) : Initialize tn−1 is the current period and tn is the new period;
+                      (4) : for Tid � 1 to Tidsum do
+                      (5) : T(tn )Tid � T(tn−1 )Tid ∗ e− α(tn − tn−1 ) + Theat ∗ F(tn−1 )Tid
+                      (6) : end for
+                      (7) : Use any sorting algorithm to rank the tablet temperature in the descending order;
+                      (8) : sTid is the sorted position of this tablet;
+                      (9) : Tsize is the size of TCT;
+                     (10) : for sTid � 1 to Tsize do
+                     (11) : if sTid ≤ Tdhot ∗ Tidsum then
+                     (12) :       TStid � 0;
+                     (13) :       if TSTid ≠ SSTid then
+                     (14) :          TCT.insert(Tid, TSTid );
+                     (15) :       end if;
+                     (16) : else if Tdhot ∗ Tidsum < sTid ≤ Tdwarm ∗ Tidsum then
+                     (17) :       TSTid � 1;
+                     (18) :       if TSTid ≠ SSTid then
+                     (19) :          TCT.insert(Tid, TSTid );
+                     (20) :       end if;
+                     (21) : else
+                     (22) :      TSTid � 2
+                     (23) :       if TSTid ≠ SSTid then
+                     (24) :          TCT.insert(Tid, TSTid );
+                     (25) :       end if;
+                     (26) : end for
+                     (27) : return TCT;
+
+                                     ALGORITHM 1: Data temperature recognition algorithm.
+
+
+system reads the original data tablet Di from the node and          the RE (4, 4, 1) hybrid storage scheme, and the cold tablets
+performs the XOR calculation with the update data D′i to            used the RS (4, 2) erasure coding scheme. As a modular
+obtain the update increment ΔDi . -en, the CS node sends            multithreaded benchmarking tool, sysBench was used for
+ΔDi to the nodes where all the parity tablets are located. -e       testing in this experiment. In addition, according to the well-
+parity nodes read the original parity tablets, calculate the        known 80/20 rule [32], in most data access scenarios, 80% of
+new parity tablets according to (6), and store the new parity       the data access of the system is concentrated on 20% of the
+tablets. Finally, the CS node stores D′i and completes the          data, we set the threshold of hot data to 20%, and for cold
+parity tablet update process.                                       data, three sets of thresholds (20%, 40%, and 60%) were set
+                                                                    to simulate complex data access scenarios.
+5. Evaluation and Comparisons
+In this section, we conducted a series of performance tests         5.1. Storage Eﬃciency. Our ﬁrst experiment evaluated the
+on the CBase system that was applied to the ER-store                disk consumption of the CBase system using the ER-store
+storage mechanism to evaluate the relationship between              storage mechanism. We used three replicas and the ER-store
+storage utilization and transaction processing perfor-              mechanism to store the same data in the cluster. Figure 5(a)
+mance. In our experiment, all the tests were performed on a         shows the disk consumption of diﬀerent storage mecha-
+CBase cluster built by 10 PC servers. -e node conﬁgu-               nisms under diﬀerent numbers of records. It can be seen
+ration in the cluster was composed of an 8-core 2.4 GHz             from the ﬁgure that when the original three-replica mech-
+(Intel(R) Xeon(R)) E5-2620 processor, 64 GB memory, a               anism was used, the storage eﬃciency of the system was only
+2 TB disk, and a 10 Gbps network card. Each node ran                33.3%, and the ER-store mechanism could signiﬁcantly
+Linux release 7.5.1804.                                             improve the system’s storage utilization. As the proportion
+    In the cluster, the CS module was deployed on each              of cold data increased to 60%, the storage eﬃciency of ER-
+server, two servers were deployed with UPS and RS modules,          store reached 51.3%, an increase of 18%. -is means that
+and four were used to deploy MS. In addition, the hot tablets       compared with the traditional three-copy storage mecha-
+used the three-replica strategy storage, the warm tablets used      nism, the system saved 1.05 PB of disk space for every 1 PB of
+                                                                                                                                           5192, 2021, 1, Downloaded from https://onlinelibrary.wiley.com/doi/10.1155/2021/9910942 by Cochrane Russian Federation, Wiley Online Library on [08/04/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+8                                                                                                                  Scientiﬁc Programming
+
+
+
+                             Require:
+                               -e data temperature conversion table, TCT;
+                               -e set of hot tablets to be converted, hotTablets;
+                               -e set of warm tablets to be converted, warmTablets;
+                               -e set of cold tablets to be converted, coldTablets;
+                             (1) ID is the sequence number of the tuple in the TCT;
+                             (2) Tid is the tablet ID to be converted in the TCT;
+                             (3) Tsize is the size of TCT;
+                             (4) for Id � 1 to Tsize do
+                             (5)     if TStid � � 0 then
+                             (6)        hotTablets.insert(Tid);
+                             (7)     else if TStid � � 1 then
+                             (8)        warmTablets.insert(Tid);
+                             (9)     else
+                            (10)        coldTablets.insert(Tid);
+                            (11) end for
+                            (12) while Tid ∈ hotTablets do
+                            (13)     Use three replicas to back up the tablet;
+                            (14)     CS notiﬁes RS to update column RI and SS � 0 of the RootTable;
+                            (15) ∗ use two replicas and Reed–Solomon to store redundant tablets; ∗ /
+                            (16) : while each 4 tablets ∈ warmTablets do
+                            (17) : re init n n k(rs,4,4,1,tablets);
+                            (18) : CS notiﬁes RS to update column RI and SS � 1 of the RootTable;
+                            (19) :/ ∗ use Reed–Solomon to encode redundant tablets; ∗ /
+                            (20) : while each 6 tablets ∈ coldTablets do
+                            (21) : rs init n k(rs,6,2,tablets);
+                            (22) : CS notiﬁes RS to update column RI and SS � 2 of the RootTable;
+
+                                     ALGORITHM 2: Data temperature conversion algorithm.
+
+
+
+
+                                    UPS
+
+                                       (1)
+                                               D'1     D2    ···   Dk   (3)         P'1   P'2          ···   P'm
+
+
+                                             (4)            (2)                                 (4)
+                                                             ···                                 ···
+
+                                                                              ···
+                                       CSs
+
+
+
+                                                     Figure 3: Re-encoding algorithm.
+
+
+data stored. -erefore, the ER-store storage solution sig-               5.2. Performance. -e second experiment tested the per-
+niﬁcantly improved the storage eﬃciency of the system.                  formance diﬀerence of the ER-store hybrid storage pattern
+    In addition, as previously mentioned, ER-store uses the             for diﬀerent data access scenarios with diﬀerent numbers of
+erasure code mechanism to store warm and cold data, while               concurrent threads. We set a ﬁxed number of access op-
+the erasure code uses encoding to achieve fault tolerances,             erations and simulated two diﬀerent data access scenarios:
+which means that, as the system has higher requirements for             uniform distribution and Pareto distribution. In the uniform
+fault tolerance, ER-store can improve the storage capacity              distribution scenario, all access operations were allowed to
+more signiﬁcantly. We veriﬁed this by setting diﬀerent fault            access each data tablet uniformly. According to the 80/20
+tolerances, as shown in Figure 5(b). When the fault tolerance           rule, in a real application scenario, it is impossible for the
+was increased to 4, the three-replica mechanism consumed                data access operations to access each tablet evenly. -us, we
+4 PB of extra space for every 1 PB of data stored, while the            simulated the Pareto distribution scenario: let most access
+ER-store consumed only 1.54 PB of extra space.                          operations focus on a small number of hot data. We used
+                                                                                                                                                                                                                                  5192, 2021, 1, Downloaded from https://onlinelibrary.wiley.com/doi/10.1155/2021/9910942 by Cochrane Russian Federation, Wiley Online Library on [08/04/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+Scientiﬁc Programming                                                                                                                                                                                                         9
+
+
+                                                                                       Data                           Parity                               Parity
+                                                            UPS
+                                                                                      Tablet                         Tablet1                              Tablet2
+
+
+                                                                     Send D'i
+                                                                          Read Di
+                                                                                                                            Send ΔDi
+                                                                                                  Send ΔDi
+                                                                                                   Read P1                        Read P2
+
+                                                                                                   Write P'1                     Write P'2
+                                                                                                  ACK
+                                                                                                                                    ACK
+
+                                                                          Write D'i
+                                                                          ACK
+
+
+                                                                    Figure 4: Incremental encoding algorithm.
+
+
+
+                  14                                                                                                25
+
+                                                                                                                                                                                              500%
+                                                                                      12
+                  12
+                                                                                                                    20
+                  10                                                9.6                                                                                         400%
+                                                                                                                                                                                                     338%
+                                                                                               9
+                                                                                             8.4
+                                                                                                                          300%
+                                                                                                                    15
+
+                                                                                                        Disk (GB)
+                                                                                                                                                                                                                296%
+                                                                                           7.8
+
+      Disk (GB)
+                  8                                  7.2                      7.2
+                                                                                                                                                                        260%                                           254%
+                                                                            6.72
+                                                                                                                                 225%                                          240%
+                                                                                                                                                                                      220%
+                                                                          6.24
+                                                                                                                                            210%   195%
+                                                             5.4
+                  6                                         5.04                                                    10
+                                    4.8                    4.68
+                                            3.6
+                  4                        3.36
+                                          3.12
+                          2.4
+                        1.8                                                                                         5
+                       1.68
+                  2    1.56
+                                                                                                                    0
+                  0                                                                                                                     2                               3                                   4
+                         200              400           600           800                  1000                                                             Fault tolerance number
+                                                Number of Records (w)
+                                                                                                                         ree-Replicas                                            ER-Store (h:w:c = 20:60:20)
+                       ree-Replicas                          ER-Store (h:w:c = 20:60:20)                                ER-Store (h:w:c = 20:40:40)                              ER-Store (h:w:c = 20:20:60)
+                       ER-Store (h:w:c = 20:40:40)            ER-Store (h:w:c = 20:20:60)
+                                                     (a)                                                                                                               (b)
+
+Figure 5: Disk consumption of diﬀerent storage schemes. (a) Disk consumption under diﬀerent record numbers for tolerating two failures.
+(b) Disk consumption for diﬀerent fault tolerance numbers. -e more the failures to be tolerated, the more the storage space ER-store will
+save.
+
+
+transactions per second (TPS) and average access latency as                                                 aﬀected because ER-store uses a data temperature algorithm
+metrics to measure system performance. We conducted a                                                       to perform temperature partitioning of the tablets so that
+total of six experiments and took the average value as the                                                  most of the access operations fall on the hot data with three
+ﬁnal result.                                                                                                copies and the warm data with two copies. Experiments have
+    -e experimental results are shown in Figure 6. In the                                                   proven that ER-store can signiﬁcantly save storage space
+uniform distribution scenario, the performance of ER-store                                                  under real data access scenarios conforming to the 80/20 rule
+is signiﬁcantly reduced compared to the three-replica                                                       while guaranteeing essential system performance.
+mechanism by the two metrics of throughput rate and access                                                      Although we can determine the storage method of the
+latency. -is may be because the system operations access                                                    data in the new cycle according to the data temperature of
+each tablet uniformly, and ER-store used the RS erasure code                                                the previous cycle, there is still a possibility that a small part
+mechanism to handle both warm and cold data. Each warm                                                      of the cold data will be accessed frequently. -erefore, we
+tablet replica number is reduced by 1, and the number of                                                    also designed related experiments to explore the impact of
+replicas of each cold tablet is reduced by 2. -e number of                                                  this sudden change in data temperature on system perfor-
+replica in the system that can respond to access operations                                                 mance. In the experiment, the data temperature threshold is
+decreases by 33%–47%, which results in performance deg-                                                     set to 2 : 2:6, the number of oltp threads is set to 60, and a
+radation. In a real data access scenario that conforms to the                                               ﬁxed number of access requests is set. We let the access
+80/20 rule, the system performance is not signiﬁcantly                                                      request to access the corresponding data in a Pareto
+                                                                                                                                                                        5192, 2021, 1, Downloaded from https://onlinelibrary.wiley.com/doi/10.1155/2021/9910942 by Cochrane Russian Federation, Wiley Online Library on [08/04/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+10                                                                                                                                              Scientiﬁc Programming
+
+                             180                                                                        180
+
+                             160                                                                        160
+
+                             140                                                                        140
+
+
+
+           roughput (Tps)                                                            roughput (Tps)
+                             120                                                                        120
+
+                             100                                                                        100
+
+                              80                                                                         80
+
+                              60                                                                         60
+
+                              40                                                                         40
+                                    10        20     30      40    50    60    70                              10        20     30      40    50    60    70
+                                                   Number of OLTP reads                                                      Number of OLTP reads
+                                         ree-Replicas                                                              ree-Replicas
+                                         ER-Store (h:w:c=20:40:40)                                                  ER-Store (h:w:c=20:40:40)
+                                         ER-Store (h:w:c=20:60:20)                                                  ER-Store (h:w:c=20:60:20)
+                                         ER-Store (h:w:c=20:20:60)                                                  ER-Store (h:w:c=20:20:60)
+                                                         (a)                                                                        (b)
+                             1400                                                                       1000
+
+                             1200                                                                       900
+
+                                                                                                        800
+                             1000
+
+
+        Latency (ms)                                                                Latency (ms)
+                                                                                                        700
+                              800
+                                                                                                        600
+                              600
+                                                                                                        500
+                              400                                                                       400
+
+                              200                                                                       300
+                                     60            80        100      120     140                               60            80       100      120      140
+                                                   Number of OLTP reads                                                      Number of OLTP reads
+
+                                    ree-Replicas                                                              ree-Replicas
+                                    ER-Store (h:w:c=20:40:40)                                                  ER-Store (h:w:c=20:40:40)
+                                    ER-Store (h:w:c=20:60:20)                                                  ER-Store (h:w:c=20:60:20)
+                                    ER-Store (h:w:c=20:20:60)                                                  ER-Store (h:w:c=20:20:60)
+                                                         (c)                                                                        (d)
+
+Figure 6: Comparison of the concurrent transaction processing performance between three replicas and ER-store. (a) Uniform distribution.
+(b) 80/20 distribution. (c) Uniform distribution. (d) 80/20 distribution.
+
+
+distribution manner. In the unstable experiment, we transfer                          Figure 8, the data access performance and the warm data
+10% of the requests to access some cold tablets at time t′ ,                          threshold are positively correlated, and the data storage
+causing the temperature of these tablets to rise. -e result is                        eﬃciency and the warm data threshold are negatively cor-
+shown in Figure 7; when the access request of the cold tablet                         related. -erefore, in real application scenarios, we can
+increases, the throughput of the system decreases because                             adjust the temperature threshold ratio of the system
+there is only one data copy that accepts data access.                                 according to our business needs to ﬁnd a balance between
+    In order to optimize the overall performance of the                               storage eﬃciency and access performance.
+system and verify the inﬂuence of the ratio of the three
+temperature thresholds of hot, warm, and cold on the system
+performance, we also perform related experiments. By                                  5.3. Update Eﬃciency. -e third experiment evaluated the
+setting a ﬁxed number of access requests, the temperature                             performance of two data update algorithms in the ER-store
+threshold of the hot data is set to 20% according to the 80/20                        storage model in the Pareto distribution scenario. In the
+rule, and the change of system performance is observed by                             experiment, we set the size of the data tablet to 16 KB and
+changing the threshold of warm data. We evaluate the                                  wrote 500,000 update transactions to the UPS node in ad-
+overall performance of the system from two indicators of                              vance. After the update transactions were written, we
+storage eﬃciency and access performance. As shown in                                  manually triggered the periodic merge mechanism of the
+                                                                                                                                                                     5192, 2021, 1, Downloaded from https://onlinelibrary.wiley.com/doi/10.1155/2021/9910942 by Cochrane Russian Federation, Wiley Online Library on [08/04/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+Scientiﬁc Programming                                                                                                                                          11
+
+                                                                      200
+                                                                      180
+                                                                      160
+
+
+
+
+                                                    roughput (Tps)
+                                                                      140
+                                                                      120
+                                                                      100
+                                                                       80
+                                                                       60
+                                                                       40
+                                                                            0                                     t'             t
+                                                                                                   Time (min)
+                                                                                   Stable
+                                                                                   Unstable
+                                                                      Figure 7: Performance impact of data mutation.
+
+
+
+
+                                                    180                                                                      1.8
+
+                                                    160                                                                      1.6
+
+
+
+
+                                  roughput (Tps)                                                                                    Storage Eﬃciency
+                                                    140                                                                      1.4
+
+                                                    120                                                                      1.2
+
+                                                    100                                                                      1
+
+                                                        80                                                                   0.8
+
+                                                        60                                                                   0.6
+                                                                        0        0.1   0.2 0.3 0.4 0.5 0.6 0.7         0.8
+                                                                                       reshold of the warm tablet
+                                                                                roughput
+                                                                                Storage Eﬃciency
+                               Figure 8: System performance changes with warm data threshold.
+
+
+CBase database and let each CS node pull its own update                                                experiment, we prepared 10 sysBench data tables con-
+data increment from the UPS. After all CS nodes completed                                              taining 100,000 records and distributed the data evenly on
+the update operation, we evaluated the performance of the                                              each node according to the load balancing mechanism,
+two update algorithms by counting the time consumed to                                                 with an average data size of 8.2 GB per node. We evaluate
+complete the update. In addition, in the experiment, we also                                           the recovery eﬃciency of ER-store under diﬀerent node
+tested the performance of the two algorithms under diﬀerent                                            failure scenarios by killing diﬀerent numbers of CS pro-
+update scenarios by varying the number of coded stripe                                                 cesses at the same time.
+update tablets. As Figure 9 shows, in the RS encoding stripe                                               As shown in Figure 10, the ER-store was inferior to the
+with the data block of 4, the incremental encoding algorithm                                           three-replica mechanism in data recovery performance.
+performed better than the recoding algorithm when the                                                  -is is likely because the erasure code mechanism involves
+number of update tablets was less than 3. As the number of                                             a large number of encode operations and a large number of
+update tablets increased, the incremental encoding algo-                                               network IO in data recovery. At the same time, we found
+rithm was inferior to the recoding algorithm.                                                          that the ER-store had higher data recovery eﬃciency when
+                                                                                                       the warm data threshold was larger. -is is likely because
+                                                                                                       the warm data were stored in a hybrid storage mode of
+5.4. Recovery Eﬃciency. -e fourth experiment evaluated                                                 replication and erasure codes, and the data recovery per-
+the performance of the system to recover data in case of                                               formance was better than cold data that are based on
+node failure in the ER-store storage mode. In the                                                      erasure codes.
+                                                                                                                                                            5192, 2021, 1, Downloaded from https://onlinelibrary.wiley.com/doi/10.1155/2021/9910942 by Cochrane Russian Federation, Wiley Online Library on [08/04/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+12                                                                                                                               Scientiﬁc Programming
+
+
+                                                           70
+                                                                                                                            65
+                                                           60
+                                                                                                                   50
+                                                           50
+
+
+                                     Latency (ms)
+                                                                                                       45
+                                                                                                  42
+                                                           40                       36
+                                                                31                        30
+                                                           30
+
+                                                           20            18
+
+                                                           10
+                                                                     1              2             3                     4
+                                                                                 Number of Update Tablets
+                                                                Re-encoding
+                                                                Incremental Encoding
+                                 Figure 9: Performance comparison of two update algorithms.
+
+
+
+
+                                                           30
+                                                                                                                        28
+                                                           28
+                                                                                                                26.6
+
+
+
+
+                                     Recovery Time (min)
+                                                           26
+                                                                                                         24.3
+                                                           24
+                                                           22                           21.8
+
+                                                           20                    19.6
+                                                                          18.1                    18.2
+                                                           18
+                                                                 16.3
+                                                           16
+                                                           14
+                                                                              1                             2
+                                                                                  Number of Failed Nodes
+                                                                ree-Replicas
+                                                                ER-Store (h:w:c=20:40:40)
+                                                                ER-Store (h:w:c=20:60:20)
+                                                                ER-Store (h:w:c=20:20:60)
+                   Figure 10: Comparison of the recovery performance between three -replicas and ER-Sstore.
+
+
+6. Conclusions                                                                                 Data Availability
+Eﬃciency and reliability are two key features in distributed                                   -e data used to support the ﬁndings of this study have not
+storage. -is article has discussed the eﬃciency and reli-                                      been made available because the data also form part of an
+ability of the multireplicas and erasure code storage                                          ongoing study.
+methods. We also understand the diﬀerence in access fre-
+quency between data and propose using data temperature to
+distinguish data. -rough the division of data temperature,                                     Conflicts of Interest
+we have proposed an ER-store hybrid storage strategy, which
+                                                                                               -e authors declare that they have no conﬂicts of
+combines the characteristics of replication and erasure
+                                                                                               interest.
+coding to balance performance and storage utilization. We
+implemented this design on the CBase distributed database
+and conducted a series of experimental comparisons with                                        Acknowledgments
+the original three-replica mechanism of the system. Ex-
+perimental results show that the ER-store mechanism can                                        -is research was funded by the National Key Research and
+increase the system storage rate by 14.6%–18.3% while                                          Development Project (Grant no. 2019YFB2102600) and
+ensuring the performance of concurrent transaction                                             National Natural Science Foundation (Grant nos. 61572194
+processing.                                                                                    and 61672233).
+                                                                                                                                               5192, 2021, 1, Downloaded from https://onlinelibrary.wiley.com/doi/10.1155/2021/9910942 by Cochrane Russian Federation, Wiley Online Library on [08/04/2026]. See the Terms and Conditions (https://onlinelibrary.wiley.com/terms-and-conditions) on Wiley Online Library for rules of use; OA articles are governed by the applicable Creative Commons License
+Scientiﬁc Programming                                                                                                                    13
+
+
+References                                                              [16] H. Zhang, M. Dong, and H. Chen, “Eﬃcient and available in-
+                                                                             memory KV-store with hybrid erasure coding and replica-
+ [1] M. Zwolenski and L. Weatherill, “-e digital universe rich               tion,” in Proc. of the 14th USENIX Conference on File and
+     data and the increasing value of the Internet of -ings,”                Storage Technologies (FAST’16), CA, USA, March 2016.
+     Journal of Telecommunications and the Digital Economy,             [17] B. Mao, H. Jiang, S. Wu, Y. Fu, and L. Tian, “Read-perfor-
+     vol. 2, no. 3, 2014.                                                    mance optimization for deduplication-based storage systems
+ [2] I. P. Egwutuoha, D. Levy, B. Selic, and S. Chen, “A survey of           in the cloud,” ACM Transactions on Storage, vol. 10, no. 2,
+     fault tolerance mechanisms and checkpoint/restart imple-                pp. 1–22, 2014.
+     mentations for high performance computing systems,” 4e             [18] Y. Li, J. Zhou, W. Wang, and Y. Chen, “Re-store: reliable and
+     Journal of Supercomputing, vol. 65, no. 3, pp. 1302–1326, 2013.         eﬃcient kv-store with erasure coding and replication,” in
+ [3] A. Roy, R. Das, H. Zeng, J. Bagga, and A. C. Snoeren,                   Proceedings of the IEEE International Conference on Cluster
+     “Understanding the Limits of Passive Realtime Datacenter                Computing (CLUSTER), pp. 1–12, Albuquerque, NM, USA,
+     fault Detection and Localization,” IEEE/ACM Transactions on             September 2019.
+     Networking, vol. 27, no. 5, pp. 2001–2014, 2019.                   [19] J. Li and B. Li, “Demand-aware erasure coding for distributed
+ [4] B. Navin, M. Keith, B. S. Fred, and T. Sam, 4e Primary-                 storage systems,” IEEE Transactions on Cloud Computing,
+     Backup Approach, Distributed Systemspp. 199–216, ACM                    vol. 9, no. 2, pp. 532–545, 2021.
+     Press/Addison-Wesley Publishing Co, NY, USA, 2nd edition,          [20] K. V. Rashmi, N. B. Shah, D. Gu, H. Kuang, D. Borthakur, and
+     1993.                                                                   K. Ramchandran, “A solution to the network challenges of
+ [5] R. V. Renesse and F. B. Schneider, “Chain replication for               data recovery in erasure-coded distributed storage systems: a
+     supporting high throughput and availability,” in Proceedings            study on the Facebook warehouse cluster,” in Proceedings of
+     of the 6th conference on Symposium on Operating Systems                 the 5th USENIX Workshop on Hot Topics in Storage and File
+     Design & Implementation - Volume 6 (OSDI’04), pp. 91–104,               Systems (HotStorage 13), San Jose, CA, USA, June 2013.
+                                                                        [21] “CBase       Home      Page,”     2021,     https://github.com/
+     USENIX Association, San Francisco, CA, USA, September
+                                                                             BankOfCommunications/CBASE.
+     2004.
+                                                                        [22] M. Vollmer, “Newton’s law of cooling revisited,” European
+ [6] J. Wang, H. Wu, and R. Wang, “A new reliability model in
+                                                                             Journal of Physics, vol. 30, no. 5, pp. 1063–1084, 2009.
+     replication-based big data storage systems,” Journal of Parallel
+                                                                        [23] W. Yijie and L. Sijun, “Research and performance evaluation
+     and Distributed Computing, vol. 108, pp. 14–27, 2017.
+                                                                             of data replication technology in distributed storage systems,”
+ [7] M. K. Mckusick and S. Quinlan, “GFS: Evolution on fast-                 Computers & Mathematics with Applications, vol. 51, no. 11,
+     forward,” ACM Queue, vol. 7, no. 7, pp. 10–20, 2009.                    pp. 1625–1632, 2006.
+ [8] H. Andreas, M. Alan, and D Peter, “Glacier: highly durable,        [24] A. R. Nasibullin and B. A. Novikov, “Replication in distrib-
+     decentralized storage despite massive correlated failures,” in          uted systems: Models, methods, and Protocols,” Programming
+     Proceedings of the 2nd conference on Symposium on Networked             and Computer Software, vol. 46, no. 5, pp. 341–350, 2020.
+     Systems Design & Implementation - Volume 2 (NSDI’05),              [25] M. Gandelman and Y. Cassuto, “Treeplication: an erasure
+     pp. 143–158, USENIX Association, Boston, MA, USA, May                   code for distributed full recovery under the random multiset
+     2005.                                                                   channel,” IEEE Transactions on Information 4eory, vol. 67,
+ [9] H. Cheng, S. Huseyin, X. Yikang et al., “Erasure coding in              no. 6, pp. 3542–3556, 2021.
+     windows azure storage,” in Proceedings of the 2012 USENIX          [26] Y. Hu, L. Cheng, Q. Yao et al., “Exploiting combined locality
+     conference on Annual Technical Conference (USENIX                       for wide-stripe erasure coding in distributed storage,” in
+     ATC’12), USENIX Association, Boston, MA, USA, June 2012.                Proceedings of the 19th USENIX Conference on File and
+[10] S. Maheswaran, A. Megasthenis, P. Dimitris et al., “XORing              Storage Technologies (FAST 2021), CA, USA, February 2021.
+     elephants: novel erasure codes for big data,” Proceedings of       [27] S. Mitra, R. Panta, M. R. Ra, and S. Bagchi, “Partial-parallel-
+     VLDB Endow, vol. 6, pp. 325–336, 2013.                                  repair(PPR): a distributed technique for repairing erasure
+[11] K. V. Rashmi, N. B. Shah, K. Ramchandran, and P. V. Kumar,              coded storage,” in Proceedings of the 11st European Conference
+     “Information-theoretically secure erasure codes for distrib-            on Computer Systems (EUROSYS’16), London, UK, April
+     uted storage,” IEEE Transactions on Information 4eory,                  2016.
+     vol. 64, no. 3, pp. 1621–1646, 2018.                               [28] R. Li, X. Li, P. Lee, and Q. Huang, “Repair pipelining for
+[12] M. Subramanian, L. Wyatt, and R. Sabyasachi, “F4: Face-                 erasure-coded storage,” in Proceedings of the USENIX Annual
+     book’s warm BLOB storage system,” in Proceedings of the 11th            Technical Conference (USENIX ATC ’17), pp. 567–579, Santa
+     USENIX conference on Operating Systems Design and                       Clara, CA, USA, July 2017.
+     Implementation (OSDI’14), pp. 383–398, USENIX Associa-             [29] D. Ongaro, S. M. Rumble, R. Stutsman, J. Ousterhout, and
+     tion, Broomﬁeld, CO, USA, October 2014.                                 M. Rosenblum, “Fast crash recovery in RAMCloud,” in
+[13] J. S. Plank, “Erasure Codes for Storage Systems: A Brief                Proceedings of the 23rd ACM Symposium on Operating Sys-
+     Primer,” Login:: 4e Magazine of USENIX & SAGE, vol. 38,                 tems Principles (SOSP’11), pp. 29–41, Cascais, Portugal, Oc-
+     no. 6, pp. 44–50, 2013.                                                 tober 2011.
+[14] T. Rebecca, M. Essam, and S. Marco, “E-store: ﬁne-grained          [30] I. S. Reed and G. Solomon, “Polynomial codes over certain
+     elastic partitioning for distributed transaction processing             ﬁnite ﬁelds,” Journal of the Society for Industrial and Applied
+     systems,” Proceedings of VLDB Endow, vol. 3, pp. 245–256,               Mathematics, vol. 8, no. 2, pp. 300–304, 1960.
+     2014.                                                              [31] P. Kathrin and R. Alexander, “Consistency and fault tolerance
+                                                                             for erasure-coded distributed storage systems,” in Proceedings
+[15] S. Balakrishnan, R. Black, and A. Donnelly, “A building block
+                                                                             of the ﬁfth international workshop on Data-Intensive Dis-
+     for exascale cold data storage,” in Proceedings of the 11th
+                                                                             tributed Computing Date (DIDC ’12), pp. 23–32, Association
+     USENIX Symposium on Operating Systems Design and
+                                                                             for Computing Machinery, NY, USA, June 2012.
+     Implementation, pp. 351–365, Broomﬁeld, CO, USA, October
+                                                                        [32] M. Joseph, “J. Pareto principle home page,” 2021.
+     2014.
+

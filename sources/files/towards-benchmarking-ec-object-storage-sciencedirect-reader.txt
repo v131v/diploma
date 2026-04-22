@@ -1,0 +1,346 @@
+Title: Towards benchmarking erasure coding schemes in object storage system: A systematic review
+
+URL Source: https://www.sciencedirect.com/science/article/abs/pii/S0167739X24004862
+
+Markdown Content:
+[![Image 1: Elsevier](https://www.sciencedirect.com/us-east-1/prod/b5d02fe3412326475f6fc7d7c0b3e2006ff0d5f2/image/elsevier-non-solus.svg)](https://www.sciencedirect.com/journal/future-generation-computer-systems "Go to Future Generation Computer Systems on ScienceDirect")
+
+[![Image 2: Future Generation Computer Systems](https://ars.els-cdn.com/content/image/1-s2.0-S0167739X24X00114-cov150h.gif)](https://www.sciencedirect.com/journal/future-generation-computer-systems/vol/163/suppl/C)
+
+## Highlights
+
+*   •
+**Benchmarking Erasure Coding Schemes**: This study rigorously benchmarks three erasure coding schemes (RS(5+3), RS(7+5), RS(10+4)) within the OpenStack Swift environment, employing both local and remote servers for a comprehensive evaluation.
+
+*   •
+**Impact of Coding Fragment Size**: Discoveries demonstrate a notable rise in both read and write times corresponding to the enlargement of Erasure Coding’s fragment sizes. This highlights a pivotal facet of erasure coding performance, irrespective of potential bottlenecks.
+
+*   •
+**Time Efficiency Mechanisms**: Beyond erasure coding, the paper comprehensively examines time efficiency mechanisms, including data placement policies and scheduling algorithms, contributing to a holistic understanding of optimizing data retrieval and storage processes.
+
+*   •
+**OpenStack Swift Performance Analysis**: The study evaluates the time taken by OpenStack Swift to store data, providing valuable information for enhancing storage processes and ensuring optimal performance in a cloud-based object storage system.
+
+*   •
+**Comprehensive Fault Tolerance Mechanisms**: Delving into redundancy schemes, error correction codes, and distributed data placement strategies, the study aims to enhance the resilience of cloud-based object storage systems, contributing to a robust fault-tolerant architecture.
+
+## Abstract
+
+Erasure Coding (EC) in cloud storage minimizes [data replication](https://www.sciencedirect.com/topics/computer-science/data-replication) by reconstructing data from parity fragments. This method enhances [data redundancy](https://www.sciencedirect.com/topics/computer-science/data-redundancy) and efficiency while reducing storage costs and improving [fault tolerance](https://www.sciencedirect.com/topics/computer-science/fault-tolerance). It is more advantageous than replication in Object Storage Systems. EC guarantees data integrity by ensuring lossless transmission of all coded pieces. As data volumes continue to increase rapidly, the time efficiency of the EC method becomes crucial in ensuring optimal system performance. Various variables, including the algorithm employed, data size, number of storage nodes, hardware resources, and network conditions, can influence the speed of EC operations. Although some literature covers various aspects, there is still a research gap in understanding the I/O activities, time efficiency, and [fault tolerance](https://www.sciencedirect.com/topics/computer-science/fault-tolerance) of EC in object storage systems. Hence, our research aims to address these challenges in cloud-based object storage systems. We analyze and benchmark the data storage I/O performance of OpenStack Swift, focusing on the time efficiency of the Reed–Solomon (RS) algorithm across two datasets. Additionally, our contributions include benchmarking [EC performance](https://www.sciencedirect.com/topics/computer-science/coding-performance) in both local and remote [testbeds](https://www.sciencedirect.com/topics/computer-science/testbed), utilizing the SimEDC simulator for comprehensive efficiency and fault tolerance assessments. Moreover, we create a comprehensive dataset (MCSD-100) for benchmarking and conduct a systematic literature review. Finally, we identify and discuss future opportunities for enhancing EC in cloud-based object storage systems.
+
+## Introduction
+
+Distributed Storage Systems (DSS) are critical in managing the immense challenges posed by the exponential growth of data. They provide scalable and reliable data storage solutions [1], [2]. Integrating Erasure Coding [3] into DSS is essential as it facilitates efficient data distribution, minimizes storage overhead, ensures robust data durability, and strengthens fault tolerance. EC thus stands out as a robust choice for empowering large-scale storage systems, offering enhanced reliability and efficiency in managing modern data demands. It addresses shortcomings of traditional methods by improving time efficiency, user-friendliness, and fault tolerance. EC distributes data across multiple devices, creating redundant fragments that ensure data integrity even in the event of device failures, thereby mitigating the risk of data loss.
+
+Additionally, EC’s reduced storage overhead enhances system performance and user experience by providing redundancy in a more compact form. Its seamless data recovery eliminates the need for extensive system modifications or user training, ensuring ease of use. Evaluating EC scheme performance is critical for informed decision-making and advancing data storage technologies. EC holds significant promise in reducing redundant storage requirements and addressing challenges related to fault tolerance and time efficiency. Research into EC extends beyond basic comprehension, focusing on benchmarking erasure codes with a strong emphasis on data security and various benchmarking factors to assess their effectiveness.
+
+Besides, researchers have explored various solution-based approaches to enhance the performance and effectiveness of EC techniques. Chiniah et al. [3] assess the integration of Erasure Codes in popular distributed storage systems, covering design principles, data models, failure handling, consistency, and security. Greenan et al. [4] investigate using Erasure Codes to reduce power consumption in storage systems through power-aware coding techniques. Balaji et al. [5] examine efficient repair methods for distributed storage, including regenerating codes and locally recoverable codes. Wang et al. [6] propose a secure integrity auditing mechanism for cloud storage using distributed erasure-coded data and homomorphic tokens. Dong et al. [7] introduce Coop-U, a cooperative update scheme for enhancing the performance of erasure-coded data updates in distributed storage systems.
+
+Moreover, Lin et al. [8] propose a secure decentralized erasure code combining threshold public key encryption and a variant of decentralized erasure code to address privacy concerns in distributed networked storage systems. The resulting system ensures robustness, privacy, and cost-effectiveness, safeguarding data even if all storage servers are compromised. Pei et al. [9] introduce Group-U, a grouped and pipelined update scheme for erasure-coded storage systems, significantly reducing update overhead and time compared to existing methods. This approach optimizes efficiency by dynamically adjusting group size and optimizing data transmission and computation. While some studies benchmark EC in terms of cost analysis [10], failure repair [11], storage efficiency [10], [12], [13], data availability, durability [14], and fault tolerance [13], [14], none specifically focus on optimizing time efficiency in terms of I/O operations for EC schemes in Object Storage System.
+
+Benchmarking EC is essential for evaluating performance, scalability, and optimization, enabling comparative analyses and standardization. It provides insights into operational efficiency, identifies areas for improvement, and aids in selecting suitable solutions. EC is widely adopted across various domains: ensuring data durability and cost-effectiveness in cloud storage, enhancing fault tolerance and scalability in distributed file systems, optimizing storage efficiency in backups and archives, and supporting resource utilization in large-scale systems. It also ensures high availability in data centers and reliable data storage in IoT applications, offering a valuable alternative to replication in handling today’s data growth challenges [3]. Organizations use benchmarking to assess system performance across different workloads, compare various implementations, and contribute to benchmark standardization.
+
+Erasure Coding has become a promising solution for addressing challenges in fault tolerance and time efficiency. Our research prioritizes the identification of EC schemes that optimize both factors specifically for OpenStack Swift cloud storage systems. Among various EC techniques including XOR-based Erasure Codes [15], Fountain Codes [16], Luby Transform (LT) Codes [17], and Reed–Solomon Codes, we select RS Codes for benchmarking due to their known limitations in fault tolerance, inefficiency with large datasets, and error correction capability. Our study focuses on experimenting with diverse datasets to benchmark EC schemes within the Object Storage System context. This involves selecting the most suitable EC technique, setting up an experimental test environment, and carefully curating datasets for thorough analysis and comparison.
+
+To address the existing research gap, our benchmarking framework focuses on addressing challenges related to time efficiency in cloud-based object storage systems. It evaluates I/O activity key metrics 1 such as upload, download, deletion, waiting times, and fault tolerance, with a specific emphasis on assessing the performance of erasure coding techniques. Moreover, our contributions include in-depth time efficiency analysis, fault tolerance exploration, dataset creation, systematic review of existing studies, and identification of opportunities for improvement in EC for cloud-based object storage systems.
+
+Based on our study, we make the following contributions to this paper:
+
+*   •
+We investigate the time efficiency of RS Codes (RS (5+3), RS (10+4), RS (7+5)) in OpenStack Swift Object Storage, evaluating upload, download, deletion, and waiting times to provide comparative insights.
+
+*   •
+Besides, we explore the fault tolerance aspect of EC using the SimEDC simulator and compare fault tolerance results with various schemes to improve reliability.
+
+*   •
+Furthermore, our study contributes significantly by introducing a new EC dataset (MCSD-100) [18], tailored specifically for our benchmarking experiments. Additionally, we utilize the established benchmark dataset (COCO-17) [19] for comparison and validation.
+
+*   •
+Finally, we provide a systematic theoretical and experimental review alongside existing literature. Our benchmarking validates the novelty of our research, highlighting opportunities to improve time efficiency and fault tolerance in EC.
+
+The organization of this paper is further segmented into different sections. Section 2 reviews related literature and research. Section 3 covers EC, focusing on RS for OpenStack Swift and the SimEDC simulator. Section 4 outlines the methodology, including test bed setup and EC selection. Section 5 details the datasets used. Section 6 presents experimental results. Section 7 compares findings with related studies, discusses limitations, and suggests future work. Finally, Section 8 concludes the paper.
+
+## Access through your organization
+
+Check access to the full text by signing in through your organization.
+
+[Access through**your organization**](https://www.sciencedirect.com/user/institution/login?targetUrl=%2Fscience%2Farticle%2Fpii%2FS0167739X24004862)
+
+## Section snippets
+
+## Review of existing literature
+
+In Cloud Computing, developing an improved security system for distributed storage presents significant challenges. Many of these challenges with new technologies are being addressed over time. Numerous researchers have studied and developed various theories and methodologies to achieve these successes, including the implementation of EC. Storing big data in OpenStack Swift with the help of EC has also been successful in many cases [20]. In this section, we aim to address all the necessary
+
+## Foundational concepts for the benchmark
+
+In this section, we present a comprehensive analysis of erasure coding in OpenStack Swift, starting with an overview of its integration and advantages. After, we delve into the specifics of Reed–Solomon coding, discussing its implementation and effectiveness in enhancing fault tolerance and data recovery. Additionally, we use SimEDC, a simulation framework designed to evaluate and compare various erasure coding schemes, highlighting its significance in optimizing storage system performance.
+
+## Benchmarking approach
+
+Fig. 1 shows the workflow of our study. First, we select an appropriate EC technique for our experiments. Next, we develop an experimental testbed for benchmarking EC schemes, as depicted in Fig. 2. We then choose datasets, including creating our own and using existing ones. Finally, our approach involves various implementations to achieve the desired results, such as data analysis.
+
+## Dataset
+
+We utilize two datasets to address our research problem: MCSD-100 [18] and COCO-17. The goal is to assess how erasure coding performs in upload, download, and delete operations on OpenStack Swift. Due to the challenges associated with handling large datasets, COCO-17 is specifically used for the upload operation.
+
+## Experimental evaluation
+
+In this section, we present a detailed overview of our experimental evaluation. We begin by outlining the experimental setup, including the configuration of our testbeds and the integration of necessary tools. Following this, we delve into the experimental results on upload, download, and deletion times, providing insights into the performance of different erasure coding schemes. Next, we analyze the waiting times for data transfers in our remote testbed, highlighting key factors affecting
+
+## Findings and discussion
+
+After analyzing the results of our experiments from Table 5, we conclude that there is a trade-off between data and parity fragments in terms of time efficiency. As the number of data and parity fragments increases, the time efficiency of the EC schemes decreases. Additionally, waiting time increases with file size; larger files take more time to process and handle. The remaining findings from systematic reviews underscore several key benefits, such as reduced data loss probability, optimal
+
+## Conclusion
+
+Our analysis indicates that larger data fragment sizes correspond to increased processing times within the cloud storage system, contributing to operational delays. Our primary objective is to benchmark time efficiency to gain insights into file processing times for future optimization efforts. Furthermore, our investigation into fault tolerance identified relative errors across all implemented schemes, highlighting the potential benefits of integrating load balancing, scaling strategies, and
+
+## CRediT authorship contribution statement
+
+**Jannatun Noor:** Writing – review & editing, Visualization, Validation, Supervision, Project administration, Methodology, Investigation, Formal analysis. **Rezuana Imtiaz Upoma:** Writing – original draft, Visualization, Resources, Methodology, Investigation, Funding acquisition, Formal analysis. **Md. Sadiqul Islam Sakif:** Writing – review & editing, Writing – original draft, Visualization, Resources, Methodology, Formal analysis. **A.B.M. Alim Al Islam:** Writing – review & editing, Validation,
+
+## Declaration of competing interest
+
+The authors declare that they have no known competing financial interests or personal relationships that could have appeared to influence the work reported in this paper.
+
+**Jannatun Noor** has been working as an Assistant Professor at the Department of CSE, School of Data and Sciences, BRAC University. She is the head of the Computing for Sustainability and Social Good (C2SG) Research Group at BRAC University. Besides, she is working as a Graduate Research Assistant under the supervision of Prof. Dr. A. B. M. Alim Al Islam in the Department of CSE at Bangladesh University of Engineering and Technology (BUET). Before BRAC University, she worked as a team lead for the
+
+## References (72)
+
+*   _et al._
+### [Strategizing secured image storing and efficient image retrieval through a new cloud framework](https://www.sciencedirect.com/science/article/pii/S1084804521001788)
+
+### J. Netw. Comput. Appl.
+
+(2021)
+
+*   Pei X. _et al._
+### [Efficient in-place update with grouped and pipelined data transmission in erasure-coded storage systems](https://www.sciencedirect.com/science/article/pii/S0167739X16304046)
+
+### Future Gener. Comput. Syst.
+
+(2017)
+
+*   Ma Y. _et al._
+### [A novel approach for improving security and storage efficiency on HDFS](https://www.sciencedirect.com/science/article/pii/S1877050915008625)
+
+### Procedia Comput. Sci.
+
+(2015)
+
+*   Guo C. _et al._
+### [Two-party interactive secure deduplication with efficient data ownership management in cloud storage](https://www.sciencedirect.com/science/article/pii/S221421262300011X)
+
+### J. Inf. Secur. Appl.
+
+(2023)
+
+*   Levitin G. _et al._
+### [Optimizing uploading and downloading pace distribution in system with two non-identical storage units](https://www.sciencedirect.com/science/article/pii/S0951832022006329)
+
+### Reliab. Eng. Syst. Saf.
+
+(2023)
+
+*   Siagian P. _et al._
+### [The design and implementation of a dashboard web-based video surveillance in openstack swift](https://www.sciencedirect.com/science/article/pii/S1877050921000326)
+
+### Procedia Comput. Sci.
+
+(2021)
+
+*   Noor J. _et al._
+### [Secure processing-aware media storage and archival (SPMSA)](https://www.sciencedirect.com/science/article/pii/S0167739X24002279)
+
+### Future Gener. Comput. Syst.
+
+(2024)
+
+*   Zhou A. _et al._
+### [Tree-structured data placement scheme with cluster-aided top-down transmission in erasure-coded distributed storage systems](https://www.sciencedirect.com/science/article/pii/S1389128621005703)
+
+### Comput. Netw.
+
+(2022)
+
+*   Noor J. _et al._
+### Orchestrating image retrieval and storage over a cloud system
+
+### IEEE Trans. Cloud Comput.
+
+(2022)
+
+*   Chiniah A. _et al._
+### On the adoption of erasure code for cloud storage by major distributed storage systems
+
+### EAI Endorsed Trans. Cloud Syst.
+
+(2022)
+
+*   Greenan K.M. _et al._
+### A spin-up saved is energy earned: Achieving power-efficient, erasure-coded storage
+
+*   Balaji S. _et al._
+### Erasure coding for distributed storage: An overview
+
+### Sci. China Inf. Sci.
+
+(2018)
+
+*   Wang C. _et al._
+### Toward secure and dependable storage services in cloud computing
+
+### IEEE Trans. Services Comput.
+
+(2011)
+
+*   Dong Y. 
+### Coop-u: a cooperative update scheme for erasure-coded storage systems
+
+### Arab. J. Sci. Eng.
+
+(2018)
+
+*   Lin H.-Y. _et al._
+### A secure decentralized erasure code for distributed networked storage
+
+### IEEE Trans. Parallel Distrib. Syst.
+
+(2010)
+
+*   Ra M.-R. 
+### Understanding the performance of ceph block storage for hyper-converged cloud with all flash storage
+
+(2018)
+
+*   Li X. _et al._
+### Fast proactive repair in erasure-coded storage: Analysis, design, and implementation
+
+### IEEE Trans. Parallel Distrib. Syst.
+
+(2022)
+
+*   Arafa Y. _et al._
+### Fault tolerance performance evaluation of large-scale distributed storage systems HDFS and ceph case study
+
+*   Chansler R.J. 
+### Data availability and durability with the hadoop distributed file system
+
+### The USENIX Magazine
+
+(2012)
+
+*   Wylie J.J. _et al._
+### Determining fault tolerance of XOR-based erasure codes efficiently
+
+*   MacKay D.J. 
+### Fountain codes
+
+### IEE Proc., Commun.
+
+(2005)
+
+*   Uyeda F. _et al._
+### Evaluation of a high performance erasure code implementation
+
+(2004)
+
+*   Upoma R. _et al._
+### MCSD-100
+
+(2024)
+
+*   Lin T.-Y. _et al._
+### Microsoft COCO: Common objects in context
+
+(2014)
+
+*   Arnold J. 
+### Openstack Swift: Using, Administering, and Developing for Swift Object Storage
+
+(2014)
+
+*   Wang Q. _et al._
+### A distributed data storage strategy based on LOPs
+
+### Arab. J. Sci. Eng.
+
+(2022)
+
+*   Opara-Martins J. _et al._
+### Critical review of vendor lock-in and its impact on adoption of cloud computing
+
+*   Zhang M. _et al._
+### SimEDC: A simulator for the reliability analysis of erasure-coded data centers
+
+### IEEE Trans. Parallel Distrib. Syst.
+
+(2019)
+
+*   Heo H. _et al._
+### Parity data de-duplication in all flash array-based OpenStack cloud block storage
+
+### IEICE Trans. Inform. Syst.
+
+(2016)
+
+*   Song Y. _et al._
+### FACHS: Adaptive hybrid storage strategy based on file access characteristics
+
+### IEEE Access
+
+(2023)
+
+*   Rivera Y. _et al._
+### Fulcrum rateless multicast distributed coding design
+
+### IEEE Access
+
+(2023)
+
+*   Shin D.-J. _et al._
+### Cache-based matrix technology for efficient write and recovery in erasure coding distributed file systems
+
+### Symmetry
+
+(2023)
+
+*   Darrous J. _et al._
+### Understanding the performance of erasure codes in hadoop distributed file system
+
+*   Nandyal A.B. _et al._
+### Improving data services of mobile cloud storage with support for large data objects using OpenStack swift
+
+### Int. J. Adv. Comput. Sci. Appl.
+
+(2021)
+
+*   Lombardo F. _et al._
+### Extending kubernetes networking to make use of segment routing over IPv6 (SRv6)
+
+(2023)
+
+*   Chen P.M. _et al._
+### RAID: High-performance, reliable secondary storage
+
+### ACM Comput. Surv.
+
+(1994)
+
+**Jannatun Noor** has been working as an Assistant Professor at the Department of CSE, School of Data and Sciences, BRAC University. She is the head of the Computing for Sustainability and Social Good (C2SG) Research Group at BRAC University. Besides, she is working as a Graduate Research Assistant under the supervision of Prof. Dr. A. B. M. Alim Al Islam in the Department of CSE at Bangladesh University of Engineering and Technology (BUET). Before BRAC University, she worked as a team lead for the IPV-Cloud team at IPvision Canada Inc. She completed her Ph.D. in Computer Engineering at Bangladesh University of Engineering and Technology (BUET) and also received her B.Sc. and M.Sc. degrees in Computer Science and Engineering from BUET.
+
+![Image 3](https://ars.els-cdn.com/content/image/1-s2.0-S0167739X24004862-fx1.jpg)
+
+**Rezuana Imtiaz Upoma** is a recent graduate from the Department of Computer Science and Engineering at BRAC University, completing her degree in 2024. Her research interests include cloud computing, with a specific focus on cloud storage, virtualization, and distributed systems. She previously worked as a DevOps Engineer at Cloud Production Ltd.
+
+![Image 4](https://ars.els-cdn.com/content/image/1-s2.0-S0167739X24004862-fx2.jpg)
+
+**Md. Sadiqul Islam Sakif** is a graduate research assistant at the Computing for Sustainability and Social Good (C2SG) Research Group at BRAC University. He holds a bachelor’s degree from BRAC University’s School of Data and Sciences in Dhaka, Bangladesh. He previously worked as a machine learning engineer at mPower-Social and as an engineer in the security operations center of an InfoSec Consultant Firm (EIC). His research interests include machine learning, computer vision, natural language processing, cloud computing, and security.
+
+![Image 5](https://ars.els-cdn.com/content/image/1-s2.0-S0167739X24004862-fx3.jpg)
+
+**A.B.M. Alim Al Islam** is working as a Professor at Bangladesh University of Engineering and Technology, Dhaka, Bangladesh. He has received a B.Sc. and M.Sc. Engineering in Computer Science and Engineering from Bangladesh University of Engineering and Technology, Bangladesh. He also received a Ph.D. in Computer Science and Engineering in 2012 from the School of ECE, Purdue University, West Lafayette in the USA. His areas of research interest include Wireless Networks, Embedded Systems, Modeling & Simulation, Computer Networks Security, and Reliability Analysis.
+
+[View full text](https://www.sciencedirect.com/science/article/pii/S0167739X24004862)
+© 2024 Elsevier B.V. All rights are reserved, including those for text and data mining, AI training, and similar technologies.

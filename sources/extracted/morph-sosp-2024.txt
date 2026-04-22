@@ -1,0 +1,1046 @@
+                  Morph: Efficient File-Lifetime Redundancy
+                    Management for Cluster File Systems
+                      Timothy Kim∗ , Sanjith Athlur∗ , Saurabh Kadekodi§ , Francisco Maturana∗
+                         Dax Delvira∗ , Arif Merchant§ , Gregory R. Ganger∗ , K. V. Rashmi∗
+                                                            ∗ Carnegie Mellon University                § Google
+
+
+Abstract
+Many data services tune and change redundancy configu-
+rations of files over their lifetimes to address changes in
+data temperature and latency requirements. Unfortunately,
+changing redundancy configs (transcode) is IO-intensive. The
+Morph cluster file system introduces new transcode-efficient
+redundancy schemes to minimize overheads as files progress
+through lifetime phases. For newly ingested data, commonly
+stored via 3-way replication, Morph introduces a hybrid re-
+dundancy scheme that combines a replica with an erasure-
+coded (EC) stripe, reducing both ingest IO and capacity over-
+heads while enabling free transcode to EC by deleting repli-
+cas. For subsequent transcodes to wider, more space-efficient
+EC configs, Morph exploits Convertible Codes, which mini-
+                                                                                              Figure 1. Morph reduces ingest+transcode IO on real-world cluster data.
+mize data read for EC transcode, and introduces new block                                     The graphs on the left show one week of measured hourly ingest+transcode
+placement policies to maximize their effectiveness.                                           IO (top=A) and transcode-only IO (bottom=C) for one of the largest Google
+   Analysis of data ingest and transcode activity in Google                                   data services. The graphs on the right show the IO to provide the same data
+storage clusters shows the current massive IO load and the                                    protections and lifetime transitions using Morph. The colors categorize IO
+                                                                                              for the different lifetime transitions: ingest, transcode from 3-way replica-
+potential savings from Morph’s approach—transcode IO can
+                                                                                              tion to a narrow EC (e.g., RS(8,12)) after a day or so, transcode from narrow
+be reduced by over 95%, and total ingest+transcode IO can be                                  EC to medium LRC (e.g., LRC(32,38)) after a month or so, and transcode
+reduced by 50–60% while also reducing capacity overheads                                      from medium LRC to wide LRC (e.g.,LRC(64,74)) after several months.
+for newly ingested data by 20%. Experiments evaluating a
+Morph implementation in HDFS show that these benefits
+can be realized in a real system without hidden increases in                                  The values of 𝑘 and 𝑛 dictate data durability, availability and
+complexity, tail latency, or degraded-mode latency.                                           storage cost and can also affect read and write performance.
+                                                                                              For instance, a EC(6,9) stripe of the commonly-used Reed-
+1     Introduction                                                                            Solomon code can tolerate 3 simultaneous chunk failures at
+                                                                                              3
+Distributed file systems (DFSs) spread PBs-to-EBs of data                                     6 =50% storage overhead. As such, different values of 𝑘 and
+over 10Ks-to-100Ks disks and use redundancy for fault tol-                                    𝑛 are often selected for different files’ contents.
+erance [8, 17, 49]. When ingested, most data is stored via                                        Indeed, the applications (data management services) that
+3-way replication to minimize throughput and tail latency                                     create most files in large clusters now change (transcode) the
+concerns. After a few hours or days, most data is erasure                                     redundancy schemes of those files one or more times during
+coded (EC) for capacity-efficient fault tolerance.                                            their lifetime to reduce space overhead as data cools. Since
+  Generally speaking, 𝑘 chunks of data protected with 𝑛 − 𝑘                                   different services have different reliability and performance
+chunks of parities (redundancy) make up a EC(𝑘,𝑛) stripe.                                     needs, the services choose the redundancy scheme and not
+                                                                                              the DFS. In most file systems [14, 25, 43], transcode is not
+                                                                                              directly supported as a native DFS operation. Instead, an
+                                                                                              application transcodes a file by reading the file’s data, writing
+                                                                                              it into a new file with the new EC, and deleting the original.
+                                                                                                  In large-scale cluster file systems, huge amounts of IO
+                                                                                              are used for establishing and changing redundancy. As a
+                                                                                              concrete example, Fig. 1A shows measured ingest+transcode
+This work is licensed under a Creative Commons Attribution International 4.0 License.
+SOSP ’24, November 4–6, 2024, Austin, TX, USA
+                                                                                              IO for one of the largest data services in a Google storage
+© 2024 Copyright held by the owner/author(s).                                                 cluster going through the lifetime phases presented in Fig. 2.
+ACM ISBN 979-8-4007-1251-7/24/11                                                              Fig. 1C zooms in on the transcode portion, which is 20–33%
+https://doi.org/10.1145/3694715.3695981                                                       of the 5–13PB/hour total.
+
+
+
+                                                                                        330
+                                                                                            a valid EC(30,33) stripe (with all 𝑛=33 on different servers),
+                                                                                            which can require moving some data chunks if not placed
+                                                                                            properly. Morph introduces data placement policies to avoid
+                                                                                            such data movement and employs parity placement policies
+                                                                                            to maximize server-local computation.
+                                                                                               We implement Morph in HDFS [15], enabling head-to-
+                                                                                            head comparison to a popular open-source DFS. Experiments
+                                                                                            on a small academic cluster show that Morph achieves a 58%
+Figure 2. A file of 𝑓 bytes is ingested in 3-r. Then, at 𝑡 1 the file is transcoded
+to a narrow RS scheme, at 𝑡 2 is transcoded to a medium-width LRC, and at 𝑡 3               reduction in disk IO and 55% reduction in network IO, com-
+is transcoded to wide LRC with the least storage overhead. Each transcode                   pared to HDFS, for a mix of data ingest and file lifetime
+requires 2 × 𝑓 IO as the file is read, re-encoded, and written to the new                   transitions. Our analytical evaluations of Morph applied
+redundancy scheme. Transcode happens in reaction to the file’s cooling                      to month-long traces of large-scale production data service
+data temperature over time.
+                                                                                            applications at Google similarly show 40-50% reductions in
+   We present Morph, a cluster file system that reduces IO re-                              IO for observed ingest and transcode activity. In addition,
+quirements for redundancy throughout file lifetimes. Morph                                  we confirm that reads and writes with a hybrid redundancy
+introduces new redundancy schemes that make both ingest                                     scheme perform almost identically to replication across work-
+and transcode more efficient and makes transcode a native                                   loads and cluster conditions. We also show that a practical
+DFS operation. For ingest, it introduces a new hybrid redun-                                implementation of Convertible Codes achieves significant IO
+dancy scheme that combines one (or two) replicas with an                                    and computational savings, directly reflecting the theoretical
+EC stripe. This reduces ingest IO and eliminates transcode                                  savings while not compromising encode or decode times for
+IO for the file’s first lifetime transition, since the replica can                          data writes and reconstruction events.
+simply be deleted to convert to EC. To make other transi-                                      Contributions. This paper makes five primary contri-
+tions efficient, Morph adopts and specializes for a recently                                butions: (1) It introduces a new hybrid redundancy scheme
+proposed theoretical code construction framework, called                                    that combines replication with erasure coding to provide
+Convertible Codes (CC) [37, 40, 41], that minimizes data read                               replication-like performance, lower space consumption, and
+when transcoding from one EC to another, often avoiding                                     near-zero transcode-to-EC overhead. (2) It describes data
+reading any data chunks (just the parities).                                                and parity placement policy augmentations that minimize
+   The result is large reduction in ingest+transcode IO. Com-                               both disk IO and network IO for transcode operations with
+paring Fig. 1B to Fig. 1A, we see that Morph would reduce the                               minimal impact on other placement considerations. (3) It de-
+IO required by ≈40%. About half of the reduction comes from                                 scribes how Morph makes transcode a native DFS operation
+a 20% reduction in ingest IO, because the hybrid scheme of                                  and combines Convertible Codes with (1) and (2) in a real sys-
+one replica plus an EC stripe is a 2.4× data expansion rather                               tem. (4) It shows that Morph can be implemented efficiently,
+than 3× for 3-way replication. The capacity consumed is also                                outperforms HDFS for both ingest and each transcode step,
+reduced accordingly. The other half comes from a >95% re-                                   and offers large reductions in the overall ingest+transcode
+duction in transcode IO (compare Fig. 1D to Fig. 1C) required                               IO based on production traces from Google. (5) It establishes
+for file lifetime transitions.                                                              that Convertible Codes, which were so far studied only the-
+   Realizing Morph’s promise has required overcoming a                                      oretically, can indeed be incorporated into real-world DFSs
+number of correctness and efficiency challenges. First, ingest                              and that they provide significant IO and computational sav-
+uses 3-way replication to achieve high-write throughput and                                 ings for transcode operations in production traces.
+low write and read tail latencies (since the newest data is
+warmest), and to avoid in-line EC which comes with incre-
+mental parity update complexity from read-modify-write. A                                   2   Background and Motivation
+straightforward realization of the hybrid redundancy scheme                                 Exascale storage clusters contain 100Ks of disks deployed on
+would jeopardize all of these requirements. Morph introduces                                1000s of servers managed by a distributed file system (DFS).
+a write protocol that replicates (3-way) across servers, but                                Each file’s contents are stored in a set of fixed-size chunks
+rapidly computes the EC parities in the background and usu-                                 using the redundancy scheme its creator specifies.
+ally deletes the then-unneeded extra replicas before they                                      Data redundancy schemes. Replication and erasure cod-
+are written to disk. Second, while recent work in the field                                 ing are the main redundancy mechanisms used to ensure
+of coding theory has provided the theoretical foundations                                   data availability and durability. Generally, replication has
+for Convertible Codes, incorporating this new class of codes                                lower average and tail write latency (see Fig. 3) at the ex-
+requires system design changes to realize the promised bene-                                pense of higher storage overhead, with 3-way replication
+fits in practice. For example, EC-to-EC file transcode requires                             (“3-r") being the most common replication configuration
+processing multiple EC stripes at once, such as when com-                                   in practice[15, 17, 43]. Since replicas are exact copies, any
+bining each sequence of five EC(6,9) stripes in the file into                               replica can be read to service a read request. In fact, some
+
+
+
+                                                                                      331
+Figure 3. 3-r outperforms RS(6,9). Write la-       Figure 4. File transitions per hour in four Google         Figure 5. HDD sustained bandwidth per capac-
+tency and throughput are shown for creating        storage clusters. Each line shows the millions of          ity trend in the last decade [4]. The red empty
+8MB files. Both median and tail (p90) write la-    file transitions pending+performed per hour (includ-       circle denotes the speculated bandwidth per ca-
+tency for RS(6,9) is almost 4× higher than 3-r.    ing early life to mid-life and mid-life to late-life) in   pacity cost with the introduction of disk technolo-
+Throughput is 68% lower, and read performance      one storage cluster, each transition consuming large       gies like HAMR (heat assisted magnetic record-
+suffers, especially for degraded-mode reads.       amounts of cluster resources.                              ing) [1–3].
+
+DFS clients will initiate reads of more than one replica in                          common for a large storage cluster to ingest 100s of PB daily,
+parallel and use the first response in order to decrease tail                        mostly stored in 3-r (200% storage overhead).
+latency [9].                                                                            As data ages, it tends to cool, such that IO performance
+     Erasure coding (EC) entails associating each 𝑘 equal-sized                      requirements are less stringent. Data in mid-life ranges from
+chunks with 𝑟 parities to make up an 𝑛-chunk EC stripe.                              warm to cool in terms of access frequency, and is often stored
+Compared to replication, EC has lower storage overhead                               using EC to reduce storage overhead. Narrow RS codes or
+( 𝑘𝑟 ) at the cost of generally higher latencies and lower IO                        narrow LRCs, where the EC stripe width (𝑘) is typically below
+efficiency. Also, when a data chunk is unavailable in an EC                          20 chunks, are popular choices for mid-life data. The narrow
+stripe, reconstructing it requires reading multiple other data                       width of the EC stripe keeps tail latencies from going too
+chunks in the stripe plus a parity chunk and mathematically                          high, especially during client degraded mode reads. Narrow
+decoding the missing chunk. A client read that decodes a                             RS or LRCs typically have 25–50% storage overhead.
+missing chunk is called a degraded-mode read.                                           Late-life data is cold or frigid. Online archives, backups,
+     Multiple classes of erasure codes exist [10, 16, 21, 26, 34,                    and years-old videos are examples of data in late-life. Client
+45, 46, 54] but the two most common constructions in large-                          accesses are rare but can occur, and thus, maximizing storage
+scale storage clusters are Reed-Solomon (RS) [54] and Locally                        efficiency is the main focus of redundancy scheme choice.
+Recoverable Codes (LRC) [21, 27]. An RS(𝑘, 𝑛) stripe (also                           Wide LRCs are typical for late-life data, with 𝑘 as large as
+written as 𝑘-of-𝑛) can tolerate any arbitrary combination of                         80 chunks [31], or even 150 chunks per EC stripe [11], with
+𝑛 − 𝑘 chunk failures. However, RS stripes incur the cost of                          10–20% storage overheads.
+high reconstruction overheads. A recovery in EC(k,n) stripe                             Transcodes are frequent and IO-intensive. Modern
+implies DFS has to read 𝑘 of 𝑛 blocks from the stripe. This                          DFSs allow files to appropriately change redundancy schemes
+overhead is exacerbated with wider stripes as 𝑘 increases.                           based on their stage of life. These transcodings have be-
+LRCs are popular due to their low reconstruction overheads.                          come a common operation performed by data services today.
+The 𝑘 data chunks are organized into 𝑙 local groups, each                            Fig. 4 shows the number of file transcodes per hour for four
+group protected with its own parity, in addition to 𝑟 global                         Google exascale storage clusters. The millions of transcodes
+parities. We denote this LRC with a (𝑘, 𝑙, 𝑟 ) scheme [27]. A                        each hour include early to mid, mid to late, and sometimes
+single failure in a local group can be recovered using 𝑘/𝑙                           multiple configurations in between. In most DFSs, however,
+local chunks. There are numerous LRC constructions [7, 20,                           transcode is not a native DFS operation—instead, an applica-
+23, 31, 33, 50–52]; discussing their differences is beyond the                       tion does it by reading file data and re-writing it as a new file
+scope of this paper. 1                                                               with the target scheme. This read–re-encode–write (RRW) op-
+     Data age, temperature and redundancy. Fig. 2 illus-                             eration requires significant disk IO and network bandwidth
+trates the lifetime of a file, such as for the data service shown                    to read data, write parities, and re-write data. Several systems
+in Fig. 1, in terms of the redundancy schemes used. Recently                         such as HDFS, Ceph and most popular public cloud infras-
+created data is often popular in its early life. Of course, data                     tructures we know of use this approach [14]. As illustrated
+reuse is absorbed by large caches, but early life data often                         in Fig. 1, huge amounts of IO (2PB/hour in this example) are
+requires higher availability and IO performance, and there-                          used for transcoding files via RRW.
+fore is often stored using replication because directly storing                         Increasing IO-per-byte-stored bottleneck. Per-HDD
+in EC has performance implications as shown in Fig. 3. It is                         capacity increases over the years at a faster rate than per-
+                                                                                     HDD bandwidth: ≈11.8%/year vs. ≈5.1%/year. Consequently,
+                                                                                     the available bandwidth-per-TB has been decreasing at an
+1 Readers can refer to the tutorial [12] on erasure-coding for more details.
+
+
+
+
+                                                                               332
+alarming ≈8.5%/year rate. Further, the onset of new disk tech-
+nologies like HAMR is expected to exacerbate the problem,
+as illustrated in Fig. 5. Thus, it is critical to design cluster file
+systems to minimize IO demand.
+
+3    Morph Overview
+Morph is a cluster file system that reduces cluster IO require-
+ments by addressing the large amount of IO used to establish
+redundancy (during ingest) and change it over file lifetimes
+(via transcode). It does so while continuing to satisfy applica-
+tion constraints related to data durability, storage efficiency,
+and access latency by introducing new redundancy schemes
+that match those properties for existing alternatives (3-r and
+RS) but reduce IO for ingest and transcode. Thus, applica-                    Figure 6. Client issuing a 40 MB spanning write in Hy(1, EC(5, 6)). The
+tions can continue to optimize their redundancy choices as                    replica is sent to 3 nodes and is acknowledged from each after reaching
+                                                                              memory-backed RAM. The first node persists the replica to disk while the
+before while using less IO.                                                   second node asynchronously sends data chunks with their parities to other
+    Morph’s design views the lifetime of a file in two parts:                 nodes. Both the second and third node delete their temporary replicas once
+(1) Early life and transition to mid-life, when data generally                parities are persisted. In its resting state, Hy(1, EC(5, 6)) has 1 replica, 5
+requires lower average and tail latency, and (2) transitions                  data chunks, and 1 parity chunk on disk.
+from mid-life onwards, when data generally becomes pro-
+                                                                              overheads after ingest and poses challenges for transitioning
+gressively colder and performance increasingly shrinks in
+                                                                              into more space-efficient storage options later on. Therefore,
+importance relative to storage overhead.
+                                                                              we propose an alternative hybrid redundancy storage scheme.
+    For early-life, Morph introduces a new hybrid redundancy
+                                                                              Morph’s hybrid redundancy offers better capacity-efficiency
+scheme that simultaneously employs both replication and EC,
+                                                                              than replication, fulfills the necessary properties for hot data,
+along with specifically designed placement and read/write
+                                                                              and enables efficient transitions as data cools.
+protocols. We show that applications can use this hybrid
+redundancy instead of 3-way replication to achieve early life                 4.1 Definition
+goals (performance and durability like 3-r) but with lower
+                                                                              Hybrid redundancy stores data in both replicated (replica
+ingest (file creation) IO and near-zero-IO transcode to EC
+                                                                              blocks) and erasure-coded form (EC stripe) simultaneously.
+for mid-life, via a new explicit transcode() interface.
+                                                                              Fig. 6 shows an example of a hybrid scheme with 1 replica
+    For mid-life, Morph leverages recent advances in coding
+                                                                              block and an EC stripe with 5 data chunks and one parity
+theory and employs a new class of codes called Convertible
+                                                                              chunk. Note that the data chunks of the EC stripe contain
+Codes (CC) [40, 41] in place of RS codes. CC provide the
+                                                                              the same data as the replicas and act as another copy despite
+same reliability properties and configuration flexibility, but
+                                                                              being in a different format. The hybrid scheme is generally
+they enable much more IO-efficient transcode from one EC
+                                                                              applicable to any combination of replicated and EC formats
+scheme to another. Whereas applications need to explicitly
+                                                                              as it is simply a combination of the two.
+opt into choosing hybrid redundancy during file creation
+                                                                                 A Hy(𝑐, EC(𝑘, 𝑛)) scheme represents 𝑐 copies for each repli-
+(ingest), CC are a drop-in replacement for existing EC mech-
+                                                                              cated block and an EC stripe consisting of 𝑘 data chunks pro-
+anisms. Applications can specify EC parameters as before
+                                                                              tected by 𝑛−𝑘 parity chunks. Morph presents the Hy(1, EC(𝑘, 𝑛))
+and expect the same performance and reliability guarantees.
+                                                                              scheme, that provides sufficient durability (one extra replica
+If, however, the target EC configurations are well-chosen (as
+                                                                              over an already durable EC stripe) and lower space overhead
+explained below), Convertible Codes allow Morph to signifi-
+                                                                              than 3-r ( 𝑛𝑘 × versus 2×), while meeting read and write per-
+cantly reduce IO overheads, especially in a transcode-native
+                                                                              formance requirements. In addition, Morph also supports
+DFS designed specifically to exploit the new codes.
+                                                                              Hy(2, EC(𝑘, 𝑛)) scheme with two replicas instead of one.
+    The next two sections describe the design and challenges
+                                                                                 While the idea of hybrid redundancy is simple, it encoun-
+overcome for each phase.
+                                                                              ters several challenges. We describe these challenges and
+                                                                              Morph’s solutions below.
+4    Early to Mid Life – Hybrid Redundancy
+Data in early life is often “hot” and thus demands high perfor-               4.2 Hybrid Writes
+mance requirements such as fast write throughput and low                      Hybrid redundancy writes data in both replicated and EC
+read latencies. Erasure coding cannot meet these high perfor-                 form during ingest. Though beneficial for future phase tran-
+mance demands (see Fig. 3), leaving replication as the defacto                sitions, writing the EC stripe when the file is first written
+option for new files. However, replication bears high storage                 poses challenges with write performance and reliability.
+
+
+
+                                                                        333
+   In many DFSs, writes are often deemed durable when the                  disks in parallel to improve read throughput compared to
+data reaches the in-memory buffer cache (battery-backed                    a single disk in a replica read. Hybrid redundancy offers
+RAM) on 3 nodes, say when writing a 3-r file. Consequently,                the read latency of replication and the read throughput of
+the ingest latency is bottlenecked by the slowest of three                 striped reads by dynamically adapting its read strategy to
+nodes when receiving data. To maintain these durability and                client access patterns.
+write latency expectations, Morph handles small writes and                    Latency-sensitive workloads. Reading data from a hy-
+spanning writes (large writes spanning multiple EC chunks)                 brid file can be performed in one of two ways (1) read from a
+differently.                                                               replica or (2) read from the EC stripe. We find at Google that
+   For small writes (writes spanning only one EC chunk),                   most client reads are small (i.e., ≤1 MB) latency-sensitive
+Morph always sends data to 2 replicas in-memory and to the                 reads. For this type of read, a hybrid scheme with 𝑐 = 2 per-
+corresponding EC chunk in the stripe. The write is acknowl-                forms exactly the same as 3-r at both the median and tail. As
+edged after all three nodes receive the data, thereby achieving            the read does not span across multiple EC chunks (i.e., read
+durability and slowest-of-3 write latency requirements. The                from a single chunk), option (2) becomes equivalent to op-
+parity computation is offloaded from the client, and delegated             tion (1). Even in the case when 𝑐 = 1, two copies of the data
+to one of the servers hosting a replica. 𝑐 of the 2 replicas               can be requested before resorting to a degraded mode read.
+and the EC chunk get persisted to disk immediately after                   We find analytically that probability of a degraded mode
+receipt of data. The remaining 2 − 𝑐 replicas are evicted from             read from the striped portion of a hybrid scheme is very low
+memory only after the parities are computed and persisted to               (tail-of-the-tail). See Appendix B for an example.
+disks to maintain durability. Thus, while Hy(2, EC(𝑘, 𝑛)) per-                Throughput-heavy workloads. In fact, there are client
+sists both the replicas to disk, Hy(1, EC(𝑘, 𝑛)) only persists             workloads that benefit from hybrid redundancy due to the
+one of the two replicas and discards the other. In the event               availability of a striped read. A striped read can achieve
+that a replica needs to be evicted from memory or when a                   greater read throughput than a sequential replicated read by
+file is closed before parities get persisted, both replicas are            concurrently reading from multiple disks. For large file scans,
+persisted even in the case of Hy(1, EC(𝑘, 𝑛)).                             Morph automatically reads in parallel from the stripe chunks
+   For large writes spanning multiple EC chunks, the afore-                rather than the replicas. As large reads become bottlenecked
+mentioned approach can lead to higher tail latencies. For                  by bandwidth rather than IOPS, striped reads outperform
+writes spanning all 𝑘 chunks, the client waits for the slowest-            replica reads.
+of-𝑘 nodes holding the chunks of the EC stripe in addition                    Degraded reads. When some data chunk is unavailable,
+to the two replica nodes. To overcome this challenge, Morph                fetching several more data chunks and decoding on the criti-
+writes all data to 3 replicas (instead of 2) in-memory. The                cal path induces latency on the critical path for erasure-coded
+client waits for acknowledgement from these three repli-                   files. Morph circumvents this issue by instead reading from
+cas (thereby maintaining the durability and latency require-               a replica when a data chunk is unavailable.
+ments) as shown in Fig. 6. One of the nodes storing a tem-
+porary replica assumes the role of a striper, and writes data              4.4 Fault Tolerance and Data Recovery
+to the 𝑛 data nodes in the striped form in the background                  In general, a Hy(𝑐, EC(𝑘, 𝑛)) scheme is capable of handling
+(async striping). Similar to the small writes case, while 𝑐 of             any arbitrary 𝑐 + (𝑛 −𝑘) failures. For any range of data, there
+the 3 replicas are persisted to disk immediately, others are dis-          exist 𝑐 replicas, 1 set of data chunks, and 𝑛 − 𝑘 parity chunks
+carded after persistence of parities. We meet the slowest-of-3             to recover from. Hybrid redundancy provides simple and
+latency requirements at the cost of server-to-server network               efficient reconstruction protocols. In the case of a replica
+IO and server memory resources.                                            chunk failure, the replica can be recovered by either (1) read-
+   Appendability guarantees. A popular attribute of repli-                 ing another replica with the same contents if 𝑐 > 1 or (2)
+cated files unavailable to EC files is the ability to append               reading from the EC stripe if (1) is not an option. In the case
+without modifying parities. Morph provides this ability by                 of an EC data chunk failure, the data can be recovered by (1)
+computing parities only when the EC stripe is complete. As                 reading the relevant portion of a replica or (2) reading the
+hybrid writes are made durable through the replicas and not                other data chunks and a parity chunk. The same options are
+parities, parity computation can be arbitrarily delayed until              available during an EC parity chunk failure, but the entire
+all the data chunks are present.                                           EC data stripe must be read either from the replica or the
+                                                                           data chunks to re-compute the parity.
+4.3 Hybrid Reads
+Replication offers the intrinsic advantage of having 𝑟 copies              4.5 Transitions from Hybrid to EC
+of data, enabling read latency that reflects the best of 𝑟 . Reads         Designing hybrid redundancy to be an exact combination
+to an EC stripe (striped reads), on the other hand, can span               of the replicated and EC components is a conscious choice
+up to 𝑘 blocks, in which case the read samples the worst                   meant to facilitate the future transition to EC. A transition
+of 𝑘. However, striped reads can potentially utilize up to 𝑘               from replication to EC forces the file to be rewritten, which
+
+
+
+                                                                     334
+has significant overheads (i.e., reading file, rewriting file,
+writing new parities) as the data needs to be eventually writ-
+ten out in a different format. Clients often know apriori which
+EC scheme the data will transition to and can build that in-
+formation into data ingest with hybrid redundancy. Thus, a
+transition from hybrid to erasure-coded is simply a localized               Figure 7. Transcode using CC to merge three stripes of CC(4,6) into one
+metadata change and the deletion of the replicas.                           stripe of CC(12,14). Instead of 12 data blocks, only the 6 parity blocks are
+                                                                            read for transcode, reducing IO by 50%.
+
+5    Mid to Late Life – Convertible Codes
+In mid to late life (post-replication period), a file sees multiple
+transitions between EC schemes, each scheme wider and
+more capacity efficient than the previous. Morph leverages
+recent advances in coding theory to minimize transcode IO
+in this phase of a file’s life. Specifically, Morph uses a class
+of codes called Convertible Codes (CC) [40, 41] instead of RS               Figure 8. Transcode using CC where number of parities increase. Two
+codes and uses a class of codes called Locally Recoverable                  stripes of CC(4,5) are transcoded to one stripe of CC(8,10), by reading all
+Convertible Codes (LRCC) [42] instead of LRCs. While the                    the parity blocks and only half of each of the data blocks, resulting in 25%
+theory behind CC and LRCC promises reduction in transcode                   reduction in the amount of data read for trancode.
+IO, several challenges need to be overcome to realize the
+benefits in practice. We discuss the codes, challenges and                  parities is at most one less than the initial number of pari-
+system design decisions and optimization done in Morph to                   ties per stripe. Here, the local parity of each local group is
+leverage these codes below.                                                 computed by only reading the first parity of each of the con-
+                                                                            stituent initial stripes. The global parities are computed by
+5.1 Codes used by Morph                                                     only reading the remaining parities. Consider the scenario of
+Convertible Codes (CC) [40, 41] are a new class of erasure                  CC(6,9) to LRCC(24,4,2) (24 data blocks, 4 local groups (with
+codes that are designed to significantly reduce transcode IO                one local parity), and 2 global parities), where four initial
+overheads. The key idea is to design the initial parities to en-            stripes are merged to form a single LRCC stripe. The first
+able maximum information extraction from existing parities                  parity of each initial stripe remains unchanged and is used
+during transcode, so that the new parities can be generated                 as the corresponding local parity in the LRCC stripe. The
+without having to read all the data chunks. These codes are                 other two parities of each initial stripe are then merged to
+an alternative to traditional codes (e.g., Reed-Solomon codes).             form the two global parities of the LRCC stripe.
+Specifically, CC have the same parameters and same fault                       The cool to frigid transcode uses similar mechanics (i.e.,
+tolerance properties as traditional codes, and only the parity              from LRCC(𝑘 𝐼 ,𝑙 𝐼 ,𝑟 𝐼 ) to LRCC(𝑘 𝐹 ,𝑙 𝐹 ,𝑟 𝐹 )) by independently
+coefficients are different. The carefully designed parity coef-             leveraging the properties of CC for computing both the local
+ficients help in reducing transcode IO. CC enable Morph to                  and global parities. See Appendix A for more details.
+support transcoding from any-to-any EC schemes.                                Next, we discuss how Morph takes transcode overheads
+   The efficacy of transcoding under CC depends on the                      for each of these scenarios into consideration when suggest-
+initial and final EC parameters. In the best case, when inte-               ing the best parameters to use.
+gral number of stripes are merged to create a stripe and the
+number of parities does not increase, new parities can be                   5.2 Choosing CC-friendly EC scheme parameters
+calculated solely by reading the existing parities and none                 The efficacy of transcode depends on the initial and final EC
+of the data blocks. An example of this is shown in Fig. 7. If               parameters since the amount of reduction in IO achieved
+integral number of stripes are merged but number of parities                by CC and LRCC depends on the code parameters. Morph
+per stripe increase, in addition to parities, reading some parts            strategically suggests EC scheme parameters such that they
+of the data blocks will be necessary. There is still a reduction            are "CC-friendly" in order to reap the maximum IO benefits,
+in transcode IO, albeit smaller. An example is shown in Fig. 8.             without sacrificing any other aspects such as durability or
+We provide more details, including a discussion on other                    space overhead. For instance, consider an application that
+transcoding scenarios, in Appendix A.                                       transcodes its files from EC(6,9) to EC(27,30). Using a final
+   Morph builds on the ideas behind CC and presents effi-                   scheme of EC(24,27) instead, improves transcode IO overhead
+cient transcode with LRCs as well. A possible warm-to-cool                  by about 40%, with better durability and a trivial decline in
+transcode is from CC to LRCC (Fig. 2). In the best case, each               space efficiency. Morph provides the strategic parameters as
+local group in LRCC is formed using an integral number                      suggestions to applications, who make the final decision on
+of initial stripes of the CC, and the number of final global                the choice of the parameters.
+
+
+
+                                                                      335
+   Morph uses following heuristics to identify EC parame-                          each set of 𝑘 ∗ consecutive chunks are placed on different
+ters that minimize transcode IO. When transcoding from                             servers without overlap.
+EC(𝑘 𝐼 ,𝑛𝐼 ) with 𝑟 𝐼 parities, to EC(𝑘 𝐹 ,𝑛 𝐹 ) with 𝑟 𝐹 parities: first,            Parity placement strategy. We observe when merging
+choose the final scheme such that the number of data chunks                        with Convertible Codes and 𝑟 𝐼 = 𝑟 𝐹 , each new parity chunk
+in the final stripe is an integral multiple of the initial number                  can be computed solely using the parities they replace. There-
+of data chunks. Second, keep the number of parities constant.                      fore, we choose to place parity chunks from different stripes
+However, when transitioning to wide schemes, it becomes                            that may be merged together on the same node. This deci-
+imperative to add extra parities for maintaining minimum                           sion enables local parity merges that do not incur network
+reliability. In such cases, minimize 𝑘 𝐹 /𝑘 𝐼 ∗ (𝑟 𝐼 +𝑘 𝐼 ∗ 𝑟 𝑟−𝑟
+                                                             𝐹    𝐼
+                                                               𝐹 )[41].
+                                                                                   overheads. When merging multiple stripes, the correspond-
+   While Morph uses CC to reduce the transcode IO and                              ing parity of each stripe is read from and combined into a
+suggests optimal parameters to use, the choice of when to                          new parity chunk on the same node. We argue that such
+transcode and parameters to trancode into remain with the                          placement of parities between stripes does not compromise
+application. To use CC across all scenarios, the application                       the reliability of any given stripe. Any given stripe is capa-
+needs to pre-determine the EC schemes to transcode into at                         ble of tolerating the same number of failures, independent
+the time of file writing. This is indeed realistically feasible, as                of failures in the other stripes it shares parity servers with.
+most transcoding events today are driven by a programmed                           Furthermore, the total amount of reconstruction work for a
+schedule. For instance, over 75% of the transcode events                           failed server does not change as each server already contains
+shown in Fig. 4 are commonly occurring, pre-determined                             chunks across many different stripes, a very small fraction
+operations known by the service in advance.                                        of which are the parities of a single file.
+
+
+5.3 Convertible Codes in Systems
+                                                                                   6   Implementation
+                                                                                   We implement Morph as an extension to the Hadoop Dis-
+Convertible Codes can be applied in DFSs to significantly re-
+                                                                                   tributed File System (HDFS). This section describes its (1)
+duce transcoding overheads. However, maximizing the ben-
+                                                                                   hybrid redundancy implementation and (2) robust transcod-
+efits of Convertible Codes requires being aware of potential
+                                                                                   ing module that supports general transcoding operations.
+future transitions and purposefully placing data and parity
+chunks onto the appropriate disks and racks. This section
+describes system decisions and block placement heuristics                          6.1 Hybrid Redundancy in a DFS
+that facilitate transcoding with Convertible Codes.                                HDFS supports replicated and EC storage natively. Morph
+   Transcoding in DFS. Transcoding occurs at the EC file                           offers hybrid as a third class of storage with support for client
+granularity, each of which consists of a logical sequence of                       read/write and background detection and recovery of block
+data chunks from EC stripes. Morph’s design creates new EC                         failures.
+stripes around sequential data chunks. For example, transcod-                         System block metadata. Clients can specify parameters
+ing to a 6-of-9 scheme creates a set of 3 parities for data                        for a hybrid file based on the client’s replication factor (𝑐)
+chunks 1-6, 7-12, etc... in the file. This strategy offers several                 and the directory’s erasure-coding policy (𝑘, 𝑛). A hybrid file
+benefits: 1) no additional metadata is required as stripe mem-                     consists of a list of hybrid blocks. A hybrid block is inter-
+bership can be inferred based on data block ordering and                           nally an EC stripe joined to a list of replica blocks. An EC
+EC scheme, 2) data placement decisions are aware of which                          stripe consists of metadata for data and parity chunks while
+blocks may end up merged later, 3) determining new stripes                         a replica block consists of metadata for replicated chunks.
+is computationally cheap.                                                          Maintaining a hybrid block as a single entity that has an in-
+   Data separation. EC guarantees adequate data reliability                        ternal nested structure serves to simplify metadata retrieval
+by ensuring that no two chunks of the same stripe are placed                       operations for recovery/reads and facilitate the metadata
+onto the same disk or server. Chunk placement policies en-                         transition to future states.
+force this property when the data is first written. However,                          Client hybrid write pipeline. HDFS writes replicas in
+when transcoding to a target scheme, the new EC stripe po-                         a pipeline where data is sent from client to Datanode and
+tentially consists of chunks that were originally stored on                        then mirrored from Datanode to Datanode until the end of
+the same server. To provide sufficient reliability, overlapping                    the chain. The client considers the write as durable when the
+chunks must be moved to an unoccupied server, incurring                            acknowledgment propagates back up through the pipeline
+disk and network IO. Morph eliminates this overhead by                             to the client. Morph’s hybrid write pipeline similarly mirrors
+planning for future stripe widths when the file is originally                      data through replica chunks, but additionally stripes to the
+written. As new stripes are formed from sequential data                            EC data chunks at the end of the chain. When the pipeline is
+blocks, Morph separates sequential sets of chunks in the ini-                      initialized, the striper instantiates and maintains a connec-
+tial placement decision. Specifically, we determine the LCM                        tion in parallel to all 𝑘 Datanodes in the stripe. Fig. 9 shows
+of all potential future stripe widths or 𝑘 ∗ . Chunks within                       a hybrid pipeline for a write to a Hy(2, CC(4, 𝑛)) block and
+
+
+
+                                                                             336
+                                                                                   from another replica chunk in parallel. If there are no more
+                                                                                   replica chunks available, the client performs a striped read.
+                                                                                   These steps are repeated until all copies are exhausted or
+                                                                                   the first result is received, at which point the outstanding
+Figure 9. Hybrid pipelined write in HDFS. Writes propagate down a chain            requests are canceled.
+and are striped by the last node. Note that in step 3, any given packet is            Morph optimizes for large, throughput-bound read re-
+mirrored to only the relevant node that stores the data chunk.
+                                                                                   quests separately. When the client requests a read that spans
+the striper forwarding the packet to the first data chunk in                       the contents of an entire EC stripe, Morph automatically
+the stripe, S1. After S1 is full, the striper will forward to S2.                  performs a striped read. If a chunk in the stripe is slow or
+   In a hybrid pipeline, replicas and data chunks are not                          unresponsive, the client will either request a replica chunk
+necessarily finished at the same time. Therefore, we add a                         if all the missing data is present on that single chunk or, if
+new flag to packets that specifies to finalize data chunks                         not, a parity chunk to perform a local degraded mode read.
+in addition to the replica chunks. This mechanism allows                              Failure detection and recovery. Block failure is detected
+keeping the data chunks open for appends from multiple                             in the Namenode by observing Datanode heartbeats. When
+stripers on their local filesystem until explicitly notified,                      a chunk is detected as corrupt or missing, the Namenode
+significantly improving write performance.                                         identifies the block (hybrid, replicated, or EC stripe) that
+   Parity computation options. The client is provided three                        the chunk is a part of based on a mask of its block ID. This
+options for EC parity computation: 1) client computes par-                         mechanism already exists in HDFS and is similarly leveraged
+ities synchronously, 2) Datanode computes parities asyn-                           for hybrid blocks. When hybrid block failure is detected, the
+chronously, 3) parities are disabled.                                              relevant metadata (replica, data, parity chunk locations, EC
+   Synchronous encoding: The client maintains a stripe buffer                      scheme) is bundled and sent to a Datanode for reconstruc-
+of size 𝑘 ∗ block size MB. When the stripe buffer is full, the                     tion. The Datanode follows the steps outlined in Sec. 4 to
+client encodes the stripe’s parities and sends them to the                         reconstruct the chunk.
+Datanodes to be appended to the appropriate parity chunk.
+The client observes the computational latency of encoding                          6.2 Transcoding as a first-class operation
+and sending parities for faster additional durability.                             Fig. 10 shows the various steps and data structures a transcod-
+   Asynchronous encoding: One Datanode is designated to                            ing operation goes through until completion.
+be the striper for all of the hybrid block’s write pipelines,                         Transcoding interface. Morph exposes a new interface
+ensuring that all data in the stripe passes through this node.                     at the Namenode defined as transcode(filename, policy). This
+As the striper receives data, it additionally writes the data                      new service allows clients to set a file’s EC scheme and the
+to an elastic buffer pool. A background thread on the Datan-                       DFS to enact the change asynchronously.
+ode polls the buffer to encode and write the parities when                            Transcoding flow. Morph implements the transcoding
+the stripe is full. To guarantee the best client performance,                      module within the Namenode, which exposes a simple in-
+writes to the buffer do not block and clients do not wait for                      terface to the client library in which clients specify a target
+parities to be received by the Datanode. By default Morph                          EC policy for a file or directory. The Namenode forms new
+encodes parities asynchronously for high throughput and                            stripes across sequential data chunks and stores the new
+fast durability.                                                                   pending stripes in the awaiting transcoding queue (ATQ).
+   No encoding: Parities are not persisted at rest, and thus,                      Upon each Datanode heartbeat to the Namenode, the Na-
+data is kept durable solely by extra copies. This option pro-                      menode polls the ATQ until the maximum amount of work
+vides the greatest throughput benefits as the system does                          is allotted or the queue is empty. The event is allocated into
+exactly the same amount of work as for 𝑐 + 1 replication but                       the work queue of the least busy target parity Datanode and
+compromises on extra durability.                                                   simultaneously tracked in the undergoing transcoding map
+   Hybrid block placement policies. Morph keeps block                              (UTM). The UTM is a concurrent map of a file ID and its
+placement modifications to the minimum and simply ex-                              pending stripes, and another map of a stripe to its pending
+cludes or includes Datanodes from the policy decisions. For                        parity chunks. Morph uses a bitmap to track completion
+hybrid writes, Morph initially allocates EC stripe chunk lo-                       status to minimize the memory footprint of the UTM. The
+cations based on the existing EC block placement policy.                           transcode completion is signaled when all parity chunks of
+Then, all locations in the EC stripe are excluded from any of                      all stripes of the file are complete.
+the corresponding replica block’s placement decisions. This                           Crash consistency during transcoding. The transcode
+guarantees no overlap between replica and EC chunks.                               completion signal serves several purposes. First, it allows the
+   Client read optimizations. Morph implements a modi-                             deletion of old parities to be delayed until all new parities
+fied version of a hedged read for hybrid files. A hedged read                      are transcoded. This decision guarantees that throughout
+initially requests the data from one replica chunk; if the ini-                    the transcoding process, normal reads, degraded reads, and
+tial read passes a certain time threshold, the client requests                     reconstruction of the stripe remain available to clients and
+
+
+
+                                                                             337
+                                                                                   7   Evaluation
+                                                                                   Morph significantly reduces disk+network IO and storage
+                                                                                   capacity for ingest+transcode. This section shows that (1)
+                                                                                   Morph reduces storage overhead and IO requirements for file
+                                                                                   creation (ingest) and lifetime transitions, (2) Morph’s hybrid
+                                                                                   redundancy does not sacrifice on client read/write perfor-
+                                                                                   mance and latency compared to 3-r, (3) applying Convertible
+                                                                                   Codes achieves faster, more IO-efficient transcode.
+                                                                                      Experimental setup. Our evaluation includes both mea-
+                                                                                   surements on a small academic cluster and benefits extrapo-
+                                                                                   lated from production cluster traces at Google. The experi-
+                                                                                   mental evaluations were run on a 29-node cluster of one Na-
+Figure 10. Morph transcode architecture in the context of HDFS com-
+ponents. In this diagram, a file is transcoded into two new stripes, each          menode, 23 Datanodes, and five client nodes. For the baseline
+with 3 data chunks and 3 new parity chunks. Note that the Namenode only            DFS, we use unchanged HDFS [49] v3.3.1, whereas Morph
+handles the assigning of transcode work to Datanodes and does not actually         uses the same HDFS version enhanced as described in Sec-
+read or write the file data.                                                       tions 3–6. Each machine has a Quad-Core AMD Opteron Pro-
+                                                                                   cessor and 128 GB RAM. Each Datanode has a 1 TB Ext4 file
+                                                                                   system atop a 7200 RPM Hitachi Ultrastar HDD. Each client
+system pipelines. Second, it triggers the atomic switch in                         node spawns up to 8 worker threads to generate read/write
+metadata to the new EC scheme and block locations, which                           traffic. The nodes in the cluster are connected via a 40 GbE
+keeps file state consistent with parity data while the file is                     network. We use DFS-perf [22] to introduce artificial client
+undergoing transcoding. Third, it is used as a reference point                     load into the cluster and measure client performance, blk-
+for the filesystem state in the event of a Namenode failure,                       trace [6] and seekwatcher [35] to measure block device IO
+avoiding the need to persist any of the metadata state.                            and cluster throughput, and Ganglia [36] to aggregate per
+   Transcoding-aware block placement policy. Morph                                 node memory and compute usage.
+preconfigures a default set of EC policies available to files
+and determines the LCM of the width, or 𝑘 ∗ , of each of those
+policies. As the client writes to a file, a custom block place-                    7.1 Morph makes lifetime transitions seamless
+ment policy excludes the locations of the other chunks in                          This section quantifies the end-to-end savings in IO and
+the set of 𝑘 ∗ chunks from the data chunk placement deci-                          storage overhead. We show both microbenchmarks and mac-
+sion. Additionally, the 𝑛 −𝑘 parity chunk locations originally                     robenchmarks evaluated in our cluster followed by an anal-
+designated for that file are excluded from the data chunk                          ysis of potential savings for workload traces captured in
+placements and included for the parity chunk placements.                           production at Google.
+This strategy guarantees 1) every set of 𝑘 ∗ data chunks are                          Morph lifetime savings. First, we use a microbench-
+uniquely placed, 2) data chunks and parity chunks do not                           mark to quantify the capacity and disk/network IO over-
+overlap, and 3) parity chunks across stripes that may be                           heads of ingest+transcode for a single 8 GB file following a
+merged are co-located.                                                             similar transition path as the data illustrated in Fig. 2.
+   Convertible Codes implementation. We implement                                     Fig. 11a shows the capacity (left Y-axis), disk IO (blue)
+both CC [37, 39] and LRCC [42]. When the number of parities                        and network IO (red) overheads in baseline HDFS where
+change, vector codes are employed which enable efficiently                         data is ingested as 3-r, resulting in 24 GB of disk usage. Ten
+computing new parities by reading only the parity chunks                           minutes after ingest, the data is transcoded from 3-r to RS(6,9)
+and a fraction of each data chunk. This is possible as a portion                   by reading and then writing the data in EC form with its
+of each new parity chunks is pre-computed when the file is                         new parities. The data is subsequently transcoded 15 minutes
+initially written. The specific part of the new parity chunk                       later to RS(12,15) in the same RRW process. Across the entire
+to pre-compute is strategically chosen such that the portion                       lifetime of the file (ingest+transcode), we measure the total
+of data blocks to read during transcode is physically con-                         network+disk IO to be 124 GB, an IO amplification of 15.5×.
+tiguous on disk, significantly improving IO efficiency. This                          Fig. 11b shows the same lifetime transitions but in Morph
+approach is based on the “hop-and-couple” optimization for                         where the data is instead ingested in Hy(1, CC(6, 9)). During
+reconstruction-efficient vector codes introduced in [45]. For                      ingest, Morph incurs a storage overhead of 150% compared
+example, when transcoding from CC(6,7) to CC(12,14), our                           to baseline’s 200%—a 25% reduction. The first transcode from
+design ensures that disks retrieve a single contiguous chunk                       Hy(1, CC(6, 9)) to CC(6,9) is free as it only consists of delet-
+of 4 MB, as opposed to retrieving 8 disjoint chunks of a half                      ing the replica, thus resulting in zero disk or network IO. In
+MB from each of the 12 data blocks. More details about CC                          the subsequent transcode to CC(12,15), Morph uses Convert-
+vector codes are provided in Appendix A.                                           ible Codes to merge parities of stripes locally on Datanodes
+
+
+
+                                                                             338
+Figure 11. Micro and macrobenchmarks evaluated in a cluster with 29 nodes comparing capacity, IO throughput, and compute/memory in baseline HDFS
+(3-r ingest + RRW transcoding) against Morph (hybrid ingest + CC transcodings). Figures (a) and (b) are microbenchmarks showing 8 GB ingest transcoded to
+EC(6,9) and then EC(12,15). Morph with Hy(1, CC(6, 9)) ingest (b) is best with 25% storage overhead reduction and 55% network and 58% disk IO reduction.
+Figures (c) and (d) are macrobenchmarks showing continuous ingest+transcode of files going through 3 transitions in their lifetime. For the same amount of
+work, Morph finishes 17% faster, requires 19% lower disk IO throughput, and uses 25% lower capacity compared to baseline. Figures (e) and (f) compare
+macrobenchmark compute and memory usage respectively. Morph reduces resource usage in both dimensions via more efficient transitions.
+
+without incurring network IO, as described in Sec. 5.3. Across                     Fig. 11e and Fig. 11f show average CPU and memory usage
+the entire file lifetime, we measure the total network+disk                     broken down across Namenode, Datanode, and client node
+IO to be 54 GB, an IO amplification of 6.75×. In comparison                     for the steady-state ingest+transcode workload. First, we
+to baseline, Morph achieves a 58% and 55% reduction in disk                     observe the client averages less total compute resources in
+and network IO bandwidths respectively.                                         Morph as the client handles transcode via RRW in baseline,
+   Savings in a steady-state ingest+transcode workload.                         while Morph uses the explicit transcode interface exposed
+We evaluate Morph’s benefits and performance by simulating                      by the Namenode. Despite the system handling transcode in
+continuous ingest+transcode traffic in an academic cluster.                     Morph, we still observe a slight decrease in compute in both
+After ingestion, each file is transcoded first to EC(5,8), then                 the Namenode and Datanodes attesting to the efficiency and
+to EC(10,13), and finally to EC(20,23). For the baseline, we                    simplicity of the transition process. In our experiment, the
+configure the cluster to ingest at a rate of ∼1100 MB/s (∼45%                   Datanode processes for both baseline and Morph were allo-
+cluster load) and transcode at a rate of ∼300 MB/s (∼12% clus-                  cated 512 MB of battery-backed buffer cache to enable fast
+ter load). Recent studies indicate that ∼56% cluster utilization                acknowledgements back to the client. Despite Morph using
+is generally representative of average datacenter load [44],                    the buffer cache to achieve fast hybrid writes as described in
+and we choose the same relative transcode to ingest rate                        Sec. 4.2, we find that Morph achieves all its benefits without
+based on Google’s production cluster as shown in Fig. 1. In                     allocating additional memory.
+Morph, we ingest and transcode the same number of files as                         Savings in production workloads. We analytically cal-
+the baseline to compare the two systems executing the exact                     culate the benefits of Morph using traces from large-scale
+same work.                                                                      production storage clusters at Google. Fig. 12 shows a month-
+   Fig. 11c and Fig. 11d show disk IO and capacity for base-                    long trace at hour-granularity of ingest+transcode IO traffic
+line and Morph respectively. Since no files are deleted, we                     from two services, each with PB-scale IO footprints. Note
+observe capacity rising for the duration of the experiment in                   that Service A is the same application as shown in Fig. 1. Data
+both systems. However, Morph achieves lower capacity over-                      in both services is ingested as 3-r, as it is hot and latency-
+heads due to ingesting data as Hy(1, CC(5, 8)) as opposed to                    sensitive to both reads and writes (subplot A of Services A,
+3-r, resulting in a total storage overhead reduction of 25%.                    B). As data cools, Service A transcodes either into a narrow
+Furthermore, Morph achieves better write and transcode                          RS code (approximately 15-wide) or a medium-width LRC
+latencies (plots omitted due to space) than the baseline. The                   (approximately 40-wide), depending on the type of file and its
+p50 and p90 transcode latency is 7× higher in the baseline,                     desired performance / storage-overhead tradeoffs2 . Once the
+and Morph demonstrates a (∼15–20%) reduction in write la-                       data written in narrow RS cools down further, it is transcoded
+tency. We attribute this improvement to the overall decrease                    into medium LRC. Finally, data that is frigid is transcoded
+in background activity from transcoding traffic. In particular,                 from medium LRC to wide LRC (approximately 60-wide).
+transcoding from Hy(1, CC(5, 8)) to CC(5,8) is free, CC(5,8)                    Just the transcoding operations zoomed in are shown in
+to CC(10,13) requires 50% less IO, and CC(10,13) to CC(20,23)                   subplots C of Services A, B. Each transition is performed
+requires 72% less IO than baseline. Moreover, the average                       via RRW. Service B only transcodes once after ingest, as it
+disk IO bandwidth needed for Morph for the duration of the                      goes directly from 3-r to a very wide LRC (approximately
+workload is 19% lower. Finally, without any compromise in                       80-wide), shown in the A and C subplots of Service B.
+reliability or performance, Morph executes the macrobench-
+mark 17% faster than the baseline.                                              2 Note that which files are to be transcoded into narrow RS versus medium
+
+                                                                                LRC is chosen by the application and not in the purview of Morph.
+
+
+
+
+                                                                          339
+       Figure 12. Lifetime transitions for a month-long trace from each of two large services in production exascale storage clusters at Google.
+
+   Subplots B and D of Fig. 12 (Services A, B) show the in-
+gest+transcode IO that would be incurred in Morph using
+aggregate calculations across stripes. During ingest, depend-
+ing on whether the first transcoding step is to the narrow
+RS or medium LRC, Morph accordingly can write data in
+Hy(1,narrow CC) or Hy(1,medium CC) in the case of Service
+A, and Hy(1,wide LRCC) in the case of service B. As shown
+above, Morph would incur a lower ingest storage overhead,
+which in this case would be 20% for Service A and 28% for
+Service B. Since the first transcoding step incurs no IO in
+case of Morph, transcoding to narrow, or medium CC for
+Service A, and wide LRCC for Service B would be free. As                       Figure 13. Write latency (a) for small writes (8 MB), throughput (b) for
+                                                                               large streaming writes (120 MB) across various ingest methods, and time
+there are no more transitions for Service B, the transcoding                   to persist parities (c) asynchronously in hybrid writes. In all cases, both
+IO incurred by Morph would be zero (shown in subplot D of                      forms of hybrid achieve the same ingest performance as 3-r while RS sees a
+Service B). CC aids transitions from narrow-to-medium and                      significant decline in performance.
+medium-to-wide CC in Service A would incur an IO cost, but
+as shown in subplot D of Service A, the disk IO throughput                     path. Meanwhile hybrid writes, similar to 3-r, can quickly
+is 95% lower compared to today’s DFS. Overall, Service A                       return back to the client after the three copies are propagated
+would reduce its disk IO throughput for all transitions for a                  and handle any EC asynchronously.
+month by 43% on average, whereas Service B would reduce                           We also compare write throughput across the ingest op-
+disk IO throughput by 51%, implying huge efficiency gains                      tions for large file (>100 MB) writes in Fig. 13b. We observe
+for petascale and exascale storage clusters.                                   both hybrid writes (1-copy and 2-copy) perform as well as 3-r
+                                                                               with less than a 2% decrease in write throughput at medium
+7.2 Hybrid redundancy matches or outperforms 3-r                               load (25 threads) and a 1% decrease at low load (12 threads).
+We now compare client write and read performance across                        Both hybrid schemes also see a 6% increase in throughput
+various hybrid schemes to 3-r and RS in an experimental                        compared to RS(6,9). We attribute this moderate increase to
+setup. We vary the number of client threads, 𝑡, across our ex-                 the durability guarantees provided by HDFS EC. EC writes
+periments to determine performance at low (t=12), medium                       puts parities on the critical path but does not compute them
+(t=25), and high load (t=40). We find that hybrid redundancy                   until the end of the stripe, thereby leaving data in an incom-
+achieves effectively the same (or at times better) performance,                plete stripe unprotected. Hybrid redundancy does not face
+attesting to its ability to replace 3-r for early-life hot data.               any durability issues with incomplete stripes as it leverages
+   Measuring hybrid write performance. Early-life data                         redundant replicas.
+is often appended and requires low write latency, as de-                          Parity computation and persistence can play a crucial role
+scribed in Sec. 4.2. Fig. 13a shows write latency across four                  in affecting hybrid write latency. Specifically, parities must
+ingest options for 8 MB files. Notably, both types of hybrid                   be persisted quickly enough to delete the temporary replica
+ingest perform almost identically to 3-r with less than a 2%                   before it gets flushed to disk. Fig. 13c shows the distribution
+slowdown at the median, whereas direct writes to RS(6,9)                       of time taken to persist parities in a write-only load. We
+are significantly slower (6× slowdown). For a small write                      measure 95% of parities are written within 500ms of the first
+(≤8 MB) workload, the client must wait for RS(6,9) to com-                     write to the stripe, confirming that the additional replicas
+pute and write out three additional parities on its critical                   are not necessarily kept in buffer-cache for a long time.
+
+
+
+                                                                         340
+Figure 14. Read latency for small reads (8 MB) across varying loads (a-c) and with nodes in the cluster down (d). And (e) read throughput for large
+stripe-spanning reads (48 MB). Hybrid and 3-r read latencies are similar in all conditions while RS performs worse in degraded mode. Read throughput for
+large reads improves as a result of better stripe parallelism.
+
+   Measuring hybrid read performance. We now com-                              draw several comparisons between CC and RS codes; recall
+pare the latency of client reads between 3-r, Hy(1, CC(6, 9)),                 that the latter must read all data chunks to compute new
+Hy(2, CC(6, 9)), and RS(6,9). Reads are “hedged” such that a                   parities.
+second parallel request to a replica is made at p95 latency,                      Fig. 15 compares RS and CC across two key metrics: la-
+which is a standard read optimization tactic. In the case of                   tency to compute new parities (Fig. 15a) and latency to read
+Hy(1, CC(6, 9)), the read is directed to the CC stripe if the                  the corresponding data necessary for transcoding (Fig. 15b).
+replica does not respond in time. Fig. 14a-d compares 8 MB                     We choose three different scenarios: (1) when the number of
+read latency for different redundancy options in varying                       parities stay constant (e.g., EC(6,9) to EC(12,15)), (2) when
+scenarios. Specifically, Fig. 14a, Fig. 14b, Fig. 14c show per-                the number of parities increase (e.g., EC(6,7) to EC(12,14))
+formance at 30%, 55%, and 80% cluster load respectively. We                    and (3) for a non-LRC to LRC transcoding (e.g., EC(6,9) to
+observe no significant difference in performance across all                    LRC(12,2,2)). We measure transcode latencies when twenty
+benchmarks between any of the redundancy options. We                           96 MB files are transcoded in parallel.
+note, however, that the tail of RS extends much further as a                      First, when transcoding from EC(6,9) to EC(12,15), the me-
+result of only having a single chunk to read from. The other                   dian computational latency reduces by 50% when compared
+schemes are capable of hedge-reading from an alternate copy                    to RS, which can be attributed to halving the computation
+while RS is forced to either wait or do a degraded mode read.                  matrix (12-wide in RS compared to 6-wide in CC). We also
+   For Fig. 14d, we measure read latency when 10% of the                       observe a 40% reduction in read latency. Transcoding with
+nodes in the cluster are down to observe performance in an                     CC requires much fewer concurrent disk reads and network
+extreme scenario with several degraded mode reads. Both                        transfers (6 parities in CC as opposed to 12 data chunks in
+Hy(1, CC(6, 9)) and Hy(2, CC(6, 9)) perform the same as 3-                     RS). Second, when transcoding from EC(6,7) to EC(12,14),
+r at the median and only see a 2% and 4% increase in p90                       CC waits for data from 14 disks and network transfers (as
+latency respectively, despite Hy(1, CC(6, 9)) performing a                     opposed to 12 in RS), but reads 33% less data overall. This is
+striped read 10% of the time and a degraded mode read for                      reflected in a 17% drop in read latency, albeit at the expense
+5% of the striped reads. RS(6,9), however, observes a palpable                 of longer compute latency. The compute latency increases be-
+decrease in performance towards the tail (52% increase in                      cause the process involves separating out the pre-computed
+latency) as a result of read-amplification and EC compute                      fraction of parities from existing parities. This is an accept-
+during degraded mode reads.                                                    able trade-off since disk bandwidth is increasingly becoming
+   For throughput, hybrid reads can perform parallel reads                     a more contested resource, as shown in Fig. 5.
+from the stripe, rather than the replica(s), especially in the                    Third, we show transcoding from EC(6,9) to an LRC EC(12,16)
+case of streaming large reads as described in Sec. 4.3 and                     with 2 local groups. Two initial stripes are combined to form
+Sec. 6. In Fig. 14e, we show the throughput benefits of Morph                  a final stripe. The first parity of the two stripes become the
+automatically prioritizing striped reads instead of replica                    local parities after transcoding, while the remaining two par-
+reads for large stripe spanning reads (48 MB). With 12 threads,                ities get converted to global parities. Similar to the first case,
+the read throughput increases by 71% compared to 3-r, and                      CC achieves 30% improvement in read latency, and about 50%
+with 25 threads the increase is 46%, as the increase is bottle-                improvement in compute latency. Further, we confirm that
+necked by disk bandwidth.                                                      encode(write)/decode(reconstruction) compute latencies stay
+                                                                               the same as RS when parities per stripe don’t change. When
+7.3 Convertible Codes minimize transcode IO                                    parities change in the second case, CC encoding is 80% slower
+This section evaluates a practical implementation of Convert-                  and decode is 150% slower, since it involves pre-computing
+ible Codes [37–39] and the latency and bandwidth benefits                      a fraction of parity block during encode and separating it
+from applying these codes to mid-to-late life transitions. We                  out during decode. However, note that compute latencies are
+
+
+
+                                                                         341
+                                                                                         The idea of transitioning between codes in a cluster has
+                                                                                      been considered in previous works. The paper [55] consid-
+                                                                                      ers transitioning between two specific codes, and thus not
+                                                                                      general (any-to-any). A recent line of work has studied how
+                                                                                      disk failure rates vary over time and proposed changing EC
+                                                                                      parameters accordingly [30]. In this context, multiple sys-
+                                                                                      tems have been proposed to reduce the IO spikes of such
+                                                                                      transitions [28, 29]. However, the total IO consumed in those
+        (a) Compute latency                     (b) Read latency                      systems is still high due to the need to read all the data
+                                                                                      chunks. The DFS-native transcode service in Morph uses CC
+Figure 15. Comparison of compute and read latencies for transcode using
+                                                                                      and LRCC to avoid having to read all the data chunks and
+CC and RS for three cases: when (A) parities stay same, (B) parity increases
+by 1, (C) EC to LRC. In A and C, we observe 30–40% reduction in read latency          help in reducing the total IO load in these systems.
+and compute latency cut by ≈ 50%. In B, separating the pre-computed                      StripeMerge [56] supports merging two narrow stripes of
+fraction of parities delays computation of parities, but reduces read latency         a carefully designed 𝑘-of-𝑛 code to generate one wider stripe
+by ≈ 17% and read bandwidth by ≈ 25%.                                                 of a 2𝑘-of-𝑛 ′ code, while keeping the number of parities fixed.
+                                                                                      Morph differs from StripeMerge in three important ways:
+                                                                                      (1) Morph is a DFS that supports transcoding of individ-
+negligible, when compared to read/write operations to/from
+                                                                                      ual files while maintaining the usual practice of restricting
+Datanodes, and have minimal effect on overall performance.
+                                                                                      EC stripes to data within file, for security and complexity
+   The above examples show the common case of transcoding
+                                                                                      reasons. StripeMerge assumes that any two stripes in the
+where multiple stripes merge to form a single stripe. However,
+                                                                                      system could be merged, and so searches throughout the
+note that CC offers significant advantages when transcoding
+                                                                                      cluster for ones with data on separate disks, whereas Morph
+to any general scheme. For instance, we evaluate transcoding
+                                                                                      explicitly places file data and parity to achieve this within
+EC(6,9) stripes to 𝑘-wide stripes for all cases where 6 < 𝑘 <=
+                                                                                      files. (2) StripeMerge supports only the one merge scenario
+30. CC achieves 45% IO reduction on average (33% in the
+                                                                                      (described above), whereas Morph supports efficient general
+worst case) when parities per stripe stay the same, and 20%
+                                                                                      transcoding (any to any). (3) Morph is implemented in and
+IO savings on average (12.5% in the worst case) when we
+                                                                                      compared with HDFS, handling all the metadata, sequencing,
+add an extra parity. A full exploration of these benefits is
+                                                                                      and crash consistency issues.
+provided in Appendix A.
+
+                                                                                      9    Conclusion
+8    Related Work
+                                                                                      Morph introduces new redundancy and placement schemes
+Large-scale cluster file systems have long relied on redun-
+                                                                                      to reduce file ingest and transcode overheads in DFSs. Morph’s
+dancy for fault tolerance, starting with replication being the
+                                                                                      new hybrid redundancy reduces ingest and early-life transcode
+primary means of redundancy [8, 18]. Subsequently, aca-
+                                                                                      IO, and Convertible Codes reduce subsequent EC-to-EC transcode
+demic research [5, 19, 24] and industry [13, 25, 27, 48, 53, 57]
+                                                                                      IO. For large Google data services, Morph’s techniques would
+cluster file systems have integrated erasure codes into the
+                                                                                      reduce transcode IO by over 95% and total ingest+transcode
+storage system to achieve space-efficient redundancy. These
+                                                                                      IO by 40–50%, while also reducing capacity required for
+are the common options in modern cluster storage.
+                                                                                      newly ingested data by about 20%—without compromising
+   A hybrid storage scheme using a combination of erasure-
+                                                                                      on performance or data reliability.
+coding and replication has been proposed for a distributed
+database system called ER-Store [32], as one of three storage
+options used for tablets depending on their data temperature.                         10    Acknowledgements
+Morph and its hybrid redundancy scheme differs from ER-                               We thank our shepherd Kang Chen and the anonymous re-
+store in several important ways: (1) ER-Store’s hybrid scheme                         viewers for their invaluable feedback. We extend special
+is used for “warm” storage, with 3-way replication used                               thanks to Larry Greenfield, Mustafa Uysal, and numerous
+for “hot” data, so ER-Store does not provide a protocol for                           other researchers and engineers at Google. This research is
+fully durable, low-latency ingest directly into it; ingesting                         generously supported in part by NSF grants CNS1956271,
+into hybrid redundancy requires a protocol like Morph’s                               CNS1901410, and CAREER 1943409, by a Sloan Foundation
+and is the source of significant benefit in DFSs; (2) ER-Store                        Fellowship, and by a VMware Systems Research Award. We
+transitions between storage options by re-writing tablets,                            also thank the members and companies of the PDL consor-
+like is done in traditional DFSs, as opposed to the IO-efficient                      tium (Amazon, Google, Hitachi, Honda, HPE, IBM, Intel, Jane
+approaches enabled and used in Morph; (3) ER-Store provides                           Street, Meta, Microsoft, NetApp, Oracle, Pure Storage, Sales-
+no support for changing EC scheme parameters, which is                                force, Samsung, Seagate, Two Sigma, Western Digital) and
+common throughout a file’s lifetime.                                                  VMware for their interests, insights, feedback, and support.
+
+
+
+                                                                                342
+References                                                                             [22] Rong Gu, Qianhao Dong, Haoyuan Li, Joseph Gonzalez, Zhao Zhang,
+ [1] How Lasers Could Unlock Hard Drives With 10 Times More Data Stor-                      Shuai Wang, Yihua Huang, Scott Shenker, Ion Stoica, and Patrick PC
+     age. https://www.popularmechanics.com/technology/a20078/heating-                       Lee. DFS-PERF: A scalable and unified benchmarking framework for
+     magnets-lasers-could-be-the-key-magnetic-recording/.                                   distributed file systems. EECS Dept., Univ. California, Berkeley, Berkeley,
+ [2] Seagate: HAMR is nailing it – no looming 20TB to 30TB capacity                         CA, USA, Tech. Rep. UCB/EECS-2016-133, 2016.
+     problem. https://blocksandfiles.com/2021/09/24/seagate-hamr-on-                   [23] Venkatesan Guruswami, Lingfei Jin, and Chaoping Xing. Construc-
+     course-no-looming-20-to-30tb-capacity-problem/.                                        tions of maximally recoverable local reconstruction codes via function
+ [3] Seagate Reveals HAMR HDD Roadmap: 32TB First, 40TB Fol-                                fields. IEEE Transactions on Information Theory, 66(10):6133–6143,
+     lows. https://www.tomshardware.com/news/seagate-reveals-hamr-                          2020.
+     roadmap-32-tb-comes-first.                                                        [24] John H Hartman and John K Ousterhout. The Zebra striped network
+ [4] HDD User Benchmarks. http://hdd.userbenchmark.com/, (accessed                          file system. ACM Transactions on Computer Systems (TOCS), 13(3):274–
+     July 5, 2023).                                                                         310, 1995.
+ [5] Thomas E Anderson, Michael D Dahlin, Jeanna M Neefe, David A Pat-                 [25] Dean Hildebrand and Denis Serenyi.                      Colossus under
+     terson, Drew S Roselli, and Randolph Y Wang. Serverless network file                   the hood: a peek into Google’s scalable storage system.
+     systems. In Proceedings of the fifteenth ACM symposium on Operating                    https://cloud.google.com/blog/products/storage-data-transfer/a-
+     systems principles, pages 109–126, 1995.                                               peek-behind-colossus-googles-file-system, 2021.
+ [6] Alan D Brunelle. Block I/O layer tracing: blktrace. HP, Gelato-Cupertino,         [26] Cheng Huang, Minghua Chen, and Jin Li. Pyramid codes: Flexible
+     CA, USA, 57, 2006.                                                                     schemes to trade space for access efficiency in reliable data storage
+ [7] Han Cai, Ying Miao, Moshe Schwartz, and Xiaohu Tang. A construction                    systems. ACM Transactions on Storage (TOS), 2013.
+     of maximally recoverable codes with order-optimal field size. IEEE                [27] Cheng Huang, Huseyin Simitci, Yikang Xu, Aaron Ogus, Brad Calder,
+     Transactions on Information Theory, 68(1):204–212, 2021.                               Parikshit Gopalan, Jin Li, Sergey Yekhanin, et al. Erasure Coding
+ [8] Brad Calder, Ju Wang, Aaron Ogus, Niranjan Nilakantan, Arild                           in Windows Azure Storage. In USENIX Annual Technical Conference
+     Skjolsvold, Sam McKelvie, Yikang Xu, Shashwat Srivastav, Jiesheng                      (ATC), 2012.
+     Wu, Huseyin Simitci, et al. Windows Azure storage: a highly available             [28] Saurabh Kadekodi, Francisco Maturana, Sanjith Athlur, Arif Merchant,
+     cloud storage service with strong consistency. In Proceedings of the                   KV Rashmi, and Gregory R Ganger. Tiger: Disk-Adaptive redundancy
+     Twenty-Third ACM Symposium on Operating Systems Principles, pages                      without placement restrictions. In 16th USENIX Symposium on Oper-
+     143–157, 2011.                                                                         ating Systems Design and Implementation (OSDI 22), pages 413–429,
+ [9] Jeffrey Dean and Luiz André Barroso. The tail at scale. Communications                 2022.
+     of the ACM, 56(2):74–80, 2013.                                                    [29] Saurabh Kadekodi, Francisco Maturana, Suhas Jayaram Subramanya,
+[10] A. G. Dimakis, P. B. Godfrey, Y. Wu, M. Wainwright, and Kannan                         Juncheng Yang, KV Rashmi, and Gregory Ganger. Pacemaker: Avoiding
+     Ramchandran. Network coding for distributed storage systems. IEEE                      heart attacks in storage clusters with disk-adaptive redundancy. In
+     Transactions on Information Theory, 56(9):4539–4551, 2010.                             Proceedings of the 14th USENIX Symposium on Operating Systems Design
+[11] Facebook. VAST Erasure Coding. https://vastdata.com/blog/                              and Implementation, 2020.
+     introducing-rack-scale-resilience, 2020.                                          [30] Saurabh Kadekodi, K V Rashmi, and Gregory R Ganger. Cluster storage
+[12] FAST. Ec tutorial. https://web.eecs.utk.edu/~jplank/plank/papers/2013-                 systems gotta have HeART: improving storage efficiency by exploiting
+     02-11-FAST-Tutorial.pdf, 2013.                                                         disk-reliability heterogeneity. In USENIX File and Storage Technologies
+[13] Daniel Ford, François Labelle, Florentina I Popovici, Murray Stokely,                  (FAST), 2019.
+     Van-Anh Truong, Luiz Barroso, Carrie Grimes, and Sean Quinlan.                    [31] Saurabh Kadekodi, Shashwat Silas, David Clausen, and Arif Merchant.
+     Availability in Globally Distributed Storage Systems. In USENIX Sym-                   Practical Design Considerations for Wide Locally Recoverable Codes
+     posium on Operating Systems Design and Implementation (OSDI), 2010.                    (LRCs). In 21st USENIX Conference on File and Storage Technologies
+[14] Apache Software Foundation.            Hdfs erasure coding.         URL                (FAST 23), pages 1–16, 2023.
+     https://hadoop.apache.org/docs/stable/hadoop-project-dist/hadoop-                 [32] Zijian Li and Chuqiao Xiao. Er-store: A hybrid storage mechanism
+     hdfs/HDFSErasureCoding.html, 2023.                                                     with erasure coding and replication in distributed database systems.
+[15] Apache Software Foundation.              Hdfs architecture.       https:               Scientific Programming, 2021:1–13, 09 2021.
+     // hadoop.apache.org/ docs/ stable/ hadoop-project-dist/ hadoop-                  [33] Gaojun Luo and Xiwang Cao. Constructions of optimal binary locally
+     hdfs/ HdfsDesign.html, 2024.                                                           recoverable codes via a general construction of linear codes. IEEE
+[16] Robert Gallager. Low-density parity-check codes. IRE Transactions on                   Transactions on Communications, 2021.
+     information theory, 8(1):21–28, 1962.                                             [34] David JC MacKay. Fountain codes. IEE Proceedings-Communications,
+[17] S. Ghemawat, H. Gobioff, and S.T. Leung. The Google File System.                       152(6):1062–1068, 2005.
+     In ACM SIGOPS Operating Systems Review, volume 37, pages 29–43.                   [35] Chris Mason. Seekwatcher. URL http://oss. oracle. com/˜ ma-
+     ACM, 2003.                                                                             son/seekwatcher, 2008.
+[18] Sanjay Ghemawat, Howard Gobioff, and Shun-Tak Leung. The google                   [36] Matt Massie, Bernard Li, Brad Nicholes, Vladimir Vuksan, Robert
+     file system. In Proceedings of the nineteenth ACM symposium on Oper-                   Alexander, Jeff Buchbinder, Frederiko Costa, Alex Dean, Dave Joseph-
+     ating systems principles, pages 29–43, 2003.                                           sen, Peter Phaal, et al. Monitoring with Ganglia: tracking dynamic host
+[19] Garth A Gibson, David F Nagle, Khalil Amiri, Jeff Butler, Fay W Chang,                 and application metrics at scale. " O’Reilly Media, Inc.", 2012.
+     Howard Gobioff, Charles Hardin, Erik Riedel, David Rochberg, and                  [37] Francisco Maturana, VS Chaitanya Mukka, and KV Rashmi. Access-
+     Jim Zelenka. A cost-effective, high-bandwidth storage architecture.                    optimal linear mds convertible codes for all parameters. In 2020 IEEE
+     ACM SIGOPS operating systems review, 32(5):92–103, 1998.                               International Symposium on Information Theory (ISIT), pages 577–582.
+[20] Parikshit Gopalan, Cheng Huang, Bob Jenkins, and Sergey Yekhanin.                      IEEE, 2020.
+     Explicit maximally recoverable codes with locality. IEEE Transactions             [38] Francisco Maturana and KV Rashmi. Convertible codes: new class
+     on Information Theory, 60(9):5245–5256, 2014.                                          of codes for efficient conversion of coded data in distributed storage.
+[21] Parikshit Gopalan, Cheng Huang, Huseyin Simitci, and Sergey                            In 11th Innovations in Theoretical Computer Science Conference (ITCS
+     Yekhanin. On the locality of codeword symbols. IEEE Transactions on                    2020). Schloss Dagstuhl-Leibniz-Zentrum für Informatik, 2020.
+     Information theory, 58(11):6925–6934, 2012.
+
+
+
+
+                                                                                 343
+[39] Francisco Maturana and KV Rashmi. Bandwidth cost of code conver-                      generation for large-scale erasure-coded storage. In 2021 IEEE 41st
+     sions in the split regime. In 2022 IEEE International Symposium on                    International Conference on Distributed Computing Systems (ICDCS),
+     Information Theory (ISIT), pages 3262–3267. IEEE, 2022.                               pages 483–493. IEEE, 2021.
+[40] Francisco Maturana and KV Rashmi. Convertible codes: Enabling effi-              [57] Zhe Zhang, Amey Deshpande, Xiaosong Ma, Eno Thereska, and
+     cient conversion of coded data in distributed storage. IEEE Transactions              Dushyanth Narayanan. Does erasure coding have a role to play in my
+     on Information Theory, 68(7):4392–4407, 2022.                                         data center. Microsoft research MSR-TR-2010, 52, 2010.
+[41] Francisco Maturana and KV Rashmi. Bandwidth cost of code conver-
+     sions in distributed storage: Fundamental limits and optimal construc-
+     tions. IEEE Transactions on Information Theory, 2023.
+[42] Francisco Maturana and KV Rashmi. Locally repairable convertible
+     codes: Erasure codes for efficient repair and conversion. In 2023 IEEE
+     International Symposium on Information Theory (ISIT), pages 2033–
+     2038. IEEE, 2023.
+[43] Satadru Pan, Theano Stavrinos, Yunqiao Zhang, Atul Sikaria, Pavel
+     Zakharov, Abhinav Sharma, Mike Shuey, Richard Wareing, Monika
+     Gangapuram, Guanglei Cao, et al. Facebook’s tectonic filesystem:
+     Efficiency from exascale. In 19th USENIX Conference on File and Storage
+     Technologies (FAST 21), pages 217–231, 2021.
+[44] Phitchaya Mangpo Phothilimthana, Saurabh Kadekodi, Soroush Gho-
+     drati, Selene Moon, and Martin Maas. Thesios: Synthesizing accurate
+     counterfactual i/o traces from i/o samples. In Proceedings of the 29th
+     ACM International Conference on Architectural Support for Program-
+     ming Languages and Operating Systems, Volume 3, ASPLOS ’24, page
+     1016–1032, New York, NY, USA, 2024. Association for Computing
+     Machinery.
+[45] K V Rashmi, Nihar B Shah, Dikang Gu, Hairong Kuang, Dhruba
+     Borthakur, and Kannan Ramchandran. A hitchhiker’s guide to fast
+     and efficient data reconstruction in erasure-coded data centers. ACM
+     Special Interest Group on Data Communication (SIGCOMM), 2014.
+[46] Korlakai Vinayak Rashmi, Nihar B Shah, and P Vijay Kumar. Opti-
+     mal exact-regenerating codes for distributed storage at the msr and
+     mbr points via a product-matrix construction. IEEE Transactions on
+     Information Theory, 57(8):5227–5239, 2011.
+[47] KV Rashmi, Nihar B Shah, and Kannan Ramchandran. A piggybacking
+     design framework for read-and download-efficient distributed storage
+     codes. IEEE Transactions on Information Theory, 63(9):5802–5820, 2017.
+[48] Philip Schwan et al. Lustre: Building a file system for 1000-node
+     clusters. In Proceedings of the 2003 Linux symposium, volume 2003,
+     pages 380–386, 2003.
+[49] Konstantin Shvachko, Hairong Kuang, Sanjay Radia, Robert Chansler,
+     et al. The Hadoop distributed file system. In IEEE/NASA Goddard
+     Conference on Mass Storage Systems and Technologies (MSST), 2010.
+[50] Natalia Silberstein, Ankit Singh Rawat, O Ozan Koyluoglu, and Sriram
+     Vishwanath. Optimal locally repairable codes via rank-metric codes.
+     In 2013 IEEE International Symposium on Information Theory, pages
+     1819–1823. IEEE, 2013.
+[51] Itzhak Tamo and Alexander Barg. A family of optimal locally recover-
+     able codes. IEEE Transactions on Information Theory, 60(8):4661–4676,
+     2014.
+[52] Itzhak Tamo, Dimitris S Papailiopoulos, and Alexandros G Dimakis.
+     Optimal locally repairable codes and connections to matroid theory.
+     IEEE Transactions on Information Theory, 62(12):6661–6671, 2016.
+[53] Brent Welch, Marc Unangst, Zainul Abbasi, Garth A Gibson, Brian
+     Mueller, Jason Small, Jim Zelenka, and Bin Zhou. Scalable performance
+     of the Panasas parallel file system. In FAST, volume 8, pages 1–17,
+     2008.
+[54] Stephen B Wicker and Vijay K Bhargava. Reed-Solomon codes and their
+     applications. John Wiley & Sons, 1999.
+[55] Mingyuan Xia, Mohit Saxena, Mario Blaum, and David A. Pease. A
+     tale of two erasure codes in HDFS. In 13th USENIX Conference on File
+     and Storage Technologies (FAST 15), pages 213–226, Santa Clara, CA,
+     February 2015. USENIX Association.
+[56] Qiaori Yao, Yuchong Hu, Liangfeng Cheng, Patrick PC Lee, Dan Feng,
+     Weichun Wang, and Wei Chen. Stripemerge: Efficient wide-stripe
+
+
+
+
+                                                                                344
+Supplemental material for Morph
+The appendix is not peer-reviewed.
+
+A    Convertible Codes
+The theoretical framework of Convertible Codes (CC) [37,
+40, 41] provides broad constructs for transcoding regimes.            Figure 16. Access-optimal split: Splitting one stripe of EC(12,14) into
+(1) Merge: where multiple EC stripes are combined to create           three stripes of EC(4,6)
+a single EC stripe of a target scheme, i.e, from 𝑘-of-𝑛𝐼 to a
+𝜆𝑘-of-𝑛 𝐹 scheme. This is the most optimal regime, where
+none of the the data blocks need to be read in the best case.
+This is particularly effective since most transcoding events
+are to wider schemes in cluster storage systems to increase
+space efficiency. Fig. 7 shows an example of this case of
+transcoding. (2) Split: where a single EC stripe is divided
+into multiple EC stripes of a target scheme, i.e., from a 𝜆𝑘-
+of-𝑛𝐼 scheme to a 𝑘-of-𝑛 𝐹 scheme. This regime offers less
+impressive transcoding IO savings when compared to merge
+regime, as most of the data chunks still need to be read from.
+However, we encounter this regime less often in practice. (3)         Figure 17. Disk IO/bandwidth overhead for transcoding 1 GB files for
+General: where any general set of parameters is supported             different initial and target EC schemes across merge(left) and split(right)
+by using merge and split regimes as building blocks.                  regimes and the two sub-classes 𝑟 𝐼 = 𝑟 𝐹 and 𝑟 𝐼 ≠ 𝑟 𝐹 . The best gains come
+    Convertible codes can be categorized into two sub-classes         in the merge regime when number of parities stay constant.
+based on the number of parities in a stripe in the initial (𝑟 𝐼 )
+and final (𝑟 𝐹 ) EC scheme: (1) when they stay the same ie.           four of the initial stripes, all the data blocks of the third stripe
+𝑟 𝐼 = 𝑟 𝐹 , where optimal transcode overheads can be achieved         need to be read. As a consequence, CC achieves transcoding
+with scalar codes, and (2) when 𝑟 𝐼 ≠ 𝑟 𝐹 , which require the         with 40% less IO overhead.
+use of vector codes. While scalar codes are easier to imple-             Case 2a - 𝑟 𝐼 < 𝑟 𝐹 : When the number of parities per stripe
+ment and have lower computational complexity, construc-               increases during transcoding, the inherent advantages of
+tion of vector codes is more involved, and come with higher           the Convertible Codes’ construction discussed above vanish.
+computational complexity. We provide background on both               This is because, the information for (𝑟 𝐹 − 𝑟 𝐼 ) new parities
+sub-classes below.                                                    do not exist in any of the initial parities. In these scenarios,
+    Case 1 - 𝑟 𝐼 = 𝑟 𝐹 : When number of parities per stripe re-       we employ another class of Convertible Codes, Bandwidth-
+main same, we employ Access-Optimal Convertible Codes[37].            Optimal Convertible Codes (BWO-CC) [41], which extend
+The most dramatic savings are observed in the merge regime            the capabilities of Convertible Codes described in case 1, to
+where data is transcoded from a 𝑘-of-𝑛𝐼 scheme to a 𝜆𝑘-of-𝑛 𝐹         minimize the total volume of data read.
+scheme. We portrayed this in the example in Fig. 7. No data              An example is illustrated in Fig. 8. Although a higher
+blocks have to be read during transcoding.                            number of blocks are read from (higher “access cost”), the
+    In the split regime, where data is transcoded from a 𝜆𝑘-          total data downloaded is minimized (lower “bandwidth cost”).
+of-𝑛𝐼 scheme to a 𝑘-of-𝑛 𝐹 scheme, CC is able to transcode            Contrary to scalar codes such as Reed-Solomon, BWO-CC
+by reading the 𝑟 𝐼 parity blocks and only the first (𝜆 − 1)𝑘          operate as a vector code. Here, each EC symbol is represented
+blocks of the initial 𝜆𝑘 data blocks, as shown in Fig. 16. On         as a vector or an array of data chunks. This design allows
+transcoding from EC(12,14) to EC(4,6), each of the four data          embedding additional information within segments of the
+blocks that would make up the first two final stripes are read        parity vectors - called piggybacking [47], which can be later
+to compute the corresponding parities, similar to transcoding         decoded for efficient transcoding.
+with RS-encoding. For computing the parities for the third               Each data block is (logically) divided into 𝑟 𝐹 chunks result-
+stripe, instead of reading all of the remaining four data blocks,     ing in 𝑟 𝐹 substripes. During the encoding process, despite
+we read the two initial parities, and the eight data blocks that      requiring only 𝑟 𝐼 parities initially, all 𝑟 𝐹 parities are com-
+were already read. As a result, we read a total of 10 blocks          puted for the first 𝑟 𝐼 substripes. The parities are derived
+instead of 12.                                                        using the Access-Optimal CC construction described in case
+    A combination of the above two regimes is used to transcode       1. These are then added to each of the 𝑟 𝐼 parities of the re-
+stripes in the general regime. For example, to transcode from         maining 𝑟 𝐹 − 𝑟 𝐼 substripes. Upon eventual transcoding of
+EC(6,9) to EC(15,18), 5 EC(6,9) initial stripes are combined to       the file, only the data from the last 𝑟 𝐹 − 𝑟 𝐼 substripes is read
+form 2 EC(15,18) final stripes. While only parities are read for      along with the parities. The efficiency arises because the new
+                                                                      parity data for the initial 𝑟 𝐼 sub-stripes can be decoded using
+
+
+
+                                                                345
+                                                                                           Transcoding in late life: LRCC Here, the properties
+                                                                                        of CC are leveraged independently for computing both the
+                                                                                        local as well as the global parities. The best case occurs when
+                                                                                        multiple stripes of LRCCs are merged to create a single stripe.
+                                                                                        Here, each post-transcoding local group is created using an
+                                                                                        integral number of initial local groups using the efficient
+                                                                                        transcode operation of CC. The global parities of the stripe
+                                                                                        are computed using the global parities of the constituent
+                                                                                        initial stripes.
+
+Figure 18. Disk IO overheads normalized to the baseline RS, when                        B    Analytical estimation of degraded stripe
+transcoding from 6-of-9 to schemes on 𝑘-of-𝑛 schemes on X-axis. Pari-                        read probability from a Hy(1, CC(𝑘, 𝑛))
+ties stay constant in the left plot, while they increase by 1 on the right. The
+                                                                                        We can analytically estimate the likelihood of a degraded
+transcode IO savings with CC vary, but significant when compared to RS
+and Stripe Merge across any general target scheme. In contrast, StripeMerge             mode read from a Hy(1, CC(𝑘, 𝑛)) scheme. Let us assume that
+only helps in one scenario 6-of-9 to 12-of-15.                                          the probability of a chunk missing is 𝑓 . So, when 𝑐 = 1, i.e.,
+                                                                                        one replica and a CC(k,n) stripe, the probability of degraded
+                                                                                                          Í
+                                                                                        mode read is 𝑓 × 𝑛−𝑘𝑖=1 𝑓 × (1 − 𝑓 )
+                                                                                                                 𝑖           𝑛−𝑖 , where the first term
+the rest of the retrieved data. This process is shown in the                            corresponds to the replicated chunk being unavailable and
+example in Fig. 8 (in the main paper).                                                  the second term corresponds to the data chunk from CC(k,n)
+    Case 2b - 𝑟 𝐼 > 𝑟 𝐹 : When the number of parities per stripe                        being unavailable. To estimate an upper bound, suppose 1%
+decreases during transcoding, Access-Optimal CC is suffi-                               of all chunks are simultaneously unavailable; 𝑓 = 0.01,then
+cient to provide optimal transcode IO reductions for the                                say for a Hy(1, CC(6, 9)) scheme, probability of degraded
+merge regime. However, for the split regime[39], i.e. when                              mode reads is 0.00009, a very rare scenario (tail-of-the-tail).
+the initial stripe is broken into integral number of smaller
+stripes, use of vector codes as discussed in case 2a is needed
+to reduce the IO overheads. Since the split regime construc-
+tion serves as a building block for the general regime, in this
+case, the general regime also benefits from Piggybacking.
+    Analysis and Comparison. Fig. 17 shows the disk and
+network bandwidth used for transcoding in the merge regime
+(left) and split regime (right). In the merge regime, we calcu-
+late the read bandwidth to transcode from 8-of-12 (𝑟 𝐼 = 4) to
+various schemes with 16 ≥ 𝑘 𝐹 ≥ 32 and 3 ≥ 𝑟 𝐹 ≥ 5.
+    The best gains are observed in the merge regime when
+𝑟 𝐼 = 𝑟 𝐹 , with > 50% IO reduction when compared to RS in
+the examples provided. These benefits scale with the initial
+stripe width. For instance, merging two stripes of EC(17,20)
+to form a stripe of EC(34,37) saves > 80% of bandwidth
+overhead when compared to RS. The gains are lower for the
+cases when 𝑟 𝐼 < 𝑟 𝐹 . Transcoding from 16-of-19 to 8-of-12,
+Convertible Codes utilizes 40% lower bandwidth than RS.
+A similar pattern emerges with a 26% bandwidth reduction
+when transcoding from 8-of-12 to 32-of-37.
+    Fig. 18 illustrates how CC fares against RS and StripeMerge
+in the general regime, while transcoding from EC(6,9) to
+EC with 𝑘-wide stripes, where 6 < 𝑘 <= 30. CC achieves
+45% IO reduction on average (33% in the worst case) when
+parities per stripe stay the same (left), and 20% IO savings
+on average (12.5% in the worst case) when we add an extra
+parity in the final stripe (right). In contrast, StripeMerge
+saves IO in only one instance, on transcoding to EC(12,15).
+CC therefore opens up a rich trade-off space for application
+developers to carefully balance transcode IO, durability and
+space efficiency.
+
+
+
+                                                                                  346
+

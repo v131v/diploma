@@ -1,0 +1,1083 @@
+    Practical Design Considerations for
+   Wide Locally Recoverable Codes (LRCs)
+     Saurabh Kadekodi, Shashwat Silas, David Clausen, and
+                   Arif Merchant, Google
+     https://www.usenix.org/conference/fast23/presentation/kadekodi
+
+
+
+
+This paper is included in the Proceedings of the
+      21st USENIX Conference on File and
+             Storage Technologies.
+           February 21–23, 2023 • Santa Clara, CA, USA
+                           978-1-939133-32-8
+
+
+                                      Open access to the Proceedings
+                                     of the 21st USENIX Conference on
+                                       File and Storage Technologies
+                                              is sponsored by
+     Practical Design Considerations for Wide Locally Recoverable Codes (LRCs)
+                           Saurabh Kadekodi∗ , Shashwat Silas∗ , David Clausen, Arif Merchant
+                                                       Google
+
+                            Abstract
+Most of the data in large-scale storage clusters is erasure
+coded. At exascale, optimizing erasure codes for low storage
+overhead, efficient reconstruction, and easy deployment is of
+critical importance. Locally recoverable codes (LRCs) have
+deservedly gained central importance in this field, because
+they can balance many of these requirements. In our work
+we study wide LRCs; LRCs with large number of blocks per
+stripe and low storage overhead. These codes are a natural
+next step for practitioners to unlock higher storage savings,
+but they come with their own challenges. Of particular inter-        Figure 1: We captured a sample of 278 unavailable stripes captured
+est is their reliability, since wider stripes are prone to more      from four Google storage clusters, along with information about the
+simultaneous failures.                                               exact block failures in each sample. The deployed code had total
+   We conduct a practically-minded analysis of several pop-          width n ≈ 50, and always succeeded in recovering data when there
+ular and novel LRCs. We find that wide LRC reliability is a          were ≤ 6 failures. We then test these failure scenarios with the Uni-
+subtle phenomenon that is sensitive to several design choices,       form Cauchy LRC of the same width and overhead. The deployed
+                                                                     code could not recover any of the 278 stripes before restoration,
+some of which are overlooked by theoreticians, and others
+                                                                     whereas Uniform Cauchy LRC simulation was successful in recov-
+by practitioners. Based on these insights, we construct novel
+                                                                     ering 92 stripes prior to restoration; a success ratio of 33%.
+LRCs called Uniform Cauchy LRCs, which show excellent
+performance in simulations, and a 33% improvement in re-
+liability on unavailability events observed by a wide LRC            codes of larger widths like 20 [3] have been deployed, and in
+deployed in a Google storage cluster. We also show that these        this work we present some data from a Google storage cluster
+codes are easy to deploy in a manner that improves their             using an erasure code of width ≈ 80 blocks. The drawback of
+robustness to common maintenance events. Along the way,              most wide codes with low overhead is that they may require
+we also give a remarkably simple and novel construction of           a large amount of IO to reconstruct any unavailable or lost
+distance optimal LRCs (other constructions are also known),          data. This is why wide codes are usually designed as locally
+which may be of interest to theory-minded readers.                   recoverable codes (LRCs) (Definition 5.3), which help miti-
+                                                                     gate this reconstruction cost in most cases. Wide LRCs can
+                                                                     be utilized to balance the challenging storage needs of today
+1     Introduction                                                   (low storage overhead, competitive reliability, competitive av-
+                                                                     erage reconstruction cost), but unique challenges arise when
+Large-scale storage clusters currently house exabytes of data,       designing wide LRCs for deployment in storage clusters.
+the bulk of which is encoded with erasure codes. With storage
+                                                                        LRCs are optimized to shine in the case when there
+devices (hard-disk drives, or just disks) routinely becoming
+                                                                     is a single erasure in a stripe, but much effort has gone
+unavailable (due to maintenance or even failures), using era-
+                                                                     into designing LRCs with various other desirable proper-
+sure coding of some variety is essential to provide acceptable
+                                                                     ties [17,26,27,33,47]. One obvious direction that has received
+data durability. But this durability comes with the additional
+                                                                     much attention is to design distance-optimal LRCs [33, 49] –
+storage overhead incurred by erasure codes. At a time when
+                                                                     that is, LRCs with the best possible distance, given their width,
+data corpus size is growing exponentially [9, 43], reducing
+                                                                     dimension, and locality. A code with distance d guarantees
+this storage overhead is essential. One way to accomplish this
+                                                                     recovery from any pattern of up to d − 1 failures. Indeed, max-
+is to utilize wider stripes for encoding i.e. codes that have a
+                                                                     imizing distance is especially important for wide codes, since
+higher ratio of data blocks to coded/redundancy blocks. Such
+                                                                     they are more likely (simply due to their width) to encounter
+codes are sometimes called ‘wide codes’ since they require
+                                                                     a larger number of failures simultaneously, as we show using
+the overall width of the stripe to be larger (width is also re-
+                                                                     data from Google storage clusters in Figure 2. But we find
+ferred to as blocklength in the coding theory literature). To
+                                                                     that even if we use distance-optimal LRCs, storage clusters
+unlock large storage savings without compromising reliability,
+                                                                     using wide codes encounter a meaningful number of events
+    * Equal contribution                                             where the number of failures is larger than the distance of the
+
+
+
+USENIX Association                                                21st USENIX Conference on File and Storage Technologies               1
+distance-optimal LRC (see data from a Google storage cluster       the LRC, so it is not enough to just optimize the coefficients
+in Figure 1). So it becomes important to study LRCs that can       of an LRC, but also the size of its local repair groups. To the
+successfully reconstruct even a significant fraction of erasure    best of our knowledge, this fact has not been considered in the
+patterns beyond the optimal distance. The theory community         literature, even though our experiments show that it can have
+has been tackling this problem by studying maximally recov-        a significant impact on reliability. In general, codes whose
+erable locally recoverable codes (MR-LRCs), which take the         local groups are evenly sized have better performance (see
+erasure correction capability of an LRC to the information         discussion in Section 8). This has the additional perk of also
+theoretic limit implied by its design parameters [16, 18, 20].     lowering the degraded mode read cost and the reconstruction
+However, to the best of our knowledge, current constructions       cost of the code.
+of MR-LRCs do not yield codes fitting the limitations of cur-         Novel LRCs that excel in practice. Using some of these
+rent hardware. For example, wide MR-LRCs with storage              insights, we modify our construction of distance-optimal
+overhead <20% require orders of magnitude larger field sizes       codes to create Uniform Cauchy LRCs. We find that these
+than the computationally efficient field sizes of up to F256 ,     codes truly shine in most practically relevant reliability (and
+which is explained in detail in Section 4.                         performance!) measures. Figure 1 shows data unavailability
+   Optimizing LRC reliability in practical parameter settings      events from a deployed wide LRC of width ≈ 50 blocks along
+is a valuable and open problem, and we tackle aspects of it in     with their erasure patterns captured from four large storage
+this work. We highlight some of our main contributions.            clusters at Google with a total disk population of over 1.7 mil-
+   Practical measurement of reliability. We study wide             lion disks, over a period of one year. For the same code width
+LRCs with a distinctively practical lens. One of our contribu-     and storage overhead, our Uniform Cauchy LRC simulation
+tions is the curation of a set of robust and practical measures    recovered more than 33% of these stripes without the need
+of LRC reliability. These include performance against random       for restoration. Indeed, further experiments confirm this ob-
+erasures, comparing the reliability of explicit LRC generator      servation by showing that Uniform Cauchy LRCs outperform
+matrices (see Definition 5.1) against the information theoretic    many popular (and deployed) LRCs across our metrics. A
+limit provided by MR-LRCs, and calculating mean time to            comprehensive experimental evaluation of LRCs is provided
+data loss (MTTDL) using observed reliability metrics. As           in Section 8, along with the main observations.
+mentioned earlier, going wide creates new reliability chal-           Maintenance-robust deployment of wide LRCs. In Sec-
+lenges for LRCs, and these tools provide a clearer and more        tion 9 we highlight the importance of maintenance-robust
+realistic set of tests to tackle the new challenges. Using these   deployment of wide LRCs. Even though a code may have
+tools, we meaningfully compare popular deployed LRCs and           many desirable properties, its exact layout in a cluster affects
+showcase novel highly performant LRCs.                             its robustness to common maintenance events such as kernel
+   New distance-optimal LRC constructions. In Section 6,           upgrades. It is desirable to construct codes that are easier
+we provide a novel construction of distance-optimal LRCs           to deploy in a maintenance-robust manner (not all codes are
+(Definition 5.4), which we call Optimal Cauchy LRCs. This          equal here), and we show that the design of Uniform Cauchy
+continues a long line of work [47, 49] for constructing            LRCs is ideal in this regard.
+distance-optimal LRCs, and while our construction is not the          Our work shows that a myriad of design choices need to be
+most general, it is remarkably simple and yields many codes        considered in order to optimize wide LRCs. Indeed, account-
+(even wide LRCs) in practically useful parameter settings.         ing for these factors can lead to more reliable deployments of
+   Insights into reliable wide LRC design. Our practical           wide LRCs in practice.
+measures of reliability provide several insights. While it is
+true that higher distance gives guarantees about fixing up to a    2    Background
+certain number of erasures, it is not enough by itself to guar-
+antee strong empirical results. The first improvement that can     Large-scale storage clusters. Large-scale storage clus-
+be made in this direction is to find codes that are approxi-       ters typically constitute of public cloud offerings or high-
+mately MR-LRCs (since it is not yet possible to construct true     performance computing systems. Hard-disk drives (HDDs)
+MR-LRCs in our parameter regimes). Here we show good               make up the primary storage tier in these clusters. It is com-
+news: the coefficients used in our simple constructions get        mon for the disk population in a large-scale cluster to be above
+us over 99% of the reliability possible with MR-LRCs. But          100K [2, 32], and some large ones are also reported to have
+we find that just being (close to) maximally recoverable is        close to 500K disks [30, 31]. Data being stored in large-scale
+not the end of the journey for reliability. Indeed, two codes      storage clusters is increasing at an alarming rate [7, 9, 10, 41].
+that have the same width and same storage overhead, and are        Data redundancy using erasure coding is the reliability mech-
+both MR-LRCs (true or approximate) can have significantly          anism of choice for bulk of the data.
+different resilience to random patterns of erasures. This is          Erasure coding. Erasure coding is a more space-efficient
+because erasure recovery is affected by how failures are dis-      alternative to data replication. Usually described as an (n, k)
+tributed across the local repair groups (see Definition 5.5) of    code, an erasure coding stripe encodes k data blocks (typi-
+
+
+
+2   21st USENIX Conference on File and Storage Technologies                                                   USENIX Association
+cally one, or a few megabytes in size) along with n − k ‘parity’                 trade-offs [27, 33, 47, 49].
+blocks (of the same size) to form an n block stripe. The                            Distance of a code. Distance of a code (denoted by d) is
+storage overhead is calculated as nk . Maximum Distance Sep-                     the minimum number of failures/erasures that may render
+arable (MDS) codes (like Reed-Solomon codes) are popular                         the stripe potentially non-recoverable (i.e. all patterns of < d
+erasure codes used in practice because they provide the max-                     failures are always recoverable). For example, the distance of
+imum erasure correction capability for any fixed value of n                      an (n, k) MDS code would be n − k + 1 since an MDS code
+and k. MDS codes have the property that up to n − k blocks                       can recover from any n − k failures. In fact, for an MDS code,
+missing from a stripe can be reconstructed using any k of the                    any failure beyond n − k failures is strictly non-recoverable.
+remaining blocks. As data has grown and space-efficiency                         However, for a code with distance d which is not MDS (such
+has become more critical, wider MDS codes (i.e. codes with                       as an LRC), some patterns of ≥ d failures could be recovered.
+larger values of k) with less storage overhead have become                       Maximizing this capability to recover as many erasure pat-
+more popular in practice. Indeed, even (20, 17) MDS codes                        terns as possible beyond the distance leads us to the notion of
+have been deployed and studied [3], in place of the once ubiq-                   maximally recoverable codes.
+uitous schemes like RAID-6 (which is a (6, 4)-Reed-Solomon                          Maximally Recoverable LRCs (MR-LRC). For any
+code), (9, 6) [13] and (14, 10) [42]. But wider MDS codes                        code, simply specifying whether each entry in its genera-
+have their own drawbacks because they require all the data                       tor matrix (see Definition 5.1) is zero or non-zero imposes
+from k blocks to reconstruct/repair even a single missing                        an information theoretic limit on which patterns of erasures
+block, leading to a high reconstruction cost. A need to use                      could be recoverable. The study of maximally recoverable
+wider encoding schemes with less overhead, combined with                         codes is concerned with finding coefficients for the non-zero
+the very high reconstruction cost of MDS codes has motivated                     entries such that this limit is reached [16]. LRCs can also be
+the study of Locally Recoverable Codes.                                          optimized in this way: once we have specified which entries
+   Data reconstruction process. Large-scale cluster storage                      of the generator matrix are non-zero (this will fix various
+systems have a background process that monitors the redun-                       code parameters like n, k, number of local parities, number of
+dancy level of all stripes stored in the cluster. Whenever a                     global parities, and the size of the local groups), it is possible
+disk becomes unavailable (either due to server unavailabil-                      to find coefficients that maximize the number of recoverable
+ity, or disk failure), the background daemon flags the under-                    erasure patterns (including potentially many patterns of ≥ d
+redundant stripe and starts a timeout of a few tens-of-minutes.                  erasures). LRCs which are maximially recoverable are known
+When the timeout expires, the stripe is marked for reconstruc-                   as MR-LRCs. In terms of their reliability, MR-LRCs are the
+tion. Storage clusters often set a soft threshold on the band-                   gold standard among LRCs.
+width used for background activity such as reconstructions
+(except client-initiated degraded mode reads). In order to bal-
+                                                                                 3   Motivation for studying wide LRCs
+ance the reconstruction workload while maintaining highest
+data safety standards, the reconstructions are processed via a                   Reducing storage overhead is critical. Storage overhead
+priority queue in which stripes that are more vulnerable are                     because of data redundancy is a major component of a clus-
+reconstructed before less vulnerable stripes.                                    ter’s storage cost. With 3-way replication, the overhead is 3×,
+   Locally Recoverable Codes (LRCs). LRCs [17, 27, 33,                           which is prohibitive for large-scale clusters storing exabytes
+42, 47, 49] (also known as Local Reconstruction Codes) are                       (EBs) of data on hundreds-of-thousands of disks. Even the
+erasure codes designed to mitigate the high reconstruction                       popular MDS codes such as (9, 6) [13] or (14, 10) [42] which
+cost of MDS codes. An (n, k, `) LRC code divides an n block                      have an overhead of 1.5× and 1.4× respectively, are consid-
+stripe into local groups, each with at most ` < k blocks and                     ered too expensive for exascale [9, 10, 29, 41]. Large-scale
+a local parity1 . In addition to the local parities, the stripe                  storage clusters are actively adopting wide MDS codes to min-
+also has global parities which cover all k data blocks. One                      imize the storage overhead. Backblaze reported the use of a
+may think of a typical LRC in this way: the data blocks and                      (20, 17) MDS code [3] which has a reasonably low overhead
+the global parities together form an MDS code, and the local                     of 1.17× (a rate of 17
+                                                                                                      20 = 0.85, see Definition 5.1). With every
+parities are added on top of this code, so as to mitigate the cost               percent reduction in storage overhead resulting in savings of
+of reconstruction (reduce it from k to `) in the case when there                 millions in capital, operational and energy costs, lowering
+is exactly one failure in a local group. One may note that LRCs                  storage overhead continues to be a lucrative problem.
+are not MDS codes since they cannot satisfy the Singleton                           Wide MDS codes are costly. Using wide MDS codes has
+bound unless ` = k (see Definition 5.6). If there is more than                   several challenges. The reconstruction IO cost of a wide (n, k)
+one failure in the same local group, the underlying MDS code                     MDS code scales linearly with k. For example, while a (9, 6)
+can be used to reconstruct the data. Several different LRC                       MDS codes requires reading 6 data blocks for reconstruct-
+constructions have been proposed over the years with different                   ing a missing block, a wide MDS code such as (20, 17) re-
+   1 Theoretically each local group can have any number of parities, but in      quires reading 17 data blocks. Wide MDS codes also have a
+practice the most common configuration involves 1 parity per local group.        higher unavailability because they have a higher probability
+
+
+
+USENIX Association                                                            21st USENIX Conference on File and Storage Technologies            3
+Figure 2: A 24 hour trace with the number of stripes with at least 4 failures in two deployed LRCs captured from a single storage cluster at
+Google. The wider LRC (n ≈ 80) has many more stripes with at least 4 failures compared to the relatively narrower LRC (n ≈ 50).
+
+of having blocks stored on devices that are unreachable due              4     Practical challenges of wide LRCs
+to maintenance (since no two blocks of a stripe can be on the
+same disk, server, rack, etc.). Thus, not only does a wide MDS           Many simultaneous failures are more common in wide
+code have a higher degraded mode read cost (Definition 5.10),            LRCs. While most stripes (which have failures) have single-
+but the frequency of performing degraded-mode reads is also              block failures, this does not mean that the tiny fraction of
+higher due to higher unavailability. Due to a larger number              more than one block failures can be ignored. Moving to wider
+of disks, degraded reads and reconstructions in wide MDS                 stripes increases the possibility that multiple blocks of a stripe
+codes are also more likely to suffer from high tail latency              need to be repaired at the same time, since there is a higher
+due to stragglers. So although wide MDS code are good for                chance that devices or servers storing multiple blocks of the
+durability and reduced storage overhead, they are not good               same stripe may be undergoing maintenance simultaneously.
+for reconstruction costs, availability, and degraded read per-           This is consistent with the observation that most data unavail-
+formance, all of which are major performance concerns in                 ability events in large-scale storage clusters are as a result of
+large-scale storage clusters. Storage overhead minimization              planned outages [13]. Another reason for increased number
+is critical, but cannot come at the expense of aforementioned            of block failures in a wide stripe is due to prioritization of
+problems. Indeed, this is the reason for the continued popu-             reconstructions as explained in Section 2. Figure 2 shows the
+larity of LRCs, which mitigate this drawback.                            number of stripes that have at least 4 failures throughout a
+   Real-world failure patterns favor LRCs. We empirically                24 hour period. There are two LRCs whose stripe failures
+observe the failure patterns of stripes stored in three large-           are being compared, one with width approximately 50 blocks
+scale storage clusters totalling over 1.5 million disks for a            and the other with width approximately 80 blocks2 . Note that
+period of 6 months. These clusters have multiple different era-          this trace is collected from a single storage cluster, and so the
+sure coding and replication schemes deployed simultaneously,             failures seen in this trace are in response to the same machines
+and have over 1.2 trillion stripes. From among the stripes that          failing. As is clearly visible, the wider LRC has a significantly
+have > 0 failures, we observe that ≈ 99.2% of stripes have               higher number of stripes with at least 4 failures compared to
+just a single failure. Similar data has been observed by others          the relatively narrower LRC.
+in [40], where they found that ≈ 98.08% stripes had a single                Constructing MR-LRCs is hard. As mentioned above,
+failure on a Facebook warehouse cluster. A single block fail-            a lot of research has looked at MR-LRCs in recent years
+ure in a stripe is a scenario where LRCs shine (in contrast to           [5, 12, 16, 18, 20]. However, even with recent advancements
+MDS codes). However, this comes at a cost of higher storage              such as [12,18], to the best of our knowledge it is not possible
+overhead (as we mentioned, typical LRCs are just MDS codes               to construct MR-LRCs in the following regime: where the
+with the additional overhead of local parities, and they cannot          field size (search-space for coefficients to construct the LRC)
+lie on the Singleton bound).                                             is fixed to be 256, n is between 25-150, and the rate of the
+   Wide LRCs. In an ideal world, we would like to use wide               code (see Definition 5.1) is at least 0.85 (i.e. storage overhead
+LRCs which have significantly lower overhead than the LRCs               is at most 1.17× and ` < k). This setting is particularly useful
+showcased in [33, 42] (and many other works). Wide LRCs                  for applications, and is the natural next phase for practical
+could reduce the overhead from the 30 − 60% range (which                 LRCs which reduce overhead and maximize reliability.
+is common in deployed LRCs and MDS codes) to the less                       Typically, maximally recoverable codes are easier to con-
+than 20% range, while still maintaining many advantages                  struct when the field is large, and much research is focused
+over MDS codes. But wide LRCs create novel challenges.                   on finding explicit codes over small field sizes. In practical
+For example, wider stripes are much more likely to result in             settings, most computations are done over individual bytes
+a larger percentage of stripes with more than a single failure.          which restricts the field size of the LRCs we can use to 256
+This makes it critical to study robust and practical measures            (the field F28 ). To the best of our knowledge, the current state
+of LRC reliability if we are to utilize wide codes in practice.          of the art constructions are in [18], and they require that the
+Further, practical issues like deployment and ease-of-use also
+need to be addressed.                                                        2 We cannot disclose the exact configuration due to confidentiality.
+
+
+
+
+4   21st USENIX Conference on File and Storage Technologies                                                                 USENIX Association
+field size q be at least ∼ (`+1)r , where `+1 is the size of a lo-      Definition 5.2 (Distance of a code). The minimum distance
+cal repair group (Definition 5.5), and r is the number of global        of a linear code (often just called the distance) is simply,
+parity checks. For our purposes, we can think of ` + 1 ∼ 16,                                        min wt(x)
+and r ≥ 3, thus q = 4096, making the required field size 16×                                      x∈C \{0}
+greater than 256.                                                       where wt(x) = ∑ni=1 1xi 6=0 . An error correcting code with dis-
+   Measurements of reliability of wide LRCs are inade-                  tance d can always correct d − 1 erasures.
+quate. While narrow LRCs have received a lot of attention in
+systems research, wide LRCs have not [25]. Existing systems             Definition 5.3 ((n, k, `)-Locally recoverable code (LRC)). An
+research on LRCs optimizes metrics such as distance, de-                (n, k, `)-LRC is a linear error correcting code of dimension
+graded read cost and reconstruction cost [6, 27, 33, 42, 47, 49].       k and blocklength n. It has the additional property that any
+We enhance this rich literature with a larger suite of empirical        codeword symbol can be recovered from at most ` other code-
+measures, which give more realistic comparisons in the practi-          word symbols. The parameter ` is called the locality paramter
+cal realm, particularly in the case when there are ≥ d erasures         of the LRC. Note that 1 ≤ ` ≤ k.
+in a code with distance d. Further, since explicit MR-LRCs
+are not available in our parameter regimes, it leaves open the          Definition 5.4 (Generalized Singleton bound and distance
+question of evaluating whether we can construct codes which             optimal LRCs). Any locally recoverable code must satisfy the
+offer us approximately the same advantages as MR-LRCs                   following bound [17],
+could offer (the answer is yes!). Finally, some design choices                                        
+such as creating evenly sized local groups have not been con-                                          k
+                                                                                              n ≥ k+       +d −2
+sidered in the literature at all, which we show can have a large                                       `
+impact on performance against random patterns of erasures.                where d is the distance of the code. Any LRC that meets this
+   Deployment of wide erasure codes is non-trivial. An-                 bound with equality is called a distance optimal LRC. Note
+other practical hurdle that gets worse with code width is the           that when ` = k, this reduces to the well-known Singleton
+deployment (placement of blocks) of an erasure coded stripe.            bound n ≥ k + d − 1.
+Recall that no two blocks of an erasure coded stripe can re-
+side on the same disk, rack, fault-domain, power-source, etc.           Definition 5.5 (Local repair group). Given an (n, k, `)-LRC,
+As the code width increases, it becomes progressively harder            choose any codeword y. Due to the local recovery property,
+to fulfill these placement constraints. The placement prob-             any codeword symbol yi can be recovered using at most `
+lem is further exacerbated because it is common for sets of             other codeword symbols {yr1 , . . . , yr` } where r j 6= i for any
+servers/racks (which comprise a maintenance zone) to be                 j. These at most ` + 1 indices in {i, r1 , . . . , r` } form a local
+down at the same time for maintenance events, potentially               repair group of the (n, k, `)-LRC.
+causing data unavailability. For example, if too many blocks
+of a stripe are in the same maintenance zone, then even a               Definition 5.6 (Maximum distance separable code). Any lin-
+planned maintenance event could make the stripe unavailable.            ear error-correcting code which satisfies the Singleton bound
+We comment on some ways that code design can make it                    with equality, i.e. satisfies n = k + d − 1, is known as a Maxi-
+easier to achieve maintenance robust layouts of data.                   mum Distance Separable (MDS) code.
+
+                                                                        Definition 5.7 (Cauchy matrix). Let {x1 , . . . , xn } and
+5    Definitions                                                        {y1 , . . . , ym } be two disjoint sequences of distinct elements
+                                                                        from Fq . The n × m matrix defined as
+We begin by defining important terms that are going to be use-
+ful when describing the wide LRC construction in Section 6.                                                    1
+                                                                                                     Ci j =
+                                                                                                            xi + y j
+Definition 5.1 (Linear error correcting code). A linear error-          is a Cauchy matrix. It is well-known that every square sub-
+correcting code is simply a subspace C ≤ Fnq where q is a               matrix of a Cauchy matrix has non-zero determinant (and
+prime power and n > 0. It is customary to think of C as the             therefore, is invertible).
+image of an encoding map Enc: Fkq → Fnq for some k ≤ n. This
+encoding may the expressed in matrix form as,                           Fact 5.8 (Generator matrix of an MDS code). Cauchy ma-
+                            Gx = y                                      trices are commonly used to design generator matrices for
+where G is an n × k matrix called the generator matrix, x               MDS codes. Indeed, an n × k matrix over Fq , whose first k
+is the message and y is the codeword. The fraction nk is the            rows form Ik (the k × k identity matrix), and whose last n − k
+rate of the code, k is the dimension, and n is the blocklength.         form an (n − k) × k Cauchy matrix generates an MDS code of
+The symbols yi ∈ Fq of a codeword y are called codeword                 blocklength n and dimension k (see Thm 2.2 and 5.2 in [8]).
+symbols.                                                                   We can visualize several of our definitions using the exam-
+                                                                        ple shown in Figure 3.
+
+
+
+USENIX Association                                                   21st USENIX Conference on File and Storage Technologies              5
+          1                   0                   0                0      d1          For MDS codes, ∀bi , cost(bi ) = ARC = k. For LRCs, cost(bi )
+                                                                       
+         0                   1                   0                0     d2          may not be the same as ARC. The above ARC is defined for
+          0                   0                   1                0     d3
+                                                                       
+                                                                                     one block failing in a stripe. In our evaluation we also show
+          0                   0                   0                1     d4
+                                                                       
+                                                                                     the ARC of reconstructing two failed blocks defined as
+     c11                    c12                 c13              c14  c1
+                                                                       
+GC =                                                                                                            ∑ni=1, j6=i cost(bi, j )
+     c21                    c22                 c23              c24  c2
+                                                                        
+                                                                                                       ARC2 =                n
+          1                   1                   0                0     l1
+                                                                       
+                                                                                                                           2
+          0                   0                   1                1     l2          where 1 ≤ i ≤ n, 1 ≤ j ≤ n and i 6= j, and cost(bi, j ) = cost to
+                                                                       
+    
+      c11 + c21           c12 + c22           c13 + c23        c14 + c24 lg           reconstruct blocks i and j which can result in a combination
+                                                                       
+                                                                                      of local and global reconstructions depending on i and j.
+                          l1             l2               lg
+
+
+                     d1        d2   d3        d4    c1         c2                     6     (n, k, r, p)-Optimal Cauchy LRCs
+Figure 3: Example of an LRC with 4 data blocks (d1 , d2 , d3 , d4 ),
+2 global parities (c1 , c2 ), and 3 local parities (l1 , l2 , lg ). This figure       In this section we construct (n, k, r, p)-Optimal Cauchy LRCs
+shows how each row of the generator matrix correponds to a ‘block’                    and discuss their advantages. Here, n is the blocklength of
+in the picture representation of an LRC (the reader may note that the                 the code, k is the dimension, r is the number of global parity
+matrix representation is more informative as the specific choice of                   checks, and p is the number of local parity checks. We make
+coefficients can affect reliability in practice). The first 4 rows of the             two design choices which are worth pointing out. First, the
+matrix correspond to the data blocks which are encoded systemati-                     p local parities in our code are uniformly distributed across
+cally; the next two rows correspond to the global parities (these two
+                                                                                      the k data, and they are all XOR-ed with the r global parity
+rows form a 2 × 4 Cauchy matrix in our implementation); the last 3
+                                                                                      checks (this helps with proving the distance optimality of the
+rows correspond to 3 local parities, all of which contain the XOR of
+the data they cover (as is evident by the coefficients of the matrix GC ).            code). Second, we restrict ourselves to the case where each of
+The last local parity, lg , only covers the global parities. This design              the data symbols of the code is covered by exactly one local
+of LRC may be familiar to some readers as an Azure-LRC+1. The                         parity. The second restriction is common in constructions pro-
+local groups of this code are (d1 , d2 , l1 ), (d3 , d4 , l2 ), and (c1 , c2 , lg )   posed in the literature, and indeed, important for our goal of
+and therefore ` = 2. In this code, ADRC (see Def. 5.10) = ARC1 (see                   minimizing the storage overhead. For simplicity of exposition
+Def. 5.11) = 2, since each data or parity block can be reconstructed                  we assume that p is even (we will mention how this condition
+by reading the two other blocks in its local repair group.                            can be removed), and p|k where we denote kp = t. It will be
+Definition 5.9 (Maximally recoverable locally recoverable                             clear that the locality parameter ` of the (n, k, r, p)-Optimal
+code (MR-LRC)). An (n, k, `)-LRC is called a MR-LRC if it                             Cauchy LRCs we will construct is kp + r.
+can recover from any pattern of n−k erasures as long as there                            In Section 6.2 will show that (n, k, r, p)-Optimal Cauchy
+is at least one erasure in each local repair group of the code.                       LRCs have the best possible distance for LRCs with their
+To clarify, suppose the (n, k, `)-LRC has local repair groups                         dimension and locality (under some modest restrictions). In
+L1 , . . . , L p for some p > 1 where each Li ⊆ {1, . . . , n}. Recall                Appendix A.2 we show how some of these restrictions can
+that ∪i Li = {1, . . . , n} and that the Li are not necessarily                       be relaxed. We begin with explaining the construction of
+disjoint. Let E = {e1 , . . . , en−k } ⊆ {1, . . . , n} be any pattern                (n, k, r, p)-Optimal Cauchy LRCs.
+of n − k erased symbols. Then as long as Li ∪ E 6= 0/ for any i,
+then the erasure pattern E can be recovered by the code.
+Definition 5.10 (Average degraded read cost (ADRC)). The                              6.1    Code construction
+ADRC is the average of the cost of reconstructing any of the
+data blocks. We can measure cost(bi ) as the number of blocks                         The generator matrix for an (n, k, r, p)-Optimal Cauchy LRC
+which need to be read in order to reconstruct block i.                                is derived naturally from the generator matrix for an (k + r +
+                                         ∑ki=1 cost(bi )                              1, k)-MDS code which has dimension k and blocklength n =
+                          ADRC =                                                      k + r + 1. Specifically, we derive our code from the generator
+                                                k
+                                                                                      matrix of a (k + r + 1, k)-cauchy MDS code.
+Definition 5.11 (Average repair (or reconstruction) cost
+                                                                                         The generator matrix G(k+r+1),k of a (k + r + 1, k)-Cauchy
+(ARC)). The average repair cost is defined identically to
+                                                                                      MDS code is an k + r + 1 × k matrix, which simply consists
+the ARDC, with the addition of the global and local parity
+                                                                                      of a k × k identity matrix stacked on top of a r + 1 × k Cauchy
+blocks to the computation.
+                                                                                      matrix. The resulting matrix is well-known to generate an
+                                      ∑ni=1 cost(bi )                                 MDS code with distance r + 2 (See Thm 2.2 and 5.2 in [8]).
+                          ARC1 =
+                                             n
+
+
+
+6    21st USENIX Conference on File and Storage Technologies                                                                        USENIX Association
+                                                                             
+                               1                                                     6.2    Distance
+                                        ..                                   
+                                             .            0                        We note that the distance of an (n, k, r, p)-Optimal Cauchy
+                                                                             
+                                                 ..                                LRC is exactly r + 2. As long as k, r, p > 0, p|k, rp2 > k + rp,
+                                                      .                      
+                    
+                                                          ..
+                                                                              
+                                                                                    and p is even, it is a distance optimal LRC (Definition 5.4).
+                                        0                      .             
+       G(k+r+1),k =                                                                Theorem 6.1. For r > 0, On,k,r,p generates an error correct-
+                                                                     1       
+                    
+                     c11                         ...                c1k
+                                                                              
+                                                                                    ing code with distance exactly r + 2. Proof details are in
+                    
+                                                 ..
+                                                                              
+                                                                                    Appendix A.1
+                                                    .                        
+                                                                                     Lemma 6.2. Given k, r, p > 0, rp2 > k + rp, and p even, the
+                                                                             
+                     cr1                                             crk     
+                     c(r+1)1                                        c(r+1)k          locally recoverable code formed by On,k,r,p is distance optimal.
+                                                                                     Proof details are in Appendix A.1
+When we do not need to refer to r and k are specifically, we
+refer to G(k+r+1),k as G, and the ith row of G(k+r+1),k as gi .                         We show how some of the conditions in Lemma 6.2 can be
+                                                                                     relaxed in Appendix A.2.
+   To create the generator matrix for an (n, k, r, p)-optimal
+cauchy LRC, we first partition this last row of G, gk+r+1 into                       Remark 6.3. Constructing distance optimal LRCs is a well-
+p rows r1 , . . . , r p as follows,                                                  studied problem. At first, only constructions whose alphabet
+        r1 = (c(r+1)1 , c(r+1)2 , . . . , c(r+1)t , 0, . . . , 0)                    size was exponential in the blocklength were known [45, 49].
+                                                                                     These do not yield codes which may be used in practical
+        r2 = (0, . . . , 0, c(r+1)(t+1) , . . . , c(r+1)2t , 0, . . . , 0)
+                                                                                     settings where the alphabet size q is fixed at 256. The most
+          ..                                                                         well-known construction of distance optimal LRCs may be
+           .
+                                                                                     found in [33, 47]. To get truly optimal codes the codes of [47]
+        r p = (0, . . . , 0, c(r+1)(p(t−1)) , . . . , c(r+1)pt )                     require that ` + 1|n, and none of the codes we use in our ex-
+ It is clear that r1 + r2 + · · · + r p = gk+r+1 . We the compute                    periments meet this restriction. Distance optimal LRCs with
+the rows r̃i as follows,                                                             very general parameters were finally shown in [33]. In our
+                 r̃i = ri + gk+1 + gk+2 + · · · + gk+r                               experimental analysis in the later sections, we use Optimal
+                                                                                     Cauchy LRCs (rather than other known constructions such
+   Note that r̃i are simply ri with the addition of the first r                      as [33]) as examples of codes which lie on the generalized
+‘cauchy rows’ of G. Since p is even (and the underlying field                        Singleton bound (essentially, distance optimal LRCs. See Def-
+ has characteristic 2) we have,                                                      inition 5.4). This is because Optimal Cauchy LRCs are easier
+  r˜1 + r˜2 + · · · + r̃ p = p(gk+1 + gk+2 + · · · + gk+r ) + gk+r+1                 to construct in our parameter regime.
+                         = gk+r+1
+Finally, the generator matrix On,k,r,p for the (n, k, r, p)-Optimal                  7     (n, k, r, p)-Uniform Cauchy LRCs
+Cauchy LRC is given by,
+                                                                                     In the previous section we give a very simple construction of
+                          1
+                                                     
+                                                                                     distance optimal LRCs which we will use in our experimental
+                              ..
+                                 .                                                   analysis as examples of distance optimal codes. In this section,
+                                                     
+                                            0        
+                                                                                     we provide a simple heuristic modification of these codes
+                                                     
+                                    ..               
+                                         .           
+                                                                                     which has several practical advantages (though they are not
+                                                     
+                                           ..        
+                                                                                     shown to be optimal with regards to distance).
+                              0               .      
+                                                                                        The later experimental analysis of these codes highlights
+                                                     
+                                                  1  
+             On,k,r,p = c11                                                         the point that distance optimal (i.e. on the generalized Single-
+                                                     
+                                     ...         c1k 
+                                                                                     ton bound) does not mean most-durable or most cost-efficient
+                                                     
+                                    ..               
+                        
+                                         .           
+                                                                                    from a practical perspective. For example, a code that has the
+                        c                       crk 
+                         r1                                                        same locality and distance can have different durability (as
+                        
+                                    r̃1              
+                                                                                    measured by mean-time-to-data-loss) and robustness against
+                                      ..             
+                                                                                     random patterns of erasures. Distance-optimality simply indi-
+                                       .             
+                                     r̃ p                                            cates the best distance for fixed values of n, k and `.
+                                                                                        These codes are constructed in much the same way as opti-
+  This matrix is simply the k + r rows of Gk+r+1,k stacked on                        mal cauchy LRCs, except that each local parity check covers
+top of the r˜1 , r˜2 , . . . , r̃ p vectors. We remark that n = k + r + p,           k+r
+                                                                                       p of the data blocks and global parity blocks. Following the
+and that On,k,r,p generates an LRC with locality parameter                           same notation as the previous section, the generator matrix
+` = kp + r. This is clear since each row among r˜1 , r˜2 , . . . , r̃ p              for a uniform cauchy code has the form (assuming p|k + r for
+provides a local parity check on exactly ` other rows.                               simplicity),
+
+
+
+USENIX Association                                                                21st USENIX Conference on File and Storage Technologies          7
+            c1            c2               c3                 c4                                       c1               c2        c3           crs
+
+            ...          ...     ...     ...     ...                                                   ...          ...     ...     ...
+       d1         d12 d13 d24 d25 d36 d37 d48 rs1 rs3                                             d1         d16 d17 d32 d33 d48 rs1 rs3
+                             (a) 48-of-55 Azure-LRC                                                            (b) 48-of-55 Azure-LRC + 1
+
+
+
+            c1            c2               c3                 c4           L                c1                 c2            c3                c4
+
+            ...          ...     ...     ...     ...                                        ...          ...     ...     ...     ...
+       d1         d12 d13 d24 d25 d36 d37 d48 rs1 rs3                                  d1         d12 d13 d25 d26 d38 d39 d48 rs1 rs3
+                       (c) 48-of-55 Optimal Cauchy LRC                                                       (d) 48-of-55 Uniform Cauchy LRC
+                                                  Figure 4: Different LRC constructions used in our evaluation.
+
+                                                                                    3. Reliability against random erasure patterns.
+                                1
+                                                                     
+                                                                                    4. Comparison of reliability against the information theoretic
+                                      ..
+                                           .                                           limit (i.e. against MR-LRCs).
+                                                                      
+                         
+                                                        0             
+                                                                       
+                                               ..                                 5. A practical computation of mean-time-to-data-loss
+                                                    .                 
+                         
+                                                        ..
+                                                                       
+                                                                                      (MTTDL).
+                         
+                                      0                      .        
+                                                                       
+                                                                   1                We compare well-known LRC constructions including dis-
+              Un,k,r,p = c11
+                                                                      
+                                               ...                c1k 
+                                                                                  tance optimal LRCs (our own Optimal Cauchy LRCs) and
+                                               ..                                novel codes like our Uniform Cauchy LRCs. We compare
+                                                  .                   
+                         
+                         c
+                                                                                  these codes for the following parameter settings, all of which
+                          r1                                      crk 
+                                                                                  have < 20% storage overhead.
+                         
+                                               r1                     
+                                                                                     LRCs used in experiments. The most popular deployed
+                                                ..                    
+                                                 .                               LRCs we came across are the Xorbas-LRC [42], Azure-
+                                                r̃ p                               LRC [27] and Azure-LRC+1 [33] constructions. Xorbas-LRC
+                                                                                   has the advantage of being distance optimal, but it is only
+    Where (if we denote k+r
+                         p = t),                                                   shown to be so in very specific parameter settings, so we
+        r1 = (c(r+1)1 , c(r+1)2 , . . . , c(r+1)t , 0, . . . , 0)                  instead use Optimal Cauchy LRCs as examples of distance
+        r2 = (0, . . . , 0, c(r+1)(t+1) , . . . , c(r+1)2t , 0, . . . , 0)         optimal codes in our evaluation. The Azure-LRC was one of
+                                                                                   the first LRCs proposed, and is reportedly used at Microsoft
+          ..
+           .                                                                       Azure [27]. We illustrate these codes for the 48-of-55 param-
+                                                                                   eter setting in Figure 4.
+        r p = (0, . . . , 0, c(r+1)(p(t−1)) , . . . , ck )
+                                                                                      Azure-LRC divides the data blocks into equally spaced lo-
+   Finally, we modify the last row by adding the exclusive-or                      cal groups, with each local group having a local parity. Each
+of the global parity checks.                                                       local parity can be the XOR of the data blocks in that lo-
+                     r̃ p = r p + gk+1 + · · · + gk+r                              cal group. The global parities are not protected by any local
+   One may note that the locality parameter for this code                          parities. Figure 4a gives a representation of the Azure-LRC
+` = k+r                                                                            construction. Note that Azure-LRC is not a true LRC since
+      p , which is lower than that for optimal cauchy LRCs.
+In the event that p - (k + r), we may simply divide the k + r                      the global parities are not locally recoverable (i.e. ` = k). In
+data and global parities as evenly as possible amongst the p                       early works, locality for global parities was not considered a
+local checks.                                                                      requirement for LRCs, but most recent works enforce it. How-
+
+
+8    Experiments and analysis                                                                Scheme                 n        k    r    p    Rate
+                                                                                                                                            24
+We now use the following suite of practical measures of LRC
+                                                                                             24-of-28               28       24   2    2    28 = 0.857
+                                                                                                                                            48
+quality to compare various codes:
+                                                                                             48-of-55               55       48   3    4    55 = 0.872
+                                                                                                                                            72
+                                                                                             72-of-80               80       72   4    4    80 = 0.9
+                                                                                                                                            96
+1. Average degraded read cost (Definition 5.10).                                             96-of-105              105      96   5    4    105 = 0.914
+
+2. Average repair costs (Definitions 5.11).                                        Table 1: Wide LRC schemes used to compare different LRC con-
+                                                                                   structions. Each scheme is chosen such that rate >= 0.85.
+
+
+
+8    21st USENIX Conference on File and Storage Technologies                                                                               USENIX Association
+Locality                                Azure-LRC                Azure-LRC+1             Optimal Cauchy LRC         Uniform Cauchy LRC
+n = 28, k = 24, r = 2, p = 2            ` = 24                   ` = 24                  ` = 12 + 2 = 14            ` =13
+n = 55, k = 48, r = 3, p = 4            ` = 48                   ` = 16                  ` = 12 + 3 = 15            ` =13
+n = 80, k = 72, r = 4, p = 4            ` = 72                   ` = 24                  ` = 18 + 4 = 22            ` =19
+n = 105, k = 96, r = 5, p = 4           ` = 96                   ` = 32                  ` = 24 + 5 = 29            ` =26
+
+Avg. degraded read cost (ADRC)          Azure-LRC                Azure-LRC+1             Optimal Cauchy LRC         Uniform Cauchy LRC
+                                        24×12                     24×24                  12×14                       26×13
+n = 28, k = 24, r = 2, p = 2              24 =12                    24 = 24                12 = 14                     26 = 13
+                                        48×12                     48×16                  48×15                       13×12+35×13
+n = 55, k = 48, r = 3, p = 4              48 =12                    48 = 16                48 = 15                        48     = 12.72
+                                        72×18                     72×24                  72×22                       72×19
+n = 80, k = 72, r = 4, p = 4              72 =18                    72 = 24                72 = 22                     72 = 19
+                                        96×24                     96×32                  96×29                       78×25+18×26
+n = 105, k = 96, r = 5, p = 4             96 =24                    96 = 32                96 = 29                        96     = 25.18
+
+Avg. repair cost 1 failure (ARC1 )      Azure-LRC                Azure-LRC+1             Optimal Cauchy LRC         Uniform Cauchy LRC
+                                        26×12+2×24                25×24+3×2              28×13                       28×13
+n = 28, k = 24, r = 2, p = 2                28     =12.85             28    = 21.64        28 = 13                     28 = 13
+                                        52×12+3×48                51×16+4×3              55×15                       13×12+42×13
+n = 55, k = 48, r = 3, p = 4                55     = 13.94            56    = 15.05        55 = 15                        55     =12.76
+                                        76×18+4×72                75×24+5×4              80×22                       80×19
+n = 80, k = 72, r = 4, p = 4                80     = 20.7             81    = 22.75        80 = 22                     80   =19
+                                        100×24+5×96               99×32+6×5              105×29                      81×25+24×26
+n = 105, k = 96, r = 5, p = 4                80     = 27.42           81    = 30.45        105 = 29                       105    =25.22
+
+Avg. repair cost 2 failures (ARC2 )     Azure-LRC                Azure-LRC+1             Optimal Cauchy LRC         Uniform Cauchy LRC
+n = 28, k = 24, r = 2, p = 2            30.66                    43.46                   32.12                      27.92
+n = 55, k = 48, r = 3, p = 4            35.49                    39.22                   36.93                      33.85
+n = 80, k = 72, r = 4, p = 4            52.80                    59.38                   54.82                      49.22
+n = 105, k = 96, r = 5, p = 4           70.68                    79.73                   74.50                      67.69
+
+Normalized MTTDL comparison             Azure-LRC                Azure-LRC+1             Optimal Cauchy LRC         Uniform Cauchy LRC
+n = 28, k = 24, r = 2, p = 2            0.64×                    0.14×                   0.50×                      1.00
+n = 55, k = 48, r = 3, p = 4            0.99×                    0.97×                   1.01×                      1.00
+n = 80, k = 72, r = 4, p = 4            0.99×                    0.97×                   0.49×                      1.00
+n = 105, k = 96, r = 5, p = 4           0.99×                    0.96×                   0.96×                      1.00
+
+Table 2: This table captures all the analytical metrics used to compare the different LRC constructions across the different wide LRC parameters
+described in Table 1. Details of this comparison are described in Section 8. The takeaways are that for all metrics except average degraded mode
+read cost (in which it is < 9% worse than the best LRC), Uniform Cauchy LRCs outperform other LRCs (including the Optimal Cauchy LRC).
+Another surprising result was that Azure-LRC outperforms Azure-LRC+1 despite its global parities having no local parities protecting them.
+
+ever, we include this code in our analysis due to its popularity           add a local parity protecting global parity blocks.
+and because it is actually used in practice (and our analysis                 Figure 4c and Figure 4d are representations of the Optimal
+shows that it gives great performance!).                                   Cauchy and Uniform Cauchy constructions which have been
+                                                                           described comprehensively in previous sections.
+   Azure-LRC+1 is an optimization to the Azure-LRC pro-
+posed in [33]. Azure-LRC suffers from an expensive MDS-                       Parameter regimes for comparison. We select four dif-
+level reconstruction on the failure of any of the global parities.         ferent widths representing wide LRCs, details of which are in
+In order to prevent this, Azure-LRC+1 forms a local group of               Table 1. For an apples-to-apples comparison, we freeze the
+the global parities and protects them using a local parity. Fig-           size of the data, k, the size of the code n, the number of global
+ure 4b captures the Azure-LRC+1 construction. Note that the                parities r, and the number of local parities, p. Since a (20, 17)
+Azure-LRC+1 construction in [33] introduces an additional                  MDS code is reportedly in use [3], we explore schemes where
+local parity to protect the global parities without removing               24 ≤ n ≤ 105 (deliberately starting from n close to 20, and
+any of the existing parity blocks. This construction changes               codes with rate strictly higher than 0.85). The entire set of
+the storage overhead of Azure-LRC+1 in comparison to other                 results are presented in Table 2, but we highlight the main
+constructions. We deliberately choose to keep the numbers                  points below.
+k-of-n the same across all schemes, otherwise we are compar-                  Uniform Cauchy LRC has the smallest locality. We first
+ing codes with different redundancy, which in our view is not              compare the locality of the different LRC constructions. Re-
+a fair comparison. Thus, in our construction of Azure-LRC+1,               call (Definition 5.3) that locality refers to the maximum
+we choose to remove one local parity protecting data blocks                number of blocks to be read for reconstruction of a single
+(as compared to removing a global parity since removing a                  block. Since Azure-LRC requires reading all data blocks to
+local parity has a less adverse effect on the reliability), and            reconstruct any failed global parity, its locality is the high-
+
+
+
+USENIX Association                                                     21st USENIX Conference on File and Storage Technologies                9
+Figure 5: This plot compares the durability of the different LRC constructions (Azure-LRC, Azure-LRC+1, Optimal Cauchy and Uniform
+Cauchy) by measuring their ability to recover from random failures (only values where some recovery ratios were less than one are shown). We
+evaluate all wide LRCs discussed in evaluation ranging from 24-of-28 to 96-of-105. Except in 48-of-55, we see that Uniform Cauchy has the
+best durability. Optimal Cauchy has the best durability in 48-of-55. Surprisingly, Azure-LRC has better durability compared to Azure-LRC+1
+even though global parities of Azure LRCs are not covered by a local parity.
+
+                                                                         Azure-LRC+1 has the highest ADRC followed by Optimal
+                                                                         Cauchy LRC, both owing to their larger local repair groups.
+                                                                            Average repair cost (ARC) is lowest for Uniform
+                                                                         Cauchy LRC. Very similar to the ADRC, the ARC1 and ARC2
+                                                                         (Definition 5.11) are the degraded read cost for all n blocks
+                                                                         of a stripe for 1 block failure and 2 block failures respec-
+                                                                         tively. We choose to showcase both ARC1 and ARC2 because
+                                                                         the wider the LRC, the higher the likelihood that more than
+Figure 6: Comparing performance with MR-LRC. In this plot                one failure can occur in a stripe as explained in Section 3.
+we show the results of a Monte-Carlo experiment where p failures         Here, the disadvantage of Azure-LRC turns into the advan-
+were forced (one in each local group) and another n − k − p fail-        tage for Uniform Cauchy LRC. Specifically, the degraded read
+ures were distributed randomly across remaining blocks. MR-LRCs          cost for the global parities involves reading all data blocks
+can recover from all such failure patterns. Azure-LRC+1, Optimal         in the case of Azure-LRC. For Uniform Cauchy LRC, the
+Cauchy and Uniform Cauchy are all > 99% as durable as an MR-             degraded read cost of global parities is the same as a data
+LRC in this scenario for our choice of coefficients. Azure-LRC is
+                                                                         block, both of which are only slightly higher than the data
+not shown because it does not have a local group covering its global
+parities, making it unsuitable for this comparison.
+                                                                         block reconstruction cost of an Azure-LRC. The exception is
+                                                                         24-of-28 where Azure-LRC has a slightly lower ARC than
+est. This is followed by Azure-LRC+1, whose local groups                 Uniform Cauchy LRC, owing to these specific parameters,
+are larger than the other constructions (since we have con-              but this too becomes favorable for Uniform Cauchy LRCs
+strained p). In fact for 24-of-28, Azure-LRC+1 has the same              in the case of ARC2 3 . Across the schemes, as the number of
+locality as Azure-LRC due to having only 1 local group that              data blocks increase, the ARC of Azure-LRC reduces, but at
+spans all data blocks. Optimal Cauchy LRC evenly divides                 the same time, any additional global parity increases the ARC
+the data blocks, but requires each local group to contain all            significantly. The difference between the Azure-LRC+1 and
+the global parities (we need this to prove distance l m
+                                                      optimal-           Optimal Cauchy LRC is lower than their difference in ADRC.
+                                                                         This is due to Azure-LRC+1 having a very low-cost global
+ity as explained in Section 6.2), making its locality kp + g.
+                                                  l m                    parity reconstruction. Nevertheless, the Azure-LRC+1 and
+Uniform Cauchy LRC has the lowest locality np since it                   Optimal Cauchy LRCs have the highest, and second highest
+uniformly divides n blocks into p groups.                                ARCs among the four constructions.
+   Azure-LRC has the lowest average degraded read cost                      Uniform Cauchy LRCs have the best random failure
+(ADRC), closely followed by Uniform Cauchy LRC. The                      tolerance. We compare the LRC constructions empirically
+ADRC is calculated only for the data blocks (Definition 5.10),           by evaluating their durability against random failures (includ-
+and therefore is directly proportional to the size of local              ing when the number of failures are ≥ d when d is the distance
+groups. Therefore, since Azure-LRC has the smallest local                of the code). For each code, we choose various values of i
+groups, it also has the smallest ADRC. Although, as the stripes          and conduct a Monte-Carlo experiment in which i blocks are
+become wider, the difference between the local group sizes of            removed uniformly at random (without replacement) from the
+Azure-LRC and Uniform Cauchy LRC starts reducing. This                   n blocks of stripe. Then data recovery is attempted. The more
+reflects in the reduction of the ratio of the ADRC of Uniform            times recovery can succeed, the more durable the code. For
+Cauchy LRCs compared to Azure-LRCs. In particular, the                   each random failures experiment at least 1 million recover-
+ADRC of Uniform Cauchy LRC is about 8% more than Azure-                     3 We refrain from detailing the calculation of ARC because it significantly
+                                                                                                                              2
+LRC for 24-of-28, but is only about 5% more for 96-of-105.               more complex than ARC1 .
+
+
+
+
+10   21st USENIX Conference on File and Storage Technologies                                                                USENIX Association
+ies from unique block failure combinations were attempted.                                                                      p5→ f ail
+                                                                                                                                      p6→ f ail
+The exception was 4 random failures for 24-of-28, where all
+                                                                              p f ail                                                       p7→ f ail
+combinations (20475) were exhaustively checked.
+   Figure 5 shows the results of the various failure scenarios                                   ...
+on each of the four schemes across all four LRCs. Uniform                                                                                               f ail
+                                                                              prepair
+Cauchy LRC outperforms all other LRC constructions in                    s0             s1       ...            s5         s6            s7
+each scenario, for each scheme, except 48-of-55. In 48-of-              Figure 7: MTTDL Markov Chain for a 48-of-55 code. The proba-
+55, the Optimal Cauchy LRC has the highest recoverability               bilities p5→ f ail , p6→ f ail , and p7→ f ail are added from Fig. 5 (b, c, d)
+ratio. The intuition behind Uniform Cauchy LRC’s superior               where they are determined empirically. The probabilities pi→ f ail for
+performance is that when a high number of failures happen               i < 5 are not pictured because they are zero.
+uniformly at random, it’s more likely that at least one failure
+occurs in each local repair group. This results in all local            i.e. the expected time until a healthy stripe experiences a data
+parities contributing to the reconstruction process, leading to         unavailability event. Each state representing e failures, de-
+a higher success rate.                                                  noted se , may transition to the states se−1 , se+1 or fail. These
+   Simple choices of coefficients give almost MR-LRCs in                transition probabilities are usually modelled using exponen-
+our parameter regime. We construct all our generator ma-                tial distributions representing repair time (which captures the
+trices using Cauchy matrices. We then conduct an experiment             transition from se to se−1 ), failure probability (which captures
+to compare our codes to a hypothetical MR-LRC of the exact              the transition from se to se+1 ) and complete failure probability
+same design. We say ‘hypothetical’ because although there               (which captures the transition from se to fail). These theoret-
+is proof that such an MR-LRC can exist [18, 22], currently              ical models are ubiquitous in modeling stripe reliability for
+there does not exist a deterministic way to construct such a            MDS codes, but they have also been used to study the relia-
+code. Nevertheless, we can precisely characterize the erasure           bility of LRCs [27, 42, 44]. In our work, replace the modelled
+patterns that can be recovered by such MR-LRCs. Simply put,             transition probabilities with observed ones, in order to get a
+an MR-LRC with p local parities and r global parities can               better estimate of the MTTDL of our codes.
+recover any pattern of r + p failures, as long as there is at              We accomplish this by supplementing our theoretical model
+least one failure in each local repair group (so that each local        with empirical data in the following way: for each state se ,
+parity may contribute towards the reconstruction). An LRC               we add a transition to the irrecoverable data loss state with
+which has this property is an MR-LRC.                                   probability pe→ f ail , where pe→ f ail is probability that a stripe
+   We conduct an experiment in which we plant one failure               with e randomly distributed failures cannot recover the data,
+in each local group (i.e. p total planted failures), and then add       as shown in Figure 7. To be clear, in order to model MTTDL
+another r failures at random. Then we attempt recovery. We              this way, we need the explicit generator matrix of our code,
+find that at least with coefficients we chose (all derived from         and then to conduct the random failures experiment to gen-
+Cauchy matrices), all the codes we tested were very close to            erate data. While no model is perfect, we believe that this
+being MR-LRCs. So even if it is hard to construct MR-LRCs,              is a more realistic evaluation of MTTDL of an LRC, since
+in practical parameter settings, it is not hard to realize many         we meaningfully account for the observed durability of the
+of their benefits using common code constructions.                      explicit code (i.e. accounting for coefficients).
+   We do point out that even though all code constructions                 Table 2 shows the MTTDL comparisons for different LRC
+were close to being MR-LRCs, this does not mean that they               constructions. Since we are interested in the relative compari-
+were all equally durable against random erasures. This is               son of MTTDLs, we show the ratio of each LRC construction
+because the shape of the code affects the probability that r + p        with the Uniform Cauchy LRC MTTDL (where MTTDL is
+random failures will spread out so that each local repair group         calculated as a function of p f ail and prepair whose values can
+gets at least one failure. Indeed, this provides some intuition         differ significantly based on specific cluster size, architecture,
+as to why Uniform Cauchy LRCs perform the best against                  disk makes/models, etc.). Although prepair can differ based
+random erasures. It is because the evenly sized local repair            on the architecture of the code, those differences are negli-
+groups maximize the probability that each local repair group            gible in comparison to the wait-time for the detection of the
+will see at least one failure (recall MR-LRC Definiton 5.9).            missing blocks in a stripe as explained in Section 2. We find
+   Mean-time-to-data-loss (MTTDL). MTTDL (for a                         that Uniform Cauchy LRC achieves the highest MTTDL (up
+stripe) has been a canonical metric for reliability in the cod-         to a factor of 100× in our evaluation), while Azure-LRC+1
+ing community [14]. It is modeled using a continuous time               has the lowest MTTDL values. This is in line with our ob-
+Markov chain in which each state represents the number of               servations that Uniform Cauchy LRCs and Azure-LRC+1
+erasures in a stripe. There is a final absorbing state, denoted         have respectively the highest and lowest performance in re-
+fail, which represents a data loss/unavailability event. The            constructing random erasures, and also the lowest and highest
+MTTDL for a coding scheme is simply the mean time until a               average locality. This is unsurprising since MTTDL of an
+Markov chain starting at state zero reaches the absorbing state         LRC is inversely proportional to its average locality [44].
+
+
+
+USENIX Association                                                  21st USENIX Conference on File and Storage Technologies                             11
+9    Maintenance-robust deployment                                   zone (i.e. a maintenance-robust-efficient deployment). Here,
+                                                                     during any maintenance event, the degraded read cost for the
+When deploying an erasure code in a large-scale storage clus-        data blocks stored in that maintenance zone is still ` = 2. How-
+ter, there are several placement constraints that need to be         ever, if z = 2, we cannot guarantee local repairs in all cases.
+met in order to ensure adequate data reliability. For example,       As a best case, we could have z1 = d1 , d3 , c1 , lg and put the
+usually no two blocks of the same stripe are put on the same         rest of the data in z2 . Suppose z2 undergoes maintenance, the
+disk, server, rack or at times even racks powered by the same        data can be repaired by first repairing c2 using c1 , lg , and sub-
+power source to improve data reliability. Placement restric-         sequently performing a global repair using d1 , d3 , c1 and c2 to
+tions have been studied recently in [30], and in this work we        reconstruct d2 and d4 . Suppose z1 undergoes maintenance, d1
+comment that placement constraints can be considered during          can be repaired using d2 , l1 , and d3 can be repaired using d4 ,
+code design as well.                                                 l2 . Thus, with z = 2, a (9, 4, 2)−LRC can only be deployed
+   In a storage cluster, the smallest unit in which maintenance      in a maintenance-robust manner, where global repairs are re-
+such as kernel/firmware/hardware upgrades can be performed           quired for reconstructing data. In general, when z >= ` + 1
+is known as a maintenance zone. The design of maintenance            for an LRC, it can guarantee maintenance-robust-efficient
+zones affects reliability because all servers/devices in a single    deployment. The parameter ` + 1 in Table 2 shows that mini-
+maintenance zone can be turned off simultaneously during             mum number of maintenance zones required for maintenance-
+a maintenance event. So we would like to have each stripe            robust-efficient deployment to be possible for the schemes we
+intersect a maintenance zone as little as possible, making it        have evaluated in this work. Thus, with z ≈20, all schemes
+robust to the maintenance events in a real storage cluster. In       except 96-of-105 can be deployed in a maintenance-robust-
+an ideal world, we could make maintenance zones as small as          efficient manner for Uniform Cauchy LRCs.
+possible (e.g. a single rack) to limit the impact of maintenance
+events on reliability. But this is not practically feasible, as it
+would increase the operational toil of maintenance tasks. One        10    Related Work
+reason for this is: after every maintenance task (belonging to
+                                                                     LRCs have widely studied and deployed in the last decade
+a single maintenance zone) cluster-wide (and therefore time-
+                                                                     due to their practical improvements over MDS codes. While
+consuming and expensive) data reachability and reliability
+                                                                     Microsoft Azure and Facebook first published the commercial
+tests are usually conducted to ensure that the maintenance
+                                                                     use of LRCs [27, 42], much academic research has also been
+activity was completed without unforeseen events. If mainte-
+                                                                     conducted to find LRC constructions with desirable proper-
+nance zones are too small (say an individual server), then a
+                                                                     ties [1, 6, 11, 17, 39, 39, 44, 46, 48]. One area of research has
+large-scale cluster of tens-of-thousands of servers would be
+                                                                     been explicit constructions of distance optimal codes (Defini-
+in perennial testing activity. This severely limits the number
+                                                                     tion 5.4) [6, 24, 28, 35, 37, 38, 47, 49, 51]. Tamo and Barg [47]
+of maintenance zones, and in practice, storage administrators
+                                                                     were among the first to provide a general construction of
+have informed us that the total number of maintenance zones
+                                                                     distance-optimal LRCs (with small field sizes), but with some
+in a single cluster are typically restricted to below 20. This
+                                                                     constraints on the allowable parameters. This construction
+means that a maintenance event can affect a large number of
+                                                                     was further generalized by Kolosov et al. [33] for a wide range
+stripes, and hence it is important to deploy stripes in a manner
+                                                                     of parameters. Recent years have seen a surge in research on
+that is robust to maintenance events.
+                                                                     MR-LRCs [4, 5, 12, 15, 16, 18–22, 36]. Recently, Gopi et
+   One desirable property of a code deployment might be that
+                                                                     al. [18] provided an explicit construction of MR-LRCs which
+no maintenance event that affects a single zone should render
+                                                                     is broad, but does not cover our parameter regime.
+any stripe unrecoverable. We name this maintenance-robust
+                                                                        Wide codes are known to be deployed in two commercial
+deployment. Since maintenance events are foreseeable, and
+                                                                     settings, VAST [50] and Backblaze [3], and recent works
+usually performed one zone at a time, a maintenance-robust
+                                                                     have studied wide codes in academia. Haddock et al. analyze
+deployment would ensure high availability.
+                                                                     wide codes’ performance using GPUs [23]. Li et al. show
+   In the context of LRCs, we can further optimize deploy-
+                                                                     local erasures codes in the context of hard-disk drives [34].
+ment strategies to increase the likelihood of cost-efficient local
+                                                                     More recently, Hu et al. [25] study the performance issues in
+repairs. For example, if we guarantee that every maintenance
+                                                                     repair, encoding, and update performance of wide codes. Our
+zone has at most one block from each local group, all de-
+                                                                     practically inspired work adds to this literature by studying
+graded reads during a maintenance event would only require
+                                                                     the trade-offs of wide LRCs from construction to deployment.
+local repairs. We term such a deployment maintenance-robust-
+efficient deployment. Ideally we want all LRC deployments
+to be maintenance-robust-efficient deployments.                      11    Conclusion
+   Consider the (9, 4, 2)−LRC from Figure 3. If the number
+of maintenance zones, say z is 3. We can assign each block of        In this work we show that many subtle factors can affect LRC
+data from every local repair group to a different maintenance        reliability in real world scenarios: coefficients in the generator
+
+
+
+12   21st USENIX Conference on File and Storage Technologies                                                    USENIX Association
+matrix, design of local repair groups, and maintenance-robust-                cauchy code. Substituting ` and d = r + 2 (from Theorem
+deployment. We show the value of an experiment-driven un-                     A.1), equation 1 becomes,
+derstanding of reliability as it provides us novel insights into
+                                                                                                &      '                 
+                                                                                                    k                pk
+design choices which have a meaningful impact on reliabil-                             n = k+ k          +r = k+            +r
+                                                                                                  p +r
+                                                                                                                   k + pr
+ity. Indeed, this culminates in our construction of Uniform
+Cauchy LRCs which outperform popular (and provably dis-                          So an (n, k, r, p)-optimal
+                                                                                                 l     m    cauchy code will be distance op-
+tance optimal) codes in practice.                                                                   pk
+                                                                              timal whenever k+pr = p, i.e. p − 1 < k+pr  pk
+                                                                                                                              ≤ p. Both in-
+                                                                              equalities hold as long as r, p, k > 0 and rp2 < k + rp.
+12     Acknowledgements
+                                                                              A.2     Relaxing constraints
+We thank our shepherd Patrick P. C. Lee and the anonymous
+reviewers for their valuable feedback and suggestions. We                     We have shown how to construct distance optimal LRCs with
+extend special thanks to Larry Greenfield and numerous other                  blocklength n = k + r + p, where k is the dimension of the
+researchers and engineers at Google.                                          code, r is the number of global parity checks, and p is the
+                                                                              number of local parity checks as long as p is even, r, p, k > 0
+                                                                              and rp2 < k + rp. We will briefly discuss some extensions of
+A     Optimal Cauchy LRCs                                                     these parameter regimes in this section.
+
+A.1     Distance optimality of Optimal Cauchy                                 Claim A.3. We may modify our construction of distance op-
+                                                                              timal codes to work with p odd.
+        LRCs
+                                                                                   If p = 1, we may modify the construction so that r1 = r p =
+Theorem A.1. For r > 0, On,k,r,p generates an error correct-
+                                                                              r̃ p = gk+r+1 , and so G(k+r+1),k = On,k,r,p . This just reduces to
+ing code with distance exactly r + 2.
+                                                                              the code defined by G(k+r+1),k .
+Proof. We will simply show that the distance of the code gen-                      If p ≥ 3, we may modify the construction so that r̃i = ri
+erated by On,k,r,p is equal to the distance of the code generated             for 1 ≤ i ≤ p − 2, r̃ p−1 = r p−1 + gk+1 + · · · + gk+r , and r̃ p =
+by G(k+r+1),k . Recall that G(k+r+1),k generates a code with                  r p + gk+1 + · · · + gk+r . In this case,
+distance exactly r + 2, which is equivalent to saying that this                 r˜1 + r˜2 + · · · + r̃ p = 2(gk+1 + gk+2 + · · · + gk+r ) + gk+r+1
+code can correct any pattern of r + 1 erasures, i.e. G(k+r+1),k                                       = gk+r+1
+has row rank at least k if any r + 1 rows are deleted.
+                                                                              From here, the same reasoning as the previous sections im-
+    We will show that On,k,r,p has row rank at least k whenever               plies that these codes are distance optimal. Notice that when
+any r + 1 rows are deleted. Note that whenever some r + 1                     p ≥ 3, these modifications do not change ` because r̃ p is a
+rows are deleted from On,k,r,p , they may or may not contain
+                                                                              local parity check on kp + r data blocks.
+any rows among the r̃1 , . . . , r̃ p .
+    First we consider the case when at least one of r̃1 , . . . , r̃ p                            2
+                                                                              Claim A.4. If rp2 < k + rp < rp2 , our construction gives
+are deleted. In this case, we may consider all of them lost,
+                                                                              codes whose blocklength is at most one greater than a dis-
+and note that we have exactly the same rows remaining as
+                                                                              tance optimal code.
+if gr+k+1 , and at most r other rows were lost in G(k+r+1),k .
+Since, G(k+r+1),k generates an MDS code with distance r + 2,                     This is easily observed by following the proof of Lemma
+it is clear that the remainder of the rows will have rank k.                                                                    pk
+                                                                              6.2 and considering the cases where p − 2 < k+pr      ≤ p − 1.
+    Now consider the case when the r + 1 deleted rows do not                  Previous works have also found such ‘off by one’ LRCs in
+contain any of the rows r̃1 , r̃2 , . . . , r̃ p . In this case, we can       broader parameter regimes than truly optimal LRCs [47]. This
+compute gk+r+1 = r˜1 + r˜2 + · · · + r̃ p , which reduces to the              allows us more freedom to explicitly construct almost distance
+case when r + 1 rows are deleted from G(k+r+1),k .                            optimal and wide LRCs.
+                                                                              Claim A.5. We may construct codes with alphabet size q ≥
+Lemma A.2. Given k, r, p > 0, rp2 > k + rp, and p even, the
+                                                                              k + r + 1.
+LRC formed by On,k,r,p is distance optimal.
+                                                                                Note that we can construct our LRCs starting from the
+Proof. Recall that for a LRC to be distance optimal we must                   generator matrix of any MDS code in place of Gk+r+1,k . In
+have,                                                                         particular, taking Gk+r+1,k to be the generator matrix of any
+                             
+                              k                                               Reed-Solomon code, we only need q ≥ k + r + 1 (since Reed-
+                    n = k+       +d −2                       (1)
+                              `                                               Solomon codes need q ≥ n). For our settings q is fixed to be
+where ` is the locality parameter and d is the distance. We                   256, so we have the flexibility to construct many wide explicit
+know that ` = kp +r and n = k +r + p for an (n, k, r, p)-optimal              codes.
+
+
+
+USENIX Association                                                        21st USENIX Conference on File and Storage Technologies                13
+References                                                      [14] Garth Alan Gibson. Redundant disk arrays: Reliable,
+                                                                     parallel secondary storage. PhD thesis, University of
+ [1] Abhishek Agarwal, Alexander Barg, Sihuang Hu, Arya              California, Berkeley, 1991.
+     Mazumdar, and Itzhak Tamo. Combinatorial alphabet-
+     dependent bounds for locally recoverable codes. IEEE       [15] Parikshit Gopalan, Guangda Hu, Swastik Kopparty,
+     Transactions on Information Theory, 2018.                       Shubhangi Saraf, Carol Wang, and Sergey Yekhanin.
+                                                                     Maximally recoverable codes for grid-like topologies.
+ [2] Backblaze. Disk Reliability Dataset. https://www.               In Proceedings of the Twenty-Eighth Annual ACM-SIAM
+     backblaze.com/b2/hard-drive-test-data.html,                     Symposium on Discrete Algorithms, 2017.
+     2013-2018.
+                                                                [16] Parikshit Gopalan, Cheng Huang, Bob Jenkins, and
+ [3] Backblaze. Erasure coding used by Backblaze. https:             Sergey Yekhanin. Explicit maximally recoverable codes
+     //www.backblaze.com/blog/reed-solomon/, 2013-                   with locality. IEEE Transactions on Information Theory,
+     2018.                                                           2014.
+ [4] SB Balaji and P Vijay Kumar. On partial maximally-         [17] Parikshit Gopalan, Cheng Huang, Huseyin Simitci, and
+     recoverable and maximally-recoverable codes. In IEEE            Sergey Yekhanin. On the locality of codeword symbols.
+     International Symposium on Information Theory (ISIT),           IEEE Transactions on Information Theory, 2012.
+     2015.
+                                                                [18] Sivakanth Gopi and Venkatesan Guruswami. Improved
+ [5] Alexander Barg, Zitan Chen, and Itzhak Tamo. A con-             maximally recoverable lrcs using skew polynomials.
+     struction of maximally recoverable codes. Designs,              IEEE Transactions on Information Theory, 2022.
+     Codes and Cryptography, 2022.
+                                                                [19] Sivakanth Gopi, Venkatesan Guruswami, and Sergey
+ [6] Alexander Barg, Itzhak Tamo, and Serge Vlăduţ. Locally        Yekhanin. On maximally recoverable local reconstruc-
+     recoverable codes on algebraic curves. IEEE Transac-            tion codes. In Electron. Colloquium Comput. Complex.,
+     tions on Information Theory, 2017.                              2017.
+ [7] Shimrit Ben-Yair. Updating Google Photos’ storage          [20] Sivakanth Gopi, Venkatesan Guruswami, and Sergey
+     policy to build for the future. https://blog.google/            Yekhanin. Maximally recoverable lrcs: A field size
+     products/photos/storage-changes/, 2020.                         lower bound and constructions for few heavy parities.
+ [8] Johannes Bloemer, Malik Kalfane, Richard Karp, Marek            IEEE Transactions on Information Theory, 2020.
+     Karpinski, Michael Luby, and David Zuckerman. An
+                                                                [21] Matthias Grezet, Thomas Westerbäck, Ragnar Freij-
+     xor-based erasure-resilient coding scheme. 1995.
+                                                                     Hollanti, and Camilla Hollanti. Uniform minors in maxi-
+ [9] Eric Brewer. Spinning Disks and Their Cloudy Future.            mally recoverable codes. IEEE Communications Letters,
+     https://www.usenix.org/node/194391, 2018.                       2019.
+
+[10] Eric Brewer, Lawrence Ying, Lawrence Greenfield,           [22] Venkatesan Guruswami, Satyanarayana V Lokam, and
+     Robert Cypher, and Theodore T’so. Disks for data cen-           Sai Vikneshwar Mani Jayaraman. -msr codes: Contact-
+     ters. Technical report, Google, 2016.                           ing fewer code blocks for exact repair. IEEE Transac-
+                                                                     tions on Information Theory, 2020.
+[11] Viveck Cadambe and Arya Mazumdar. An upper bound
+     on the size of locally recoverable codes. In 2013 In-      [23] Walker Haddock, Purushotham V Bangalore, Matthew L
+     ternational Symposium on Network Coding (NetCod).               Curry, and Anthony Skjellum. High performance era-
+     IEEE, 2013.                                                     sure coding for very large stripe sizes. In 2019 Spring
+                                                                     Simulation Conference (SpringSim).
+[12] Han Cai, Ying Miao, Moshe Schwartz, and Xiaohu Tang.
+     A construction of maximally recoverable codes with         [24] Kathryn Haymaker, Beth Malmskog, and Gretchen
+     order-optimal field size. IEEE Transactions on Informa-         Matthews. Locally recoverable codes with availabil-
+     tion Theory, 2021.                                              ity t <= 2 from fiber products of curves. arXiv preprint
+                                                                     arXiv:1612.03841, 2016.
+[13] Daniel Ford, François Labelle, Florentina I Popovici,
+     Murray Stokely, Van-Anh Truong, Luiz Barroso, Carrie       [25] Yuchong Hu, Liangfeng Cheng, Qiaori Yao, Patrick PC
+     Grimes, and Sean Quinlan. Availability in Globally              Lee, Weichun Wang, and Wei Chen. Exploiting com-
+     Distributed Storage Systems. In USENIX Symposium on             bined locality for {Wide-Stripe} erasure coding in dis-
+     Operating Systems Design and Implementation (OSDI),             tributed storage. In USENIX File and Storage Technolo-
+     2010.                                                           gies (FAST), 2021.
+
+
+
+14   21st USENIX Conference on File and Storage Technologies                                           USENIX Association
+[26] Cheng Huang, Minghua Chen, and Jin Li. Pyramid                  [37] Gaojun Luo and Xiwang Cao. Constructions of optimal
+     codes: Flexible schemes to trade space for access effi-              binary locally recoverable codes via a general construc-
+     ciency in reliable data storage systems. ACM Transac-                tion of linear codes. IEEE Transactions on Communica-
+     tions on Storage (TOS), 2013.                                        tions, 2021.
+[27] Cheng Huang, Huseyin Simitci, Yikang Xu, Aaron Ogus,            [38] Giacomo Micheli. Constructions of locally recoverable
+     Brad Calder, Parikshit Gopalan, Jin Li, Sergey Yekhanin,             codes which are optimal. IEEE Transactions on Infor-
+     et al. Erasure Coding in Windows Azure Storage. In                   mation Theory, 2019.
+     USENIX Annual Technical Conference (ATC), 2012.
+                                                                     [39] D.S. Papailiopoulos and A.G. Dimakis. Locally re-
+[28] Lingfei Jin. Explicit construction of optimal locally
+                                                                          pairable codes. In IEEE International Symposium on
+     recoverable codes of distance 5 and 6 via binary con-
+                                                                          Information Theory (ISIT), 2012.
+     stant weight codes. IEEE Transactions on Information
+     Theory, 2019.                                                   [40] K V Rashmi, Nihar B Shah, Dikang Gu, Hairong Kuang,
+[29] Saurabh Kadekodi. DISK-ADAPTIVE REDUNDANCY:                          Dhruba Borthakur, and Kannan Ramchandran. A So-
+     tailoring data redundancy to disk-reliability heterogene-            lution to the Network Challenges of Data Recovery in
+     ity in cluster storage systems. PhD thesis, Carnegie                 Erasure-coded Distributed Storage Systems: A Study on
+     Mellon University, 2020.                                             the Facebook Warehouse Cluster. In USENIX Workshop
+                                                                          on Hot Topics in Storage and File Systems (HotStorage),
+[30] Saurabh Kadekodi, Francisco Maturana, Sanjith Ath-                   2013.
+     lur, Arif Merchant, KV Rashmi, and Gregory R Ganger.
+     Tiger:{Disk-Adaptive} redundancy without placement              [41] David Reinsel-John Gantz-John Rydning, J Reinsel, and
+     restrictions. In USENIX Symposium on Operating Sys-                  J Gantz. The digitization of the world from edge to
+     tems Design and Implementation (OSDI), 2022.                         core. Framingham: International Data Corporation, 16,
+                                                                          2018.
+[31] Saurabh Kadekodi, Francisco Maturana, Suhas Jayaram
+     Subramanya, Juncheng Yang, KV Rashmi, and Gre-                  [42] Maheswaran Sathiamoorthy, Megasthenis Asteris, Dim-
+     gory R Ganger. PACEMAKER: Avoiding heart attacks                     itris Papailiopoulos, Alexandros G Dimakis, Ramkumar
+     in storage clusters with disk-adaptive redundancy. In                Vadali, Scott Chen, and Dhruba Borthakur. Xoring ele-
+     USENIX Symposium on Operating Systems Design and                     phants: Novel erasure codes for big data. In Interna-
+     Implementation (OSDI), 2020.                                         tional Conference on Very Large Data Bases (VLDB),
+                                                                          2013.
+[32] Saurabh Kadekodi, K V Rashmi, and Gregory R Ganger.
+     Cluster storage systems gotta have HeART: improving             [43] Seagate.  The Digitization of the World From
+     storage efficiency by exploiting disk-reliability hetero-            Edge to Core.      https://www.seagate.com/
+     geneity. In USENIX File and Storage Technologies                     files/www-content/our-story/trends/files/
+     (FAST), 2019.                                                        idc-seagate-dataage-whitepaper.pdf, 2018.
+[33] Oleg Kolosov, Gala Yadgar, Matan Liram, Itzhak Tamo,
+                                                                     [44] Mostafa Shahabinejad. Locally repairable linear block
+     and Alexander Barg. On fault tolerance, locality, and op-
+                                                                          codes for distributed storage systems. 2018.
+     timality in locally repairable codes. ACM Transactions
+     on Storage (TOS), 2020.                                         [45] Natalia Silberstein, Ankit Singh Rawat, O Ozan Koylu-
+[34] Yin Li, Hao Wang, Xuebin Zhang, Ning Zheng, Shafa                    oglu, and Sriram Vishwanath. Optimal locally repairable
+     Dahandeh, and Tong Zhang. Facilitating magnetic                      codes via rank-metric codes. In IEEE International Sym-
+     recording technology scaling for data center hard disk               posium on Information Theory (ISIT), 2013.
+     drives through {Filesystem-Level} transparent local era-
+                                                                     [46] Itzhak Tamo and Alexander Barg. Bounds on locally
+     sure coding. In USENIX File and Storage Technologies
+                                                                          recoverable codes with multiple recovering sets. In
+     (FAST).
+                                                                          IEEE Transactions on Information Theory, 2014.
+[35] Jian Liu, Sihem Mesnager, and Lusheng Chen. New
+     constructions of optimal locally recoverable codes via          [47] Itzhak Tamo and Alexander Barg. A family of opti-
+     good polynomials. IEEE Transactions on Information                   mal locally recoverable codes. IEEE Transactions on
+     Theory, 2017.                                                        Information Theory, 2014.
+
+[36] Shu Liu and Chaoping Xing. Maximally recoverable                [48] Itzhak Tamo, Alexander Barg, and Alexey Frolov.
+     local reconstruction codes from subspace direct sum                  Bounds on the parameters of locally recoverable codes.
+     systems. arXiv preprint arXiv:2111.03244, 2021.                      IEEE Transactions on Information Theory, 2016.
+
+
+
+USENIX Association                                               21st USENIX Conference on File and Storage Technologies       15
+[49] Itzhak Tamo, Dimitris S Papailiopoulos, and Alexan-
+     dros G Dimakis. Optimal locally repairable codes and
+     connections to matroid theory. IEEE Transactions on
+     Information Theory, 2016.
+[50] VAST. Providing Resilience, Efficiently. https://www.
+     usenix.org/node/194391, 2019.
+[51] Guanghui Zhang. A new construction of optimal (r,
+     δ) locally recoverable codes. IEEE Communications
+     Letters, 2020.
+
+
+
+
+16   21st USENIX Conference on File and Storage Technologies   USENIX Association
+

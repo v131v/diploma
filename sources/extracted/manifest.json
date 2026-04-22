@@ -1,0 +1,218 @@
+[
+  {
+    "id": "morph_sosp_2024",
+    "title": "Morph: Efficient File-Lifetime Redundancy Management for Cluster File Systems",
+    "extracted_text_path": "sources/extracted/morph-sosp-2024.txt",
+    "lines": 1062,
+    "chars": 116627,
+    "preview": "Morph: Efficient File-Lifetime Redundancy Management for Cluster File Systems Timothy Kim∗ , Sanjith Athlur∗ , Saurabh Kadekodi§ , Francisco Maturana∗ Dax Delvira∗ , Arif Merchant§ , Gregory R. Ganger∗ , K. V. Rashmi∗ ∗ Carnegie Mellon University § Google Abstract Many data services tune and change redundancy configu- rations of files over their lifetimes to address changes in data temperature and latency requirements. Unfortunately, changing redundancy configs (transcode) is IO-intensive. The M"
+  },
+  {
+    "id": "convertible_codes_it_2022",
+    "title": "Convertible Codes: Enabling Efficient Conversion of Coded Data in Distributed Storage",
+    "extracted_text_path": "sources/extracted/convertible-codes-itit-2022.txt",
+    "lines": 1240,
+    "chars": 135830,
+    "preview": "4392 IEEE TRANSACTIONS ON INFORMATION THEORY, VOL. 68, NO. 7, JULY 2022 Convertible Codes: Enabling Efficient Conversion of Coded Data in Distributed Storage Francisco Maturana , Student Member, IEEE, and K. V. Rashmi , Member, IEEE Abstract— Erasure codes are essential for providing efficient resilience against node failures in distributed storage. Typically, an [n, k] erasure code encodes k symbols into n symbols which are then stored in different nodes. Recent work by Kadekodi et al. shows th"
+  },
+  {
+    "id": "azure_ec_atc_2012",
+    "title": "Erasure Coding in Windows Azure Storage",
+    "extracted_text_path": "sources/extracted/azure-ec-atc12.txt",
+    "lines": 843,
+    "chars": 95730,
+    "preview": "Erasure Coding in Windows Azure Storage Cheng Huang, Huseyin Simitci, Yikang Xu, Aaron Ogus, Brad Calder, Parikshit Gopalan, Jin Li, and Sergey Yekhanin Microsoft Corporation Abstract which is a tremendous cost saving as we will soon sur- Windows Azure Storage (WAS) is a cloud storage sys- pass an Exabyte of storage. There are the obvious cost tem that provides customers the ability to store seem- savings from purchasing less hardware to store that much ingly limitless amounts of data for any du"
+  },
+  {
+    "id": "elect_fast_2024",
+    "title": "ELECT: Enabling Erasure Coding Tiering for LSM-tree-based Storage",
+    "extracted_text_path": "sources/extracted/elect-fast24.txt",
+    "lines": 1224,
+    "chars": 143051,
+    "preview": "ELECT: Enabling Erasure Coding Tiering for LSM-tree-based Storage Yanjing Ren and Yuanming Ren, The Chinese University of Hong Kong; Xiaolu Li and Yuchong Hu, Huazhong University of Science and Technology; Jingwei Li, University of Electronic Science and Technology of China; Patrick P. C. Lee, The Chinese University of Hong Kong https://www.usenix.org/conference/fast24/presentation/ren This paper is included in the Proceedings of the 22nd USENIX Conference on File and Storage Technologies. Febru"
+  },
+  {
+    "id": "lrc_convertible_arxiv_2023",
+    "title": "Locally Repairable Convertible Codes with Optimal Access Costs",
+    "extracted_text_path": "sources/extracted/lrc-convertible-arxiv-2023.txt",
+    "lines": 1742,
+    "chars": 139019,
+    "preview": "1 Locally repairable convertible codes with optimal access costs Xiangliang Kong Abstract Modern large-scale distributed storage systems use erasure codes to protect against node failures with low storage arXiv:2308.06802v1 [cs.IT] 13 Aug 2023 overhead. In practice, the failure rate and other factors of storage devices in the system may vary significantly over time, and leads to changes of the ideal code parameters. To maintain the storage efficiency, this requires the system to adjust parameter"
+  },
+  {
+    "id": "rapidraid_arxiv_2012",
+    "title": "RapidRAID: Pipelined Erasure Codes for Fast Data Archival in Distributed Storage Systems",
+    "extracted_text_path": "sources/extracted/rapidraid-arxiv-2012.txt",
+    "lines": 685,
+    "chars": 73765,
+    "preview": "RapidRAID: Pipelined Erasure Codes for Fast Data Archival in Distributed Storage Systems Lluis Pamies-Juarez, Anwitaman Datta and Frederique Oggier Nanyang Technological University (Singapore) Email: {lpjuarez,anwitaman,frederique}@ntu.edu.sg Abstract—To achieve reliability in distributed storage systems, in these systems have an overall overhead of 1.3×–1.5× the arXiv:1207.6744v2 [cs.DC] 3 Aug 2012 data has usually been replicated across different nodes. However size of the original data [5], ["
+  },
+  {
+    "id": "xoring_elephants_arxiv_2013",
+    "title": "XORing Elephants: Novel Erasure Codes for Big Data",
+    "extracted_text_path": "sources/extracted/xoring-elephants-arxiv-2013.txt",
+    "lines": 1252,
+    "chars": 137711,
+    "preview": "XORing Elephants: Novel Erasure Codes for Big Data Maheswaran Megasthenis Asteris Dimitris Papailiopoulos Sathiamoorthy University of Southern University of Southern University of Southern California California California asteris@usc.edu papailio@usc.edu msathiam@usc.edu Alexandros G. Dimakis Ramkumar Vadali Scott Chen University of Southern Facebook Facebook California ramkumar.vadali@fb.com sc@fb.com dimakis@usc.edu arXiv:1301.3791v1 [cs.IT] 16 Jan 2013 Dhruba Borthakur Facebook dhruba@fb.com "
+  },
+  {
+    "id": "ec_survey_tos_2024",
+    "title": "A Survey of the Past, Present, and Future of Erasure Coding for Storage Systems",
+    "extracted_text_path": "sources/extracted/ec-survey-tos-2024.txt",
+    "lines": 2280,
+    "chars": 184222,
+    "preview": "1 A Survey of the Past, Present, and Future of Erasure Coding for Storage Systems ZHIRONG SHEN and YUHUI CAI, Xiamen University, China KEYUN CHENG and PATRICK P. C. LEE, The Chinese University of Hong Kong, China XIAOLU LI and YUCHONG HU, Huazhong University of Science and Technology, China JIWU SHU, Tsinghua University, China Erasure coding is a known redundancy technique that has been popularly deployed in modern storage systems to protect against failures. By introducing a small portion of co"
+  },
+  {
+    "id": "ec_store_icdcs_2018",
+    "title": "EC-Store: Bridging the Gap Between Storage and Latency in Distributed Erasure Coded Systems",
+    "extracted_text_path": "sources/extracted/ec-store-icdcs-2018.txt",
+    "lines": 799,
+    "chars": 94828,
+    "preview": "EC-Store: Bridging the Gap Between Storage and Latency in Distributed Erasure Coded Systems Michael Abebe, Khuzaima Daudjee, Brad Glasbergen, Yuanfeng Tian Cheriton School of Computer Science, University of Waterloo {mtabebe, kdaudjee, bjglasbe, y48tian}@uwaterloo.ca resp. time (ms) Abstract—Cloud storage systems typically choose between replicating or erasure encoding data to provide fault tolerance. 30 31.9 Replication ensures that data can be accessed from a single site 20 20.9 but incurs a m"
+  },
+  {
+    "id": "identifying_hot_cold_icde_2013",
+    "title": "Identifying Hot and Cold Data in Main-Memory Databases",
+    "extracted_text_path": "sources/extracted/identifying-hot-cold-icde-2013.txt",
+    "lines": 875,
+    "chars": 109938,
+    "preview": "Identifying Hot and Cold Data in Main-Memory Databases Justin J. Levandoski 1 , Per-Åke Larson 2 , Radu Stoica 3 1,2 Microsoft Research 3 École Polytechnique Fédérale de Lausanne 1 2 3 justin.levandoski@microsoft.com, palarson@microsoft.com, radu.stoica@epfl.ch 200 Abstract— Main memories are becoming sufficiently large that Price (1000s of $) RAM most OLTP databases can be stored entirely in main memory, 150 2TB Flash (high) but this may not be the best solution. OLTP workloads typically 10"
+  },
+  {
+    "id": "heart_fast_2019",
+    "title": "Cluster Storage Systems Gotta Have HeART: Improving Storage Efficiency by Exploiting Disk-Reliability Heterogeneity",
+    "extracted_text_path": "sources/extracted/heart-fast19.txt",
+    "lines": 901,
+    "chars": 92669,
+    "preview": "Cluster storage systems gotta have HeART: improving storage efficiency by exploiting disk-reliability heterogeneity Saurabh Kadekodi, K. V. Rashmi, and Gregory R. Ganger, Carnegie Mellon University https://www.usenix.org/conference/fast19/presentation/kadekodi This paper is included in the Proceedings of the 17th USENIX Conference on File and Storage Technologies (FAST ’19). February 25–28, 2019 • Boston, MA, USA 978-1-939133-09-0 Open access to the Proceedings of the 17th USENIX Conference on F"
+  },
+  {
+    "id": "zebra_iwqos_2016",
+    "title": "Zebra: Demand-aware Erasure Coding for Distributed Storage Systems",
+    "extracted_text_path": "sources/extracted/zebra-iwqos16.txt",
+    "lines": 839,
+    "chars": 83036,
+    "preview": "Zebra: Demand-aware Erasure Coding for Distributed Storage Systems Jun Li, Baochun Li Department of Electrical and Computer Engineering, University of Toronto, Canada {junli, bli}@ece.toronto.edu Abstract—Erasure coding has been increasingly replac- With Reed-Solomon (RS) codes [11], the most com- ing replication in distributed storage systems, thanks to mon choice of erasure codes in distributed storage its lower storage overhead with the same level of failure systems, we can encode r parity bl"
+  },
+  {
+    "id": "f4_osdi_2014",
+    "title": "f4: Facebook's Warm BLOB Storage System",
+    "extracted_text_path": "sources/extracted/f4-osdi14.txt",
+    "lines": 1284,
+    "chars": 122202,
+    "preview": "f4: Facebook’s Warm BLOB Storage System Subramanian Muralidhar, Facebook, Inc.; Wyatt Lloyd, University of Southern California and Facebook, Inc.; Sabyasachi Roy, Cory Hill, Ernest Lin, Weiwen Liu, Satadru Pan, Shiva Shankar, and Viswanath Sivakumar, Facebook, Inc.; Linpeng Tang, Princeton University and Facebook, Inc.; Sanjeev Kumar, Facebook, Inc. https://www.usenix.org/conference/osdi14/technical-sessions/presentation/muralidhar This paper is included in the Proceedings of the 11th USENIX Sym"
+  },
+  {
+    "id": "wide_lrc_fast_2023",
+    "title": "Practical Design Considerations for Wide Locally Recoverable Codes (LRCs)",
+    "extracted_text_path": "sources/extracted/wide-lrc-fast23.txt",
+    "lines": 1099,
+    "chars": 111951,
+    "preview": "Practical Design Considerations for Wide Locally Recoverable Codes (LRCs) Saurabh Kadekodi, Shashwat Silas, David Clausen, and Arif Merchant, Google https://www.usenix.org/conference/fast23/presentation/kadekodi This paper is included in the Proceedings of the 21st USENIX Conference on File and Storage Technologies. February 21–23, 2023 • Santa Clara, CA, USA 978-1-939133-32-8 Open access to the Proceedings of the 21st USENIX Conference on File and Storage Technologies is sponsored by Practical "
+  },
+  {
+    "id": "hsm_ieee_access_2024",
+    "title": "HSM: A Hybrid Storage Method Based on the Heat of Data and Global Disk Space Utilization",
+    "extracted_text_path": "sources/extracted/HSM_A_Hybrid_Storage_Method_Based_on_the_Heat_of_Data_and_Global_Disk_Space_Utilization.txt",
+    "lines": 652,
+    "chars": 69369,
+    "preview": "Received 12 March 2024, accepted 26 March 2024, date of publication 29 March 2024, date of current version 9 April 2024. Digital Object Identifier 10.1109/ACCESS.2024.3382987 HSM: A Hybrid Storage Method Based on the Heat of Data and Global Disk Space Utilization YING SONG 1,2,3 , WENXUAN ZHAO 1,2 , YINGAI TIAN1 , AND BO WANG4 1 Beijing Information Science and Technology University, Beijing 100101, China 2 Beijing Advanced Innovation Center for Materials Genome Engineering, Beijing Information S"
+  },
+  {
+    "id": "er_store_scientific_programming_2021",
+    "title": "ER-Store: A Hybrid Storage Mechanism with Erasure Coding and Replication in Distributed Database Systems",
+    "extracted_text_path": "sources/extracted/Scientific_Programming_-_2021_-_Li_-_ER‐Store__A_Hybrid_Storage_Mechanism_with_Erasure_Coding_and_Replication_in.txt",
+    "lines": 1080,
+    "chars": 106540,
+    "preview": "Hindawi Scientiﬁc Programming Volume 2021, Article ID 9910942, 13 pages https://doi.org/10.1155/2021/9910942 Research Article ER-Store: A Hybrid Storage Mechanism with Erasure Coding and Replication in Distributed Database Systems Zijian Li and Chuqiao Xiao School of Software Engineering, East China Normal University, Shanghai 200062, China Correspondence should be addressed to Zijian Li; 51194501053@stu.ecnu.edu.cn Received 22 March 2021; Revised 12 July 2021; Accepted 26 July 2021; Published 1"
+  },
+  {
+    "id": "hyres_arxiv_2025",
+    "title": "HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage",
+    "extracted_text_path": "sources/extracted/hyres-arxiv-2511.00896v1.txt",
+    "lines": 496,
+    "chars": 61782,
+    "preview": "HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage Daniel E. Lucani1 , Marcell Fehér2 1 Department of Electrical and Computer Engineering, Aarhus University, Denmark 2 Chocolate Cloud ApS, Denmark daniel.lucani@ece.au.dk, marcell@chocolate-cloud.cc Abstract—Reliability in distributed storage systems has typi- cally focused on the design and deployment of data replication Replication (R=3) or erasure coding techniques. Although some scenarios have 1.0 Reed Solomon Code (14,1"
+  },
+  {
+    "id": "benchmarking_ec_object_storage_fgcs_2025",
+    "title": "Towards Benchmarking Erasure Coding Schemes in Object Storage System: A Systematic Review",
+    "extracted_text_path": "sources/extracted/ssrn-4713329.txt",
+    "lines": 2080,
+    "chars": 147046,
+    "preview": "Towards Benchmarking Erasure Coding Schemes In Object Storage System Rezuana Imtiaz Upomab , Md. Sadiqul Islam Sakifb,c and Jannatun Noora,b iew a Department of Computer Science and Engineering, Bangladesh University of Engineering and Technology, Dhaka, Bangladesh ed b Computing for Sustainability and Social Good (C2SG) Research Group, School of Data and Sciences, BRAC University, Dhaka, Bangladesh c mPower-Social Enterprise, Dhaka, Bangladesh ARTICLE INFO ABSTRACT Keywords: Erasure Coding (EC)"
+  },
+  {
+    "id": "tpds17_ear_2017",
+    "title": "Enabling Efficient and Reliable Transition from Replication to Erasure Coding for Clustered File Systems",
+    "extracted_text_path": "sources/extracted/tpds17-ear.txt",
+    "lines": 2304,
+    "chars": 73705,
+    "preview": "Enabling Efficient and Reliable Transition from Replication to Erasure Coding for Clustered File Systems Runhui Li, Yuchong Hu, and Patrick P. C. Lee Abstract—To balance performance and storage efficiency, modern clustered file systems often first store data with replication, followed by encoding the replicated data with erasure coding. We argue that the commonly used random replication does not take into account erasure coding in its design, thereby raising both performance and availability iss"
+  },
+  {
+    "id": "pacemaker_osdi_2020",
+    "title": "PACEMAKER: Avoiding HeART attacks in storage clusters with disk-adaptive redundancy",
+    "extracted_text_path": "sources/extracted/pacemaker-osdi20.txt",
+    "lines": 2630,
+    "chars": 103496,
+    "preview": "PACEMAKER Avoiding HeART attacks in storage clusters with disk-adaptive redundancy 1 Introduction Distributed storage systems use data redundancy to protect data in the face of disk failures [13, 15, 55]. While it provides resilience, redundancy imposes significant cost overhead. Most large-scale systems today erasure code most of the data stored, instead of replicating, which helps to reduce the space overhead well below 100% [13, 24, 43, 47, 63, 68]. Despite this, space overhead remains a key "
+  },
+  {
+    "id": "cocytus_fast_2016",
+    "title": "Efficient and Available In-memory KV-Store with Hybrid Erasure Coding and Replication",
+    "extracted_text_path": "sources/extracted/cocytus-fast16.txt",
+    "lines": 2106,
+    "chars": 67298,
+    "preview": "Efficient and Available In-memory KV-Store with Hybrid Erasure Coding and Replication Heng Zhang, Mingkai Dong, and Haibo Chen, Shanghai Jiao Tong University https://www.usenix.org/conference/fast16/technical-sessions/presentation/zhang-heng This paper is included in the Proceedings of the 14th USENIX Conference on File and Storage Technologies (FAST ’16). February 22–25, 2016 • Santa Clara, CA, USA ISBN 978-1-931971-28-7 Open access to the Proceedings of the 14th USENIX Conference on File and S"
+  },
+  {
+    "id": "tiger_osdi_2022",
+    "title": "Tiger: Disk-Adaptive Redundancy Without Placement Restrictions",
+    "extracted_text_path": "sources/extracted/tiger-osdi22.txt",
+    "lines": 2092,
+    "chars": 90292,
+    "preview": "Tiger: Disk-Adaptive Redundancy Without Placement Restrictions Saurabh Kadekodi, Google; Francisco Maturana and Sanjith Athlur, Carnegie Mellon University; Arif Merchant, Google; K. V. Rashmi and Gregory R. Ganger, Carnegie Mellon University https://www.usenix.org/conference/osdi22/presentation/kadekodi This paper is included in the Proceedings of the 16th USENIX Symposium on Operating Systems Design and Implementation. July 11–13, 2022 • Carlsbad, CA, USA 978-1-939133-28-1 Open access to the Pr"
+  },
+  {
+    "id": "cbase_ec_electronics_2021",
+    "title": "CBase-EC: Achieving Optimal Throughput-Storage Efficiency Trade-Off Using Erasure Codes",
+    "extracted_text_path": "sources/extracted/electronics-10-00126.txt",
+    "lines": 1093,
+    "chars": 46141,
+    "preview": "electronics Article CBase-EC: Achieving Optimal Throughput-Storage Efficiency Trade-Off Using Erasure Codes Chuqiao Xiao * , Yefeng Xia , Qian Zhang , Xueqing Gong * and Liyan Zhu Software Engineering Institute, East China Normal University, Shanghai 200062, China; 51184501163@stu.ecnu.edu.cn (Y.X.); 52184501012@stu.ecnu.edu.cn (Q.Z.); 51184501093@stu.ecnu.edu.cn (L.Z.) * Correspondence: 52184501011@stu.ecnu.edu.cn (C.X.); xqgong@sei.ecnu.edu.cn (X.G.) Abstract: Many distributed database systems"
+  },
+  {
+    "id": "greenhdfs_hotpower_2010",
+    "title": "GreenHDFS: Towards An Energy-Conserving, Storage-Efficient, Hybrid Hadoop Compute Cluster",
+    "extracted_text_path": "sources/extracted/greenhdfs-hotpower10.txt",
+    "lines": 723,
+    "chars": 29118,
+    "preview": "GreenHDFS: Towards An Energy-Conserving, Storage-Efficient, Hybrid Hadoop Compute Cluster Rini T. Kaushik The University of Illinois, Urbana-Champaign and Yahoo! Inc. kaushik1@illinois.edu ABSTRACT Hadoop Distributed File System (HDFS) presents unique challenges to the existing energy-conservation techniques and makes it hard to scale-down servers. We propose an energy-conserving, hybrid, logical multi-zoned variant of HDFS for managing dataprocessing intensive, commodity Hadoop cluster. Green H"
+  },
+  {
+    "id": "janus_atc_2013",
+    "title": "Janus: Optimal Flash Provisioning for Cloud Storage Workloads",
+    "extracted_text_path": "sources/extracted/janus-atc13.txt",
+    "lines": 1664,
+    "chars": 53845,
+    "preview": "Janus: Optimal Flash Provisioning for Cloud Storage Workloads Christoph Albrecht, Arif Merchant, Murray Stokely, Muhammad Waliji François Labelle, Nate Coehlo, Xudong Shi, C. Eric Schrock {calbrecht,aamerchant,mstokely}@google.com,mhwaliji@gmail.com {flab,natec,xdshi,eschrock}@google.com Google, Inc. Abstract Janus is a system for partitioning the flash storage tier between workloads in a cloud-scale distributed file system with two tiers, flash storage and disk. The file system stores newly cr"
+  },
+  {
+    "id": "hard_jbigdata_2019",
+    "title": "HaRD: A Heterogeneity-Aware Replica Deletion for HDFS",
+    "extracted_text_path": "sources/extracted/hard-jbigdata19.txt",
+    "lines": 1642,
+    "chars": 66738,
+    "preview": "Journal of Big Data manuscript No. (will be inserted by the editor) HaRD: A Heterogeneity-Aware Replica Deletion for HDFS Hilmi Egemen Ciritoglu · John Murphy · Christina Thorpe Received: 16 July 2019 Abstract The Hadoop Distributed File System (HDFS) is responsible for storing very large data-sets reliably on clusters of commodity machines. The HDFS takes advantage of replication to serve data requested by clients with high throughput. Data replication is a trade-off between better data availab"
+  },
+  {
+    "id": "plank_fast_2009",
+    "title": "A Performance Evaluation and Examination of Open-Source Erasure Coding Libraries For Storage",
+    "extracted_text_path": "sources/extracted/plank-fast09.txt",
+    "lines": 1566,
+    "chars": 52751,
+    "preview": "A Performance Evaluation and Examination of Open-Source Erasure Coding Libraries For Storage James S. Plank University of Tennessee Jianqiang Luo Wayne State University Catherine D. Schuman University of Tennessee plank@cs.utk.edu Lihao Xu Wayne State University Abstract Over the past ﬁve years, large-scale storage installations have required fault-protection beyond RAID-5, leading to a ﬂurry of research on and development of erasure codes for multiple disk failures. Numerous open-source impleme"
+  }
+]

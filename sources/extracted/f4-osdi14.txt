@@ -1,0 +1,1160 @@
+     f4: Facebook’s Warm BLOB Storage System
+Subramanian Muralidhar, Facebook, Inc.; Wyatt Lloyd, University of Southern California
+  and Facebook, Inc.; Sabyasachi Roy, Cory Hill, Ernest Lin, Weiwen Liu, Satadru Pan,
+             Shiva Shankar, and Viswanath Sivakumar, Facebook, Inc.;
+ Linpeng Tang, Princeton University and Facebook, Inc.; Sanjeev Kumar, Facebook, Inc.
+       https://www.usenix.org/conference/osdi14/technical-sessions/presentation/muralidhar
+
+
+
+
+            This paper is included in the Proceedings of the
+                     11th USENIX Symposium on
+            Operating Systems Design and Implementation.
+                           October 6–8, 2014 • Broomfield, CO
+                                       978-1-931971-16-4
+
+
+
+                                                Open access to the Proceedings of the
+                                            11th USENIX Symposium on Operating Systems
+                                                     Design and Implementation
+                                                      is sponsored by USENIX.
+                f4: Facebook’s Warm BLOB Storage System
+Subramanian Muralidhar∗ , Wyatt Lloyd†∗ , Sabyasachi Roy∗ , Cory Hill∗ , Ernest Lin∗ , Weiwen Liu∗ ,
+     Satadru Pan∗ , Shiva Shankar∗ , Viswanath Sivakumar∗ , Linpeng Tang‡∗ , Sanjeev Kumar∗
+                            ∗
+                                Facebook Inc., † University of Southern California, ‡ Princeton University
+
+Abstract                                                              from a throughput perspective. Yet, triple replication also
+Facebook’s corpus of photos, videos, and other Binary                 provided important fault tolerance guarantees.
+Large OBjects (BLOBs) that need to be reliably stored                     Our newer f4 BLOB storage system provides the
+and quickly accessible is massive and continues to grow.              same fault tolerance guarantees as Haystack but at a
+As the footprint of BLOBs increases, storing them in                  lower effective-replication-factor. f4 is simple, modular,
+our traditional storage system, Haystack, is becoming in-             scalable, and fault tolerant; it handles the request rate
+creasingly inefﬁcient. To increase our storage efﬁciency,             of BLOBs we store it in; it responds to requests with
+measured in the effective-replication-factor of BLOBs,                sufﬁciently low latency; it is tolerant to disk, host, rack
+we examine the underlying access patterns of BLOBs                    and datacenter failures; and it provides all of this at a low
+and identify temperature zones that include hot BLOBs                 effective-replication-factor.
+that are accessed frequently and warm BLOBs that are                      We describe f4 as a warm BLOB storage system
+accessed far less often. Our overall BLOB storage sys-                because the request rate for its content is lower than that
+tem is designed to isolate warm BLOBs and enable us to                for content in Haystack and thus is not as “hot.” Warm
+use a specialized warm BLOB storage system, f4. f4 is                 is also in contrast with cold storage systems [20, 40]
+a new system that lowers the effective-replication-factor             that reliably store data but may take days or hours to
+of warm BLOBs while remaining fault tolerant and able                 retrieve it, which is unacceptably long for user-facing
+to support the lower throughput demands.                              requests. We also describe BLOBs using temperature,
+   f4 currently stores over 65PBs of logical BLOBs                    with hot BLOBs receiving many requests and warm
+and reduces their effective-replication-factor from 3.6               BLOBs receiving few.
+to either 2.8 or 2.1. f4 provides low latency; is resilient               There is a strong correlation between the age of
+to disk, host, rack, and datacenter failures; and provides            a BLOB and its temperature, as we will demonstrate.
+sufﬁcient throughput for warm BLOBs.                                  Newly created BLOBs are requested at a far higher rate
+                                                                      than older BLOBs. For instance, the request rate for
+                                                                      week-old BLOBs is an order of magnitude lower than for
+1.   Introduction                                                     less-than-a-day old content for eight of nine examined
+As Facebook has grown, and the amount of data shared                  types. In addition, there is a strong correlation between
+per user has grown, storing data efﬁciently has become                age and the deletion rate. We use these ﬁndings to inform
+increasingly important. An important class of data that               our design: the lower request rate of warm BLOBs en-
+Facebook stores is Binary Large OBjects (BLOBs),                      ables us to provision a lower maximum throughput for f4
+which are immutable binary data. BLOBs are created                    than Haystack, and the low delete rate for warm BLOBs
+once, read many times, never modiﬁed, and sometimes                   enables us to simplify f4 by not needing to physically re-
+deleted. BLOB types at Facebook include photos, videos,               claim space quickly after deletes. We also use our ﬁnding
+documents, traces, heap dumps, and source code. The                   to identify warm content using the correlation between
+storage footprint of BLOBs is large. As of February 2014,             age and temperature.
+Facebook stored over 400 billion photos.                                  Facebook’s overall BLOB storage architecture is de-
+    Haystack [5], Facebook’s original BLOB storage                    signed to enable warm storage. It includes a caching stack
+system, has been in production for over seven years and is            that signiﬁcantly reduces the load on the storage systems
+designed for IO-bound workloads. It reduces the number                and enables them to be provisioned for fewer requests
+of disk seeks to read a BLOB to almost always one and                 per BLOB; a transformer tier that handles computational-
+triple replicates data for fault tolerance and to support a           intense BLOB transformation and can be scaled inde-
+high request rate. However, as Facebook has grown and                 pendently of storage; a router tier that abstracts away
+evolved, the BLOB storage workload has changed. The                   the underlying storage systems and enables seamless
+types of BLOBs stored have increased. The diversity in                migration between them; and the hot storage system,
+size and create, read, and delete rates has increased. And,           Haystack, that aggregates newly created BLOBs into vol-
+most importantly, there is now a large and increasing                 umes and stores them until their request and delete rates
+number of BLOBs with low request rates. For these                     have cooled off enough to be migrated to f4.
+BLOBs, triple replication results in over provisioning
+
+
+                                                                  1
+
+USENIX Association                 11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14) 383
+                                                                                    
+            User Requests (Browsers, Mobile Devices)
+
+                                                                        
+                                                                                   
+          R1     C1                             R3
+                                                                                  
+           Web Tier                         CDN                                                                    
+                                                                                   
+
+                                                                       
+                                                                                                                            
+          R2     C3      C2                     R4                                                                 
+                                                                                                                             
+                                  BLOB Storage System                                                                 
+             Graph
+                                                                                                                   
+             Store
+                                                                                                             
+
+Figure 1: Reading (R1-R4) and creating (C1-C3) BLOBs.                       Figure 2: Size distribution for ﬁve BLOB types.
+
+
+    f4 stores volumes of warm BLOBs in cells that use dis-        the BLOB. Tao associates the handle with other elements
+tributed erasure coding, which uses fewer physical bytes          of the graph, e.g., the owner of a video.
+than triple replication. It uses Reed-Solomon(10,4) [46]              BLOB reads—e.g., watching a video—also originate
+coding and lays blocks out on different racks to ensure           on the web tier (R1). The web tier accesses the Graph
+resilience to disk, machine, and rack failures within a           Store (R2) to ﬁnd the necessary handles and constructs
+single datacenter. Is uses XOR coding in the wide-area            a URL that can be used to fetch the BLOB. When
+to ensure resilience to datacenter failures. f4 has been          the browser later sends a request for the BLOB (R3),
+running in production at Facebook for over 19 months.             the request ﬁrst goes to a content distribution network
+f4 currently stores over 65PB of logical data and saves           (CDN) [2, 34] that caches commonly accessed BLOBs.
+over 53PB of storage.                                             If the CDN does not have the requested BLOB, it sends
+    Our contributions in this paper include:                      a request to the BLOB storage system (R4), caches the
+ • A case for warm storage that informs future research           BLOB, and returns it to the user. The CDN shields the
+      on it and justiﬁes our efforts.                             storage system from a signiﬁcant number of requests on
+                                                                  frequently accessed data, and we return to its importance
+ • The design of our overall BLOB storage architecture
+                                                                  in Sections 4.1.
+      that enables warm storage.
+ • The design of f4, a simple, efﬁcient, and fault tolerant       2.2              BLOBs Explained
+      warm storage solution that reduces our effective-           BLOBs are immutable binary data. They are created once,
+      replication-factor from 3.6 to 2.8 and then to 2.1.         read potentially many times, and can only be deleted, not
+ • A production evaluation of f4.                                 modiﬁed. This covers many types of content at Facebook.
+                                                                  Most BLOB types are user facing, such as photos, videos,
+   The paper continues with background in Section 2.              and documents. Other BLOB types are internal, such as
+Section 3 presents the case for warm storage. Section 4           traces, heap dumps, and source code. User-facing BLOBs
+presents the design of our overall BLOB storage archi-            are more prevalent so we focus on them for the remainder
+tecture that enables warm storage. f4 is described in             of the paper and refer to them as simply BLOBs.
+Section 5. Section 6 covers a production evaluation of               Figure 2 shows the distribution of sizes for ﬁve types
+f4, Section 7 covers lessons learned, Section 8 covers            of BLOBs. There is a signiﬁcant amount of diversity
+related work, and Section 9 concludes.                            in the sizes of BLOBs, which has implications for our
+                                                                  design as discussed in Section 5.6.
+2.      Background
+This section explains where BLOB storage ﬁts in the full          3.               The Case for Warm Storage
+architecture of Facebook. It also describes the different
+                                                                  This section motivates the creation of a warm storage
+types of BLOBs we store and their size distributions.
+                                                                  system at Facebook. It demonstrates that temperature
+2.1     Where BLOB Storage Fits                                   zones exist, age is a good proxy for temperature, and that
+                                                                  warm content is large and growing.
+Figure 1 shows how BLOB storage ﬁts into the overall
+architecture at Facebook. BLOB creates—e.g., a video              Methodology The data presented in this section is
+upload—originate on the web tier (C1). The web tier               derived from a two-week trace, benchmarks of existing
+writes the data to the BLOB storage system (C2) and               systems, and daily snapshots of summary statistics. The
+then stores the handle for that data into our graph store         trace includes a random 0.1% of reads, 10% of creates,
+(C3), Tao [9]. The handle can be used to retrieve or delete       and 10% of deletes.
+
+
+                                                              2
+
+384 11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14)                                 USENIX Association
+                                                                                                 !            
+                                                                                                                         "" 
+
+
+
+
+     
+                                                                                                     
+                                                                                              
+
+
+
+
+                                                                                            
+                                                                                                             
+
+
+                                                                                                              
+
+
+                                                                                                    
+                                                                     
+                                                                                                          
+                                                                                                                    
+                                                                                                                                  
+                                                                                                                                  
+                                                                                                                                               
+                                                                                                                                                
+                                                                                                                                                                
+                                                                                                                                                                  
+                                                                                                                       
+
+Figure 3: Relative request rates by age. Each line is rela-                             Figure 4: 99th percentile load in IOPS/TB of data for
+tive to only itself, absolute values have been denormal-                                different BLOB types for BLOBs of various ages.
+ized to increase readability, and points mark an order-of-
+magnitude decrease in request rate.
+                                                                                        warm temperature zone to include unchanging content
+                                                                                        with a low request rate. BLOBs are not modiﬁed, so the
+   Data is presented for nine user-facing BLOB types.                                   only changes are the deletes. Thus, differentiating warm
+We exclude some data types from some analysis due to                                    from hot content depends on the request and delete rates.
+incomplete logging information.                                                            First, we examine the request rate. To determine
+   The nine BLOB types include Proﬁle Photos, Photos,                                   where to draw the line between hot and warm storage
+HD Photos, Mobile Sync Photos [17], HD Mobile Sync                                      we consider near-worst-case request rates because our
+Photos, Group Attachments [16], Videos, HD Videos,                                      internal service level objects require low near-worst-case
+and Message (chat) Attachments. Group Attachments                                       latency during our busiest periods of the day.
+and Message Attachments are opaque BLOBS to our                                            Figure 4 shows the 99th percentile or near-worst-case
+storage system, they can be text, pdfs, presentation, etc.                              request load for BLOBs of various types grouped by age.
+                                                                                        The two-week trace of 0.1% of reads was used to create
+Temperature Zones Exist To make the case for warm                                       this ﬁgure. The age of each object read is recorded and
+storage we ﬁrst show that temperature zones exist, i.e.,                                these are bucketed into intervals equivalent to the time
+that content begins as hot, receiving many requests, and                                needed to create 1 TB of that BLOB type. For instance, if
+then cools over time, receiving fewer and fewer requests.                               1 TB of a type is created every 3600 seconds, then the ﬁrst
+   Figure 3 shows the relative request rate, requests-per-                              bucket is for ages of 0-3599 seconds, the second is for
+object-per-hour, for content of a given age. The two-week                               3600-7200 seconds, and so on.1 We then compensate for
+trace of 0.1% of reads was used to create this ﬁgure. The                               the 0.1% sampling rate by looking at windows of 1000
+age of each object being read is recorded and these are                                 seconds. We report the 99th percentile request rate for
+bucketed into 1-day intervals. We then count the number                                 these windows, i.e., we report the 99th percentile count
+of requests to the daily buckets for each hour in the trace                             of requests in a 1000 second window across our two-
+and report the mean—the medians are similar but noisier.                                week trace for each age bucket. The 4TB disks used in f4
+Absolute values are denormalized to increase readability                                can deliver a maximum of 80 Input/Output Operations
+so each line is relative to only itself. Points mark order-                             Per Second (IOPS) while keeping per-request latency
+of-magnitude decreases.                                                                 acceptably low. The ﬁgure shows this peak warm storage
+   The existence of temperature zones is clear in the                                   throughput at 20 IOPS/TB.
+trend of decreasing request rates over time. For all nine                                  For seven of the nine types the near-worst-case
+types, content less than one day old receives more than                                 throughput is below the capacity of the warm storage sys-
+100 times the request rate of one-year-old content. For                                 tem in less than a week. For Photos, it takes ~3 months to
+eight of the types the request rate drops by an order of                                drop below the capacity of warm storage and for Proﬁle
+magnitude in less than a week, and for six of the types                                 Photos it takes a year.
+the request rate drops by 100x in less than 60 days.                                       We also examined, but did not rigorously quantify, the
+Differentiating Temperature Zones Given that tem-                                       deletion rate of BLOB types over time. The general trend
+perature zones exist, the next questions to answer are                                  1 We spread newly created BLOBs over many hosts and disks, so no
+how to differentiate warm from hot content and when it                                  host or disk in our system is subject to the extreme loads on far left of
+is safe to move content to warm storage. We deﬁne the                                   Figure 4. We elaborate on this point further in Section 5.6
+
+
+                                                                                    3
+
+USENIX Association                                      11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14) 385
+                                                                                    
+                                                                                  !                                                                                                      R1
+                                                                            "" !  
+                                                                                                                                             C1              D1         Transformer      R2        CDN
+                                                                                                                                                                           Tier
+                                                                                                                      
+                                                                                                                                                                                   R3
+                              
+            
+                                                   
+                                                                                                                   
+                                                                                                                                                                Router Tier
+                                                         
+                                                                                                       
+                                                                                                                                                                                                   Controller
+                                             
+                                                                                                                                  C2             D2                         R4
+                 
+                                                                        
+
+
+
+     
+                                                                                                                                              Haystack                             f4
+                                                                                                                                                 Hot Storage                      Warm Storage
+                                     
+                                      
+                                                                                                                                     Figure 6: Overall BLOB Storage Architecture with cre-
+                                                                                                                                   ates (C1-C2), deletes (D1-D2), and reads (R1-R4). Cre-
+                                                                                                                      ates are handled by Haystack, most deletes are handled
+                                                                                                                                     by Haystack, reads are handled by either Haystack or f4.
+Figure 5: Median percentage of each type that was warm
+9-6 months ago, 6-3 months ago, 3 months ago to now.
+                                                                                                                                     the full design of our BLOB storage system, and explain
+The remaining percentage of each type is hot.
+                                                                                                                                     how it enables focused and simple warm storage with f4.
+
+is that most deletes are for young BLOBs and that once                                                                               Volumes We aggregate BLOBs together into logical
+the request rate for a BLOB drops below the threshold                                                                                volumes. Volumes aggregate ﬁlesystem metadata, allow-
+of warm storage, the delete rate is low as well.                                                                                     ing our storage systems to waste few IOPS as we discuss
+    Combining the deletion analysis with the request rate                                                                            further below. We categorize logical volumes into two
+analysis yields an age of a month as a safe delimiter                                                                                classes. Volumes are initially unlocked and support reads,
+between hot and warm content for all but two BLOB                                                                                    creates (appends), and deletes. Once volumes are full,
+types. One type, Proﬁle Photos, is not moved to warm                                                                                 at around 100GB in size, they transition to being locked
+storage. The other, Photos, uses a three months threshold.                                                                           and no longer allow creates. Locked volumes only allow
+                                                                                                                                     reads and deletes.
+Warm Content is Large and Growing We ﬁnish the                                                                                           Each volume is comprised of three ﬁles: a data ﬁle, an
+case for warm storage by demonstrating that the percent-                                                                             index ﬁle, and a journal ﬁle. The data ﬁle and index ﬁles
+age of content that is warm is large and continuing to                                                                               are the same as the published version of Haystack [5],
+grow. Figure 5 gives the percentage of content that is                                                                               while the journal ﬁle is new. The data ﬁle holds each
+warm for three-month intervals for six BLOB types.                                                                                   BLOB along with associated metadata such as the key,
+   We use the above analysis to determine the warm                                                                                   the size, and checksum. The index ﬁle is a snapshot of the
+cutoff for each type, i.e., one month for most types.                                                                                in-memory lookup structure of the storage machines. Its
+This ﬁgure reports the median percentage of content for                                                                              main purpose is allowing rebooted machines to quickly
+each type that is warm in three-month intervals from 9-6                                                                             reconstruct their in-memory indexes. The journal ﬁle
+months ago, 6-3 months ago, and 3 months ago to now.                                                                                 tracks BLOBs that have been deleted; whereas in the
+   The ﬁgure shows that warm content is a large percent-                                                                             original version of Haystack, deletes were handled by
+age of all objects: in the oldest interval more than 80%                                                                             updating the data and index ﬁles directly. For locked
+of objects are warm for all types. It also shows that the                                                                            volumes, the data and index ﬁles are read-only, while the
+warm fraction is increasing: in the most recent interval                                                                             journal ﬁle is read-write. For unlocked volumes, all three
+more than 89% of objects are warm for all types.                                                                                     ﬁles are read-write.
+This section showed that temperature zones exist, that
+the line between hot and warm content can safely be                                                                                  4.1        Overall Storage System
+drawn for existing types at Facebook at one month                                                                                    The full BLOB storage architecture is shown in Figure 6.
+for most types, and that warm content is a large and                                                                                 Creates enter the system at the router tier (C1) and
+growing percentage of overall BLOB content. Next,                                                                                    are directed to the appropriate host in the hot storage
+we describe how Facebook’s overall BLOB storage                                                                                      system (C2). Deletes enter the system at the router
+architecture enables warm storage.                                                                                                   tier (D1) and are directed to the appropriate hosts in
+                                                                                                                                     appropriate storage system (D2). Reads enter the system
+4.               BLOB Storage Design                                                                                                 at the caching stack (R1) and, if not satisﬁed there,
+Our BLOB storage design is guided by the principle of                                                                                traverse through the transformer tier (R2) to the router
+keeping components simple, focused, and well-matched                                                                                 tier (R3) that directs them to the appropriate host in the
+to their job. In this section we explain volumes, describe                                                                           appropriate storage system (R4).
+
+
+                                                                                                                                 4
+
+386 11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14)                                                                                                       USENIX Association
+Controller The controller ensures the smooth function-              to hold a large number of disks with only a single CPU
+ing of the overall system. It helps with provisioning new           and relatively little RAM.
+store machines, maintaining a pool of unlocked volumes,
+ensuring that all logical volumes have enough physical              Caching Stack BLOB reads are initially directed to the
+volumes backing them, creating new physical volumes                 caching stack [2, 34] and if a BLOB is resident in one of
+if necessary, and performing periodic maintenance tasks             the caches it is returned directly, avoiding a read in the
+such as compaction and garbage collection.                          storage system. This absorbs reads for popular BLOBs
+                                                                    and decreases the request rate at the storage system.
+Router Tier The router tier is the interface of BLOB                The caching stack enables warm storage by lowering
+storage; it hides the implementation of storage and en-             its request rate.
+ables the addition of new subsystems like f4. Its clients,          Hot Storage with Haystack Facebook’s hot storage
+the web tier or caching stack, send operations on logical           system, Haystack, is designed to use only fully-utilized
+BLOBs to it.                                                        IOPS. It enables warm storage by handling all BLOB
+    Router tier machines are identical, they execute the            creates, handling most of the deletes, and handling a
+same logic and all have soft state copies of the logical-           higher read rate.
+volume-to-physical-volume mapping that is canonically                  Haystack is designed to fully utilize disk IOPS by:
+stored in a separate database (not pictured). The router
+tier scales by adding more machines and its size is                 • Grouping BLOBs: It creates only a small number
+independent of the other parts of the overall system.                 (~100) of ﬁles with BLOBs laid out sequentially
+    For reads, a router extracts the logical volume id from           in those ﬁles. The result is a simple BLOB storage
+the BLOB id and ﬁnds the physical mapping of that                     system that uses a small number of ﬁles, and bypasses
+volume. It chooses one of available physical volumes—                 the underlying ﬁle system for most metadata access.
+typically, the volume on the closest machine—and sends              • Compact metadata management: It identiﬁes the
+the request to it. In case of failure, a timeout ﬁres and the         minimal set of metadata that is needed to locate
+request is directed to the next physical volume.                      each BLOB and carefully lays out this metadata so
+    For creates, the router picks a logical volume with               that it ﬁts in the available memory on the machine.
+available space, and sends the BLOB out to all physical               This allows the system to waste very few IOPS for
+volumes for that logical volume. In case of any errors, any           metadata fetches.
+partially written data is ignored to be garbage collected               BLOBs are grouped into logical volumes. For fault
+later, and a new logical volume is picked for the create.           tolerance and performance, each logical volume maps
+    For deletes, the router issues deletes to all physi-            into multiple physical volumes or replicas on different
+cal replicas of a BLOB. Responses are handled asyn-                 hosts across different geographical regions: all physical
+chronously and the delete is continually retried until the          volumes for a logical volume store the same set of
+BLOB is fully deleted in case of failure.                           BLOBs. Each physical volume lives entirely on one
+    The router tier enables warm storage by hiding the              Haystack host. There are typically 3 physical volumes for
+storage implementation from its clients. When a volume              each logical volume. Each volume holds up to millions
+is migrated from the hot storage system to the warm                 of immutable BLOBs, and can grow to ~100GB in size.
+storage system it temporarily resides in both while the                 When a host receives a read it looks up the relevant
+canonical mapping is updated and then client operations             metadata—the offset in the data ﬁle, the size of the
+are transparently directed to the new storage system.               data record, and whether it has been deleted—in the in-
+                                                                    memory hash table. It then performs a single I/O request
+Transformer Tier The transformer tier handles a set                 to the data ﬁle to read the entire data record.
+of transformations on the retrieved BLOB. For exam-                     When a host receives a create it synchronously ap-
+ple, these transformations include resizing and cropping            pends a record to its physical volume, updates the in-
+photos. In Facebook’s older system, these computational             memory hash tables, and synchronously updates the in-
+intensive transformations were performed on the storage             dex and journal ﬁles.
+machines.                                                               When a host receives a delete it updates the its in-
+   The transformer tier enables warm storage by freeing             memory hash tables and the journal ﬁle. The contents
+the storage system to focus solely on providing storage.            of the BLOB still exist in the data ﬁle. Periodically we
+Separating computation into its own tier allows us to               compact volumes, which completely deletes the BLOB
+scale out the storage tier and the transformer tier inde-           and reclaims its space.
+pendently. In turn, that allows us to match the size of
+the storage tiers precisely to our needs. Furthermore, it           Fault tolerance Haystack has fault tolerance to disk,
+enables us to choose more optimal hardware for each of              host, rack, and datacenter failure through triple replica-
+these tasks. In particular, storage nodes can be designed           tion of data ﬁles and hardware RAID-6 (1.2X replication).
+
+
+                                                                5
+
+USENIX Association               11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14) 387
+Two replicas of each volume are in a primary datacenter                        BLOB                        Volume
+                                                                                                              
+but on different racks, and thus hosts and disks. This pro-                                                  
+                                                                               Block                         
+vides resilience to disk, host, and rack failure. RAID-6                                                     
+                                                                                                              
+provides additional protection against disk failure. The                                                     
+                                                                               Stripe                       
+third replica is in another datacenter and provides re-
+silience to datacenter failure.                                                     Companions   Parity
+
+    This scheme provides good fault tolerance and high
+throughput for BLOBs, but at an effective-replication-                Figure 7: BLOBs in Blocks in Stripes in Volumes.
+factor of 3 ∗ 1.2 = 3.6. This is the main limitation of
+Haystack: it is optimized for IOPS but not storage efﬁ-
+ciency. As the case for warm storage demonstrated, this            within one datacenter and is comprised of homogeneous
+results in signiﬁcant over replication of many BLOBs.              hardware. Current cells use 14 racks of 15 hosts [42]
+                                                                   with 30 4TB drives per host. We treat a cell as a unit of
+Expiry-Driven Content Some BLOB types have ex-                     acquisition and as a unit of deployment and roll out.
+piration times for their content. For instance, uploaded              A cell is responsible for reliably storing a set of locked
+videos are stored in their original format temporary while         volumes and uses Reed-Solomon coding to store these
+they are transcoded to our storage formats. We avoid ever          volumes with lower storage overhead. Distributed erasure
+moving this expiry-driven content to f4 and keep it in             coding achieves reliability at lower-storage overheads
+Haystack. The hot storage system copes with the high               than replication, with the tradeoff of increased rebuild
+delete rate by running compaction frequently to reclaim            and recovery times under failure and lower maximum
+the now available space.                                           read throughput. Reed-Solomon coding [46] is one of the
+                                                                   most popular erasure coding techniques, and has been
+5.    f4 Design                                                    employed in a number of different systems. A Reed-
+This section describes our design goals for warm storage           Solomon(n, k) code encodes n bits of data with k extra
+and then describes f4, our warm storage system.                    bits of parity, and can tolerate k failures, at an overall
+                                                                   storage size of n + k. This scheme protects against disk,
+5.1   Design Goals                                                 host, and rack failures.
+At a high level, we want our warm storage system to                   We use a separate XOR coding scheme to tolerate
+provide storage efﬁciency and to provide fault tolerance           datacenter or geographic region failure. We pair each
+so we do not lose data or appear unavailable to our users.         volume/stripe/block with a buddy volume/stripe/block in
+Storage Efﬁciency One of the key goals of our new                  a different geographic region. We store an XOR of the
+system is to improve storage efﬁciency, i.e., reduce the           buddies in a third region. This scheme protects against
+effective-replication-factor while still maintaining a high        failure of one of the three regions. We discuss fault
+degree of reliability and performance.                             tolerance in Section 5.5
+   The effective replication factor describes the ratio of
+                                                                   5.3   Individual f4 Cell
+actual physical size of the data to the logical size stored.
+In a system that maintains 3 replicas, and uses RAID-              Individual f4 cells are resilient to disk, host, and rack
+6 encoding on each node with 12 disks, the effective               failures and are the primary location and interface for
+replication factor is 3.6.                                         the BLOBs they store. Each f4 cell handles only locked
+                                                                   volumes, i.e., it only needs to support read and delete
+Fault Tolerance Another important goal for our stor-               operations against that volume. The data and index ﬁles
+age system is fault tolerance to a hierarchy of faults to          are read-only. The haystack journal ﬁles that track deletes
+ensure we do not lose data and that storage is always              are not present in f4. Instead, all BLOBs are encrypted
+available for client requests. We explicitly consider four         with keys that are stored in an external database. Deleting
+types of failures:                                                 the encryption key for a BLOB in f4 logically deletes it
+1. Drive failures, at a low single digit annual rate.              by making it unreadable.
+2. Host failures, periodically.                                       The index ﬁles use triple replication within a cell. The
+                                                                   ﬁles are small enough that the storage gain from encoding
+3. Rack failures, multiple time per year.                          them is too small to be worth the added complexity.
+4. Datacenter failures, extremely rare and usually tran-              The data ﬁle with the actual BLOB data is encoded
+   sient, but potentially more disastrous.                         and stored via a Reed-Solomon(n, k) code. Recent f4
+                                                                   cells use n = 10 and k = 4. The ﬁle is logically divided
+5.2   f4 Overview                                                  up into contiguous sequences of n blocks, each of size
+f4 is our storage subsystem for warm data. It is comprised         b. For each such sequence of n blocks, k parity blocks
+of a number of cells, where each cell lives entirely               are generated, thus forming a logical stripe of size n + k
+
+
+                                                               6
+
+388 11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14)                          USENIX Association
+  KF1                                                                    R6                exposes this through its Index API.2 It stores the index—
+                                      Router Tier
+
+                                                                                           BLOB to data ﬁle, offset, and length—ﬁle on disk and
+             R1                R2                            R4             F4 Cell       loads them into custom data structures in memory. It also
+                                                                                           loads the location-map for each volume that maps offsets
+   Index
+    Index
+     Index
+          API
+      Index
+           API
+            API
+       IndexAPI
+              API
+                      File
+                       FileAPI
+                        FileAPI
+                           FileAPI
+                         File API
+                                API
+                                                 File API
+                                                     
+                                                                    NameNode
+                                                                    Name Node             in data ﬁles to the physically-stored data blocks. Index
+   Storage Node     R3                     BackoﬀdfNode                                  ﬁles and location maps are pinned in memory to avoid
+   Storage
+    Storage  Node R3
+            Node    R3
+                      R3
+     Storage
+      StorageNode
+              Node   R3                                         Coordinator
+                                                                  CoordinatorNode
+                                                                              Node
+           Data  API
+            Data
+             Data
+                  API 
+                     API
+                                                                                           disk seeks.
+              Data
+               Data    API
+                         API                          R5
+                                                                   Rebuilder Node
+                                                                                               Each BLOB in f4 is encrypted with a per-BLOB
+                                                                      Rebuilder
+                                                                       Rebuilder
+                                                                                           encryption key. Deletes are handled outside of f4 by
+                                                                                           deleting a BLOB’s encryption key that is stored in a
+                                                                                           separate key store, typically a database. This renders
+Figure 8: f4 Single Cell Architecture. R1–R3 shows
+                                                                                           the BLOB unreadable and effectively deletes it without
+a normal-case read. R1, R4, R5 shows a failure-case
+                                                                                           requiring the use of compaction in f4. It also enables f4
+read. KF1 show the encryption key fetch that happens
+                                                                                           to eliminate the journal ﬁle that Haystack uses to track
+in parallel with the rest of the read path in f4.
+                                                                                           key presence and deletion information.
+                                                                                               Reads (R1) are handled by validating that the BLOB
+                                                                                           exists and then redirecting the caller to the storage node
+                                                                                           with the data block that contains the speciﬁed BLOB.
+blocks. For a given block in a stripe, the other blocks                                        The Data API provides data access to the data and
+in the stripe are considered to be its companion blocks.                                   parity blocks the node stores. Normal-case reads are
+If the ﬁle is not an integral multiple of n blocks, it is                                  redirected to the appropriate storage node (R2) that
+zero-padded to the next multiple. In normal operation                                      then reads the BLOB directly from its enclosing data
+BLOBs are read directly from their data block. If a block                                  block (R3). Failure-case reads use the Data API to read
+is unavailable it can be recovered by decoding any n of                                    companion and parity blocks needed to reconstruct the
+its companion and parity blocks. A subset of a block,                                      BLOB on a backoff node.
+corresponding to a BLOB, can also be decoded from                                              The router tier fetches the per-BLOB encryption key
+only the equivalent subsets of any n of its companion and                                  in parallel with the rest of the read path, i.e., R1–R3 or R1,
+parity blocks. Figure 7 shows the relationship between                                     R4, R5. The BLOB is then decrypted on the router tier.
+BLOBs, blocks, strips, and volumes.                                                        Decryption is computationally expensive and performing
+    The block-size for encoding is chosen to be a large                                    it on the router tier allows f4 to focus on efﬁcient storage
+value—typically 1 GB—for two reasons. First, it de-                                        and allows decryption to be scaled independently from
+creases the number of BLOBs that span multiple blocks                                      storage.
+and thus require multiple I/O operations to read. Second,
+it reduces the amount of per-block metadata that f4 needs                                  Backoff Nodes When there are failures in a cell, some
+to maintain. We avoid a larger block size because of the                                   data blocks will become unavailable, and serving reads
+larger overhead for rebuilding blocks it would incur.                                      for the BLOBs it holds will require online reconstruction
+    Figure 8 shows a f4 cell. Its components include                                       of them from companion data blocks and parity blocks.
+storage nodes, name nodes, backoff nodes, rebuilder                                        Backoff nodes are storage-less, CPU-heavy nodes that
+nodes, and coordinator nodes.                                                              handle the online reconstruction of request BLOBs.
+                                                                                               Each backoff node exposes a File API that receives
+                                                                                           reads from the router tier after a normal-case read fails
+Name Node The name node maintains the mapping be-                                          (R4). The read request has already been mapped to a data
+tween data blocks and parity blocks and the storage nodes                                  ﬁle, offset, and length by a primary volume-server. The
+that hold the actual blocks. The mapping is distributed                                    backoff volume-server sends reads of that length from
+to storage nodes via standard techniques [3, 18]. Name                                     the equivalent offsets from all n − 1 companion blocks
+nodes are made fault tolerant with a standard primary-                                     and k parity blocks for the unavailable block (R5). Once
+backup setup.                                                                              it receives n responses it decodes them to reconstruct the
+                                                                                           requested BLOB.
+Storage Nodes The storage nodes are the main com-                                              This online reconstruction rebuilds only the requested
+ponent of a cell and handle all normal-case reads and                                      BLOB, it does not rebuild the full block. Because the
+deletes. Storage nodes expose two APIs: an Index API                                       size of a BLOB is typically much smaller than the block
+that provides existence and location information for vol-                                  2 Each storage node owns a subset of the volumes in a cell, each
+umes, and a File API that provides access to data.
+                                                                                           volume is owned by exactly one storage node at a time, and all volumes
+   Each node is responsible for the existence and location                                 are owned at all times. The volume-to-storage-node assignment is
+information of a subset of the volumes in a cell and                                       maintained by a separate system that is out of the scope of this paper.
+
+
+                                                                                       7
+
+USENIX Association                                     11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14) 389
+size—e.g., 40KB instead of 1GB—reconstructing the                               Datacenter 1                 Datacenter 3
+
+BLOB is much faster and lighter weight than rebuilding                                          Block A
+
+the block. Full block rebuilding is handled ofﬂine by                                                      A XOR B
+                                                                                Datacenter 2
+rebuilder nodes.
+                                                                                                Block B
+
+Rebuilder Nodes At large scale, disk and node failures
+are inevitable. When this happens blocks stored on the                     Figure 9: Geo-replicated XOR Coding.
+failed components need to be rebuilt. Rebuilder nodes are
+storage-less, CPU-heavy nodes that handle failure detec-
+tion and background reconstruction of data blocks. Each            and parity block in a volume is XORed with the equiv-
+rebuilder node detects failure through probing and re-             alent data or parity block in the other volume, called
+ports the failure to a coordinator node. It rebuilds blocks        its buddy block, to create their XOR block. These XOR
+by fetching n companion or parity blocks from the failed           blocks are stored with normal triple-replicated index ﬁles
+block’s strip and decoding them. Rebuilding is a heavy-            for the volumes. Again, because the index ﬁles are tiny
+weight process that imposes signiﬁcant I/O and network             relative to the data, coding them is not worth the added
+load on the storage nodes. Rebuilder nodes throttle them-          complexity.
+selves to avoid adversely impacting online user requests.              The 2.1 replication factor comes from the 1.4X for the
+Scheduling the rebuilds to minimize the likelihood of              primary single cell replication for each of two volumes
+data loss is the responsibility of the coordinator nodes.          and another 1.4X for the geo-replicated XOR of the two
+Coordinator Nodes A cell requires many maintenance                 volumes: 1.4∗2+1.4
+                                                                                  2      = 2.1.
+task, such as scheduling block rebuilding and ensuring                 Reads are handled by a geo-backoff node that receives
+that the current data layout minimizes the chances of              requests for a BLOB that includes the data ﬁle, offset,
+data unavailability. Coordinator nodes are storage-less,           and length (R6 in Figure 8). This node then fetches the
+CPU-heavy nodes that handle these cell-wide tasks.                 speciﬁed region from the local XOR block and the remote
+   As noted earlier, blocks in a stripe are laid out on dif-       XOR-companion block and reconstructs the requested
+ferent failure domains to maximize reliability. However,           BLOB. These reads go through the normal single-cell
+after initial placement and after failure, reconstruction,         read path through storage nodes Index and File APIs or
+and replacement there can be violations where a stripe’s           backoff node File APIs if there are disk, host, or rack
+blocks are in the same failure domain. The coordinator             failures that affect the XOR or XOR-companion blocks.
+runs a placement balancer process that validates the block             We chose XOR coding for geo-replication because
+layout in the cell, and rebalance blocks as appropriate.           it signiﬁcantly reduces our storage requirements while
+Rebalancing operations, like rebuilding operations, in-            meeting our fault tolerance goal of being able to survive
+cur signiﬁcant disk and network load on storage nodes              the failure of a datacenter.
+and are also throttled so that user requests are adversely
+impacted.                                                          5.5   f4 Fault Tolerance
+                                                                   Single f4 cells are tolerant to disk, host, and rack fail-
+5.4   Geo-replication
+                                                                   ures. Geo-replicating XOR volumes brings tolerance to
+Individual f4 cells all reside in a single datacenter and          datacenter failures. This subsection explains the failure
+thus are not tolerant to datacenter failures. To add dat-          domains in a single cell, how f4 lays out blocks to in-
+acenter fault tolerance we initially double-replicated f4          crease its resilience, gives an example of recovery if all
+cells and placed the second replica in a different data-           four types of failure all affect the same BLOB, and sum-
+center. If either datacenter fails, all the BLOBs are still        marizes how all components of a cell are fault tolerant.
+available from the other datacenter. This provides all of
+our fault tolerance requirements and reduces the effective-        Failure Domains and Block Placement Figure 10 il-
+replication-factor from 3.6 to 2.8.                                lustrates how data blocks in a stripe are laid out in a
+   Given the rarity of datacenter failure events we                f4 cell. A rack is the largest failure domain and is our
+sought a solution that could further reduce the effective-         primary concern. Given a stripe S of n data blocks and
+replication-factor with the tradeoff of decreased through-         k parity blocks, we attempt to lay out the blocks so that
+put for BLOBs stored at the failed datacenter. We are              each of these is on a different rack, and at least on a dif-
+currently deploying geo-replicated XOR coding that                 ferent node. This requires that a cell have at least n + k
+reduces the effective-replication-factor to 2.1.                   racks, of roughly the same size. Our current implemen-
+   Geo-replicated XOR coding provides datacenter fault             tation initially lays out blocks making a best-effort to
+tolerance by storing the XOR of blocks from two differ-            put each on a different rack. The placement balancer pro-
+ent volumes primarily stored in two different datacenters          cess detects and corrects any rare violations that place a
+in a third datacenter as shown in Figure 9. Each data              stripe’s blocks on the same rack.
+
+
+                                                               8
+
+390 11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14)                              USENIX Association
+           D1     D2                Dn     P1                Pk   Stripe(n,k)
+                                                                                      Node             Fault Tolerance Strategy
+                                                                                      Name             Primary-backup; 2 backups; different racks.
+                                                                                      Coordinator      "
+                                                                                      Backoff          Soft state only.
+  Host           Host      Host           Host      Host                Host          Rebuilder        "
+  Host           Host      Host           Host      Host                Host          Storage:
+  Host           Host      Host           Host      Host                Host            Index          3x local cell; 3x remote cell.
+  Host           Host      Host           Host      Host                Host            Data           Reed-Solomon local cell; XOR remote cell.
+  Host           Host      Host           Host      Host                Host
+  Host           Host      Host           Host      Host                Host
+  Host           Host      Host           Host      Host                Host
+                                                                                     Table 1: Fault tolerance strategy for components of f4.
+  Host           Host      Host           Host      Host                Host
+
+ Rack 1        Rack 2   Rack 3        Rack 4   Rack 5             Rack r
+                                                                                     common techniques because they are not the dominant
+Figure 10: Distributing data & parity blocks in a f4 cell.                           resource. Table 1 summarizes the techniques we use for
+                                                                                     fault tolerance for all components of a cell for failures
+                                                                                     within a cell. We do not provide datacenter fault tolerance
+    Laying blocks for a stripe out on different racks also
+                                                                                     for the other components of a cell because they are fate-
+provide resilience to host and disk failures. Blocks in a
+                                                                                     sharing, i.e., datacenter failures take down entire cells.
+stripe on different racks will also be on different hosts
+and disks.
+                                                                                     5.6    Additional Design Points
+Quadruple Failure Example To illustrate f4’s fault                                   This subsection brieﬂy covers additional design points
+tolerance we examine a case where a failure at all four                              we excluded from the basic f4 design for clarity.
+levels affects a single BLOB. The failures include:
+                                                                                     Mixing Age and Types Our BLOB storage system ﬁlls
+1. Primary cell’s datacenter fails.
+                                                                                     many volumes for each BLOB type concurrently. This
+2. Data block’s XOR block’s rack fails.                                              mixes the age of BLOBs within a volume and smoothes
+3. One of the parity block’s XOR block’s host fails.                                 their temperature. The most recent BLOBs in a volume
+                                                                                     may have a higher temperature than our target for f4.
+4. Data block’s XOR-companion block’s disk fails.
+                                                                                     But, if the older BLOBs in the volume reduce its overall
+    The router tier will detect the primary’s cell datacenter                        temperature below our target the volume may still be
+failure and send a BLOB read request to the XOR                                      migrated to f4.
+datacenter. The BLOB read request will be converted                                     Different BLOB types are mixed together on hosts in
+to a data ﬁle read request with an offset and length by                              a f4 cell to achieve a similar effect. High temperature
+the Index API on a geo-storage node using the triple-                                types can be migrated to f4 sooner if they are mixed with
+replicated index ﬁle in the XOR datacenter. Then a geo-                              low temperature types that will smooth out the overall
+backoff node will fetch the equivalent section of the                                load on each disk.
+XOR-data block locally and the buddy block from a
+third datacenter. The local XOR-data block read will                                 Index Size Consideration The memory needs of f4
+initially fail because its enclosing rack is unavailable.                            (and Haystack) are primarily driven by the memory
+Then the XOR-backoff node reads the XOR-data block                                   footprint of the index. The multiple caching layers in
+through a (regular) backoff node that reconstructs the                               front of f4 obviate the need for a large buffer cache on
+XOR-data block from n of its companion and parity                                    the storage machine.3
+blocks. Simultaneously, the remote buddy block read will                                 Other than for proﬁle photos, the memory sizes for the
+fail because its enclosing disk failed. A (regular) backoff                          index ﬁt into the memory in our custom hardware. For
+node in that datacenter will reconstruct the relevant                                proﬁle photos, we currently exclude them from f4 and
+section of buddy block from n of its companion and                                   keep them in Haystack. The index size for proﬁle photos
+parity blocks. The XOR-backoff node will then receive                                is still problematic for Haystack hosts, even though they
+the sections of the XOR-data block and the buddy block,                              store fewer BLOBs than f4 hosts. To keep the index size
+XOR them, and return the BLOB.                                                       reasonable we under utilize the storage on the Haystack
+                                                                                     hosts. This enabled us to keep Haystack simple and
+Fault Tolerance for All Our primary fault tolerance                                  does not signiﬁcantly impact the efﬁciency of the overall
+design concern for f4 was providing four level of fault                              system because there is only a single proﬁle photo per
+tolerance for data ﬁles, the dominant resource for warm                              user and they are quite small.
+BLOB storage, at a low effective-replication-factor. We
+also require that the other components of a cell be                                  3 A small buffer cache in Haystack is useful for newly written BLOBs,
+
+tolerance to the same faults, but use simpler and more                               which are likely to be read and are not yet in the caching stack.
+
+
+                                                                                 9
+
+USENIX Association                          11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14) 391
+                                 !                                                                         
+            
+                                                                                                                           
+        
+                 
+                                                                                                                           
+                 
+                                                                                                                      
+                                                                                                                           
+                 
+
+
+      
+                                                                                                                                                 
+                                                                                                                        
+                                                                                                                                                   
+                                                                                                       
+                                                                                                                                                                     
+                                                                                                                                                             
+                                                                                                                            
+
+       (a) Effect of the caching stack on load.                       (b) CDF of age of BLOB reads.                              (c) CDF of age of BLOB deletes.
+
+                                         Figure 11: Effects of our general architecture on the workload for f4.
+
+
+   Looking forward, we are evaluating lower-powered                                               week sample from the router tier of 0.1% of reads and
+CPUs for the storage nodes because the CPU require-                                               10% of deletes. The results in Section 6.3 are obtained
+ments are quite low. Unfortunately, lower powered CPUs                                            by dynamically tracking all operations to a uniform sam-
+usually come with smaller on-board memories. This, cou-                                           ple (0.01%) of all stored content. The storage savings in
+pled with the fact that the drive densities as well as the                                        Section 6.5 are from measurements on a subset of f4.
+number of drives per box are increasing, means that the                                              We measure performance on our production system
+index might not ﬁt in memory for these lower-end con-                                             using a uniform sampling function so multiple genera-
+ﬁgurations. We are exploring storing the index on ﬂash                                            tions of our storage machines are reﬂected in the cap-
+instead of memory for these future conﬁgurations.                                                 tured data. Our older storage machines are commodity
+                                                                                                  servers with a quad-core Intel Xeon CPU, 16/24/32 GB
+Software/Hardware Co-Design An important consid-
+                                                                                                  of memory, a hardware raid controller with 256-512 byte
+eration in the design of f4 was keeping the hardware and
+                                                                                                  NVRAM and 12 x 1TB/2TB/3TB SATA drives. More
+software well matched. Hardware that provides capac-
+                                                                                                  recent machines are custom hosts with an Open Vault
+ity or IOPS that are not used by the software is waste-
+                                                                                                  2U chassis holding 30 x 3TB/4TB SATA drives [42].
+ful; software designed with unrealistic expectations of
+                                                                                                  Haystack uses Hardware RAID-6 with a NVRAM write-
+the hardware will not work. The hardware and software
+                                                                                                  back cache while f4 uses these machines in a JBOD (Just
+components of f4 were co-designed to ensure they were
+                                                                                                  a Bunch Of Disks) conﬁguration.
+well-matched by using software measurements to inform
+hardware choices and vice-versa.                                                                  6.2      General Architecture Enables Warm Storage
+   For instance, we measured the candidate hard drives
+for f4 using a synthetic benchmark to determine the                                               Our general architecture enables our warm storage sys-
+maximum IOPS we could consistently achieve while                                                  tem in four ways: (1) the caching stack reduces the load
+keeping per-request latency low. We then used these                                               on f4; (2) the hot storage system bears the majority of
+measurements to inform our choice of drives and our                                               reads and deletes, allowing our warm storage system to
+provisioning on the software side. The f4 software is                                             focus on efﬁcient storage; (3) the router tier allows us to
+designed so the weekly peak load on any drive is less                                             migrate volumes easily because it is an abstraction layer
+than the maximum IOPS it can deliver.                                                             on top of the physical storage; and (4) the transformer tier
+                                                                                                  allows an independent scaling of processing and storage.
+6.           Evaluation                                                                              The latter two points (3) and (4) are fundamental to
+                                                                                                  our design. We validate points (1) and (2) experimentally.
+This evaluation answers four key questions. Does our
+overall BLOB storage architecture enable warm storage?                                            Caching Stack Enables f4 Figure 11a shows the nor-
+Can f4 handle the warm BLOB storage workload’s                                                    malized request rate for BLOBs before and after the
+throughput and latency requirements? Is f4 fault tolerant?                                        caching stack for different groups of BLOBs based on
+And, does f4 save a signiﬁcant amount of storage?                                                 age. The Figure shows the caching stack reduces the
+                                                                                                  request rate for all BLOBs to ~30% of what it would
+6.1              Methodology                                                                      have otherwise been. Caching is the most effective for
+Section 6.4 presents analytic results, all other results in                                       the most popular content, which we expect to be newer
+this section are based on data captured from our produc-                                          content. Thus, we expect the reduction in load from the
+tion systems. The caching stack results in Section 6.2                                            cache to be less for older content. Our data shows this
+are based on a day-long trace of 0.5% of BLOB requests                                            with the caching stack reducing the request rate to 3+
+routed through Facebook’s caching stack; they do not                                              month old BLOBs to ~55% of its pre-caching volume.
+include results served from browser or device caches.                                             This reduction is still signiﬁcant, however, without it the
+The read/delete results in Section 6.2 are based on a two-                                        load for these BLOBs would increase 100−5555    = 82%.
+
+
+                                                                                            10
+
+392 11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14)                                                                           USENIX Association
+                                                                                                
+                                   
+
+
+
+
+                                                                              
+                                                                                               
+          
+                                                                                               
+
+
+          
+
+                                                                                             
+
+                                                                                                                                     
+                                                                                                                                              
+                                                                                              
+                                                                                                                               
+                                                                                                                       
+
+Figure 12: Maximum request rates over a week to f4’s                               Figure 13: CDF of local read latency for Haystack/f4.
+most loaded cluster.
+                                                                                The maximum rack load is indistinguishable from
+Haystack Enables f4 Figure 11b shows the CDF of the                         the cluster load in the ﬁgure and peaks at 3.5 IOPS/TB
+age of read BLOBs. Haystack handles all read requests                       during the trace week. The maximum machine load is
+for BLOBs less than 3 months old and some of the                            slightly higher and peaks at 4.1 IOPS/TB. Maximum disk
+read request for BLOBs older than that.4 This accounts                      load is notably higher and peaks at 8.5 IOPS/TB. All of
+for more than 50% of the read requests, signiﬁcantly                        these are still less than half the 20 IOPS/TB maximum
+lowering the load on f4.                                                    rate of f4. Even when examining the near-worse-case
+   Figure 11c shows the CDF of the age of deleted                           loads, f4 is able to cope with the lower throughput and
+BLOBs. All deletes are plotted, and all deletes excluding                   decreased variance demands of warm BLOBs.
+those for BLOBs that auto-expire after a day are plotted.
+                                                                           f4 Provides Low Latency Figure 13 shows the same
+Haystack again handles all deletes for content less than 3
+                                                                           region read latency for Haystack and f4. In our system,
+months old. Haystack absorbs most BLOB deletes—over
+                                                                           most (>99%) of the storage tier read accesses are within
+70% of deletes excluding auto-expiry, and over 80% of
+                                                                           the same region. The latencies for f4 reads are higher
+deletes including auto-expiry—making them less of a
+                                                                           than those for Haystack, e.g., the median read latency is
+concern for f4.
+                                                                           14 ms for Haystack and 17 ms for f4. But, the latency
+6.3            f4 Production Performance                                   for f4 are still sufﬁciently low to provide a good user
+This subsection characterizes f4’s performance in pro-                     experience: the latency for reads in f4 is less than 30 ms
+duction and demonstrated it can handle the warm storage                    for 80% of them and 80 ms for 99% of them.
+workload and that it provides low latency for reads.                        6.4                       f4 is Resilient to Failure
+f4 Handles Peak Load The IOPS requirement for real-                         f4 is resilient to datacenter failures because we replicate
+time requests is determined by the peak load rather                         data in multiple geographically distinct locations. Here
+than average requirement, so we need to look at peak                        we verify that f4 is resilient to disk, host, and rack failure.
+request rates at a ﬁne granularity. Figure 12 shows load                        Our implementation places blocks on different racks
+in IOPS/TB for the f4 cluster with the highest load over                    initially and continually monitors and rebalances blocks
+the course of a week. The data is gathered from the 0.1%                    so they are on different racks due to failure. The result is
+of reads trace and we compensate for the sampling rate                      that blocks are almost always in different failure domains,
+by examining windows of 1000 seconds (instead of 1                          which we assume to be true for the rest of this analysis.
+second). Our trace identiﬁes only the cluster for each                      Figure 14 shows the CDF of BLOBs that are unavailable
+request, so we randomly assign BLOBs to disks and use                       if N disks, hosts, or racks fail in an f4 cell. Worst case,
+this assignment to determine the load on disks, machines,                   expected case, and best case CDFs are plotted. All results
+and racks. The maximum across all disk, machines, and                       assume we lose some data when there are more than 4
+racks is reported for each time interval.                                   failures in a stripe, though there is work that can recover
+    The ﬁgure show the request rate has predictable peaks                   some of this data [22] we do not implement it. Worst case
+and troughs that result from different users across the                     results assume failures are assigned to one or a small
+globe accessing the site at different times and this can                    number of blocks ﬁrst and that parity blocks are the last
+vary load by almost 2x during the course of a day.                          to fail. Best case results assume failures are assigned to
+4 We currently use an approximately 3-month cutoff for all types in         individual racks ﬁrst and that parity blocks are the ﬁrst to
+production for simplicity. BLOBs older than 3 months can be served          fail. Non-parity blocks can be used to individually extract
+by Haystack due to lag in migrations to f4.                                 the BLOBs they enclose. Expected results are calculated
+
+
+                                                                      11
+
+USENIX Association                         11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14) 393
+                                                                                                                                                                
+
+                                                                                                                                           
+
+                                                                                                                                                                
+
+                                                                                                                                                                
+
+
+                                                                                                                                          
+                                                                                                                                                                
+
+                                                                                                                                                                     
+                                                                                                                                     
+                                                                                                                                                                                     
+                                                                                                                                                                              
+
+                                     (a)                                                                              (b)                                                                       (c)
+
+                               Figure 14: Fraction of unavailable BLOBs for a f4 cell with N disk, host, and rack failures.
+
+
+by the Monte Carlo method. There are 30 disks/host, 15                                                                        days. The only adverse affect of the drill was an increase
+hosts/rack, and 14 racks.                                                                                                     in p99 latency to 500ms.
+    Figure 14a shows the results for N disk failures. In the
+worst case there are some unavailable BLOBs after 4 disk                                                                      6.5        f4 Saves Storage
+failures, 50% unavailable BLOBs after 2250 disk failures,                                                                     f4 saves storage space by reducing the effective-replication-
+and 100% unavailable BLOBs after 4500 disk failures. In                                                                       factor of BLOBs, but it does not reclaim the space of
+the best case there are no unavailable BLOBs until there                                                                      deleted BLOBs. Thus, the true beneﬁt in reduced storage
+are more than 1800 disk failures. In expectation, there                                                                       for f4 must account for the space. We measured the space
+will be some unavailable BLOBs after 450 disk failures,                                                                       used for deleted data in f4, which was 6.8%.
+and 50% unavailable BLOBs after 3200 disk failures.                                                                               Let replhay = 3.6 be the effective replication factor
+    Figure 14b shows the results for N host failures. In                                                                      for Haystack, replf4 = 2.8 or 2.1 be the effective
+the worst case there are unavailable BLOBs after 4 host                                                                       replication factor of f4, delf4 = .068 the fraction of
+failures, 50% unavailable BLOBs after 74 host failures,                                                                       BLOBs in f4 that are deleted, and logicalf4 > 65P B be
+and 100% unavailable BLOBs after 150 host failures. In                                                                        the logical size of BLOBs stored in f4. Then the reduction
+the best case, there are no unavailable BLOBs until there                                                                     in storage space from f4 is:
+are more than 60 host failures. In expectation, there will                                                                                                                     1
+be some unavailable BLOBs with 32 host failures and                                                                           Reduction = (replhay − replf4 ∗                        ) ∗ logicalwarm
+                                                                                                                                                                           1 − delf4
+50% unavailable BLOBs once there are 100 host failures.
+    Figure 14c shows the results for N rack failures. In the                                                                                         = (3.6 − replf4 ∗ 1.07) ∗ 65PB
+worst case there are unavailable BLOBs after 4 rack fail-                                                                                            = 30PB at 2.8, 68PB at 2.1, 53PB currently
+ures and 100% unavailable BLOBs after 10 rack failures.
+Even in the best case, there will be some unavailable                                                                            With a current corpus over 65 PB, f4 saved over 39
+BLOBs once there are 5 rack failures. In expectation,                                                                         PB of storage at the 2.8 effective-replication-factor and
+once there are 7 rack failures 50% of BLOBs will be                                                                           will save over 87 PB of storage at 2.1. f4 currently saves
+unavailable. Taken together Figure 14 demonstrates that                                                                       over 53PB with the partial deployment of 2.1.
+f4 is resilient to failure.
+                                                                                                                              7.         Experience
+Failure Experience In general, we see an Annualized                                                                           In the course of designing, building, deploying, and
+Failure Rate (AFR) of ~1% for our disks and they are                                                                          reﬁning f4 we learned many lessons. Among these the
+replaced in less than 3 business days so we typically have                                                                    importance of simplicity for operational stability, the
+at most a few disks out at a time per cluster. We recently                                                                    importance of measuring underlying software for your
+received a batch of bad disks and have a higher failure                                                                       use case’s efﬁciency, and the need for heterogeneity in
+rate for the cluster they are in, as discussed further in                                                                     hardware to reduce the likelihood of correlated failures
+Section 7. Even so, we are always on the far left parts                                                                       stand out.
+of the graphs in Figure 14 where there is no difference                                                                          The importance of simplicity in the design of a system
+between worst/best/expected thus far. Host failures occur                                                                     for keeping its deployment stable crops up in many
+less often, though we do not have a rule-of-thumb failure                                                                     systems within Facebook [41] and was reinforced by our
+rate for them. Host failures typically do not lose data,                                                                      experience with f4. An early version of f4 used journal
+once the faulty component is replaced (e.g., DRAM) the                                                                        ﬁles to track deletes in the same way that Haystack does.
+host returns with the data still on its disks. Our worst                                                                      This single read-write ﬁle was at odds with the rest of
+failure thus far has been a self-inﬂicted drill that rebuilt                                                                  the f4 design, which is read-only. The at-most-one-writer
+2 hosts worth of data (240 TB) in the background over 3                                                                       requirement of the distributed ﬁle system at the heart of
+
+
+                                                                                                                       12
+
+394 11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14)                                                                                                                  USENIX Association
+our implementation (HDFS), the inevitability of failure             necessarily more complex, than f4 whose design was
+in large distributed systems, and the rarity of writes to           informed by its simpler workload.
+the journal ﬁle did not play well together. This was the
+                                                                    Distributed Disk Arrays There is also a large body of
+foremost source of production issues for f4. Our later
+                                                                    work on striping data across multiple disks for improved
+design that removed this read-write journal ﬁle pushed
+                                                                    throughput and fault tolerance that was ﬁrst advocated
+delete tracking to another system that was designed to be
+                                                                    in a case for RAID [43]. Later work included Zebra [30]
+read-write. This change simpliﬁed f4 by making it fully
+                                                                    that forms of a client’s write into a log and stripes them
+read-only and ﬁxed the production issues.
+                                                                    together, similar to how we stripe many BLOBs together
+    Measuring and understanding the underlying software
+                                                                    in a block. Other work includes disk shadowing [7], max-
+that f4 was built on top of helped improve the efﬁciency
+                                                                    imizing performance in a striped disk array [13], parity
+of f4. f4’s implementation is built on top of the Hadoop
+                                                                    declustering [31], parity logging [51], AFRAID [49],
+File System (HDFS). Reads in HDFS are typically han-
+                                                                    TickerTAIP [11], NASD [19], and D-GRAID [50]. Chen
+dled by any server in the cluster and then proxied by that
+                                                                    et al.’s survey on provides a thorough overview of RAID
+server to the server that has the requested data. Through
+                                                                    in practice [14]. f4 continues the tradition of distributing
+measurement we found that this proxied read has lower
+                                                                    data for reliability, but does so across racks and datacen-
+throughput and higher latency than expected due to the
+                                                                    ter as well as disks and hosts.
+way HDFS schedules IO threads. In particular, HDFS
+used a thread for each parallel network IO request and              Erasure Codes Erasure codes enjoy a long history
+Java’s multithreading did not scale well to a large number          starting with the Hamming’s original error-correcting
+of parallel requests, which resulted in an increasing back-         code [27]. Our work uses Reed-Solomon codes [46] and
+log of network IO requests. We worked around this with a            XOR codes. EVENODD [8] simpliﬁes error correction
+two-part read, described in Section 5.3, that avoids prox-          using XOR codes. WEAVER codes [24] are a more
+ying the read through HDFS. This workaround resulted                recent XOR-based erasure code. HoVer codes [25] add
+in the expected throughput and latency for f4.                      parity in two dimensions, similar to our local vs. geo-
+    We recently learned about the importance of hetero-             replicated distinction, though at a much lower level and
+geneity in the underlying hardware for f4 when a crop of            with more similar techniques. STAIR codes [37] provide
+disks started failing at a higher rate than normal. In addi-        fault tolerance to disk sector failures, a level below our
+tion, one of our regions experienced higher than average            currently smallest failure domain. XORing elephants [4]
+temperatures that exacerbated the failure rate of the bad           presents a new family of erasure codes that are more
+disks. This combination of bad disks and high tempera-              efﬁciently repairable. A hitchhiker’s guide to fast and
+tures resulted in an increase from the normal ~1% AFR               efﬁcient data reconstruction [45] presents new codes that
+to an AFR over 60% for a period of weeks. Fortunately,              reduce network and disk usage. f4 uses erasure codes as
+the high-failure-rate disks were constrained to a single            tools and does not innovate in this area.
+cell and there was no data loss because the buddy and               Erasure Coded Storage Plank gave a tutorial on Reed-
+XOR blocks were in other cells with lower temperatures              Solomon codes for error correction in RAID-like sys-
+that were unaffected. In the future we plan on using hard-          tems [44]. f4 implements something similar, but uses
+ware heterogeneity to decrease the likelihood of such               checksums colocated with blocks for error detection and
+correlated failures.                                                uses Reed-Solomon for erasure correction that can tol-
+                                                                    erate more failures at same parity level. More recent
+8.   Related Work                                                   erasure coded storage includes Oceanstore [35], a peer-
+                                                                    to-peer erasure coded system. Weatherspoon et al. [52]
+We divide related work into distributed ﬁle system,
+                                                                    provide a detailed comparison of replication vs. erasure-
+distributed disk arrays, erasure codes, erasure coded
+                                                                    coding for peer-to-peer networks. Other systems include
+storage, hierarchical storage, other related techniques,
+                                                                    Glacier [23] and Ursa Minor [1]. Windows Azure stor-
+and BLOB storage systems. f4 is primarily distinguished
+                                                                    age [33] uses new Local Reconstruction Codes for efﬁ-
+by its speciﬁcity and thus simplicity, and by virtue of it
+                                                                    cient recovery with local and global parity information,
+running in production at massive scale across many disk,
+                                                                    but is not a Maximum Distance Separable (MDS) code.
+hosts, racks, and datacenters.
+                                                                    Our local Reed-Solomon coding is MDS, though the
+                                                                    combination with XOR is not.
+Distributed File Systems There are many classic dis-
+tributed ﬁle systems including Cedar [26], Andrew [32],             Hierarchical Storage The literature is also rich with
+Sprite [39], Coda [48], Harp [38], xfs [3], and Petal [36]          work on hierarchical storage that uses different storage
+among many others. Notable recent examples include the              subsystems for different working sets. A canonical exam-
+Google File System [18], BigTable [12], and Ceph [53].              ple is HP AutoRAID [54] that has two levels of storage
+All of these ﬁle systems are much more general, and thus            with replication at the top-level and RAID 5 for the bot-
+
+
+                                                               13
+
+USENIX Association              11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14) 395
+tom level. HP AutoRAID transparently migrates data                       Wylie. Ursa minor: Versatile cluster-based storage. In
+between the two levels based on inactivity. The replica-                 Proceedings of the USENIX Conference on File and Stor-
+tion our BLOB storage system is similar, though at a                     age Technologies (FAST), 2005.
+far larger scale, for a simpler workload, and with very              [2] Akamai. http://www.akamai.com.
+different migration choices and costs.                               [3] T. E. Anderson, M. D. Dahlin, J. M. Neefe, D. A. Patter-
+Other Similar Techniques Our approach of append-                         son, D. S. Roselli, and R. Y. Wang. Serverless network
+ing new BLOBs to a physical volume resembles log-                        ﬁle systems. In Proceedings of the ACM Symposium on
+structured ﬁle systems [47], and greatly improves our                    Operating Systems Principles (SOSP), 1995.
+write latency. Harter et al. [28] analyzed the I/O behavior          [4] M. Asteris, D. Papailiopoulos, A. G. Dimakis, R. Vadali,
+of iBench, a collection of productivity and multimedia                   S. Chen, and D. Borthakur. Xoring elephants: Novel
+applications and observed that many modern applications                  erasure codes for big data. Proceedings of the VLDB
+manage a single ﬁle as a mini-ﬁlesystem. This is also                    Endowment (PVLDB), 6(5), 2013.
+how we treat our ﬁles (including data ﬁles, index ﬁles               [5] D. Beaver, S. Kumar, H. C. Li, J. Sobel, and P. Vajgel.
+and journal ﬁles). Copyset replication [15] explores how                 Finding a needle in haystack: Facebook’s photo storage.
+to group replicas to decrease the likelihood of data loss,               In Proceedings of the Symposium on Operating Systems
+but does not use erasure codes.                                          Design and Implementation (OSDI), 2010.
+                                                                     [6] A. Bigian. Blobstore: Twitter’s in-house photo storage
+BLOB Storage Our work on warm storage builds on
+                                                                         system. http://tinyurl.com/cda5ahq, 2012.
+some key ideas from Haystack [5], Facebook’s hot BLOB
+storage system. Huang et al. [34] performed an exten-                [7] D. Bitton and J. Gray. Disk shadowing. In Proceedings of
+sive study of Facebook photo and found that advanced                     the International Conference on Very Large Data Bases
+                                                                         (VLDB), 1988.
+caching algorithms would increase cache hit ratios and
+further drive down backend load. If implemented, this                [8] M. Blaum, J. Brady, J. Bruck, and J. Menon. Evenodd:
+could enable faster migration from hot storage to f4.                    An efﬁcient scheme for tolerating double disk failures in
+Harter et al. [29] performed a multilayer study of the                   raid architectures. IEEE Transactions on Computers, 44
+                                                                         (2), 1995.
+Facebook Messages stack, which is also built on top
+of HDFS. Blobstore [6] provides a good overview of                   [9] N. Bronson, Z. Amsden, G. Cabrera, P. Chakka, P. Dimov,
+Twitter’s in-house photo storage system, but does not de-                H. Ding, J. Ferris, A. Giardullo, S. Kulkarni, H. Li,
+scribe performance or efﬁciency aspects in much detail.                  M. Marchukov, D. Petrov, L. Puzar, Y. J. Song, and
+                                                                         V. Venkataramani. Tao: Facebook’s distributed data store
+Microsoft’s Windows Azure Storage [10] is designed to
+                                                                         for the social graph. In Proceedings of the Usenix Annual
+be a generic cloud service while ours is a more special-
+                                                                         Technical Conference (ATC), 2013.
+ized application, with more unique challenges as well
+as optimization opportunities. Their coding techniques              [10] B. Calder, J. Wang, A. Ogus, N. Nilakantan, A. Skjolsvold,
+                                                                         S. McKelvie, Y. Xu, S. Srivastav, J. Wu, H. Simitci, J. Hari-
+are discussed above. Google provides a durable but re-
+                                                                         das, C. Uddaraju, H. Khatri, A. Edwards, V. Bedekar,
+duced availability storage service (DRA) on its cloud                    S. Mainali, R. Abbasi, A. Agarwal, M. F. u. Haq, M. I. u.
+platform [21], but implementation details are not public                 Haq, D. Bhardwaj, S. Dayanand, A. Adusumilli, M. Mc-
+and there is no support for migrating groups of objects                  Nett, S. Sankaran, K. Manivannan, and L. Rigas. Windows
+(buckets) from normal to DRA storage.                                    azure storage: A highly available cloud storage service
+                                                                         with strong consistency. In Proceedings of ACM Sympo-
+9.   Conclusion                                                          sium on Operating Systems Principles (SOSP), 2011.
+Facebook’s BLOB corpus is massive, growing, and in-                 [11] P. Cao, S. B. Lin, S. Venkataraman, and J. Wilkes. The
+creasingly warm. This paper made a case for a special-                   tickertaip parallel raid architecture. ACM Transactions on
+ized warm BLOB storage system, described an overall                      Computer Systems (TOCS), 12(3), 1994.
+BLOB storage system that enables warm storage, and                  [12] F. Chang, J. Dean, S. Ghemawat, W. C. Hsieh, D. A. Wal-
+gave the design of f4. f4 reduces the effective-replication-             lach, M. Burrows, T. Chandra, A. Fikes, and R. E. Gruber.
+factor of warm BLOBs from 3.6 to 2.1; is fault tolerant                  Bigtable: A distributed storage system for structured data.
+to disk, host, rack, and datacenter failures; provides low               ACM Transactions of Computer Systems (TOCS), 26(2),
+latency for client requests; and is able to cope with the                2008.
+lower throughput demands of warm BLOBs.                             [13] P. M. Chen and D. A. Patterson. Maximizing performance
+                                                                         in a striped disk array. In Proceedings of the Annual In-
+References                                                               ternational Symposium on Computer Architecture (ISCA),
+ [1] M. Abd-El-Malek, W. V. Courtright II, C. Cranor, G. R.              1990.
+     Ganger, J. Hendricks, A. J. Klosterman, M. Mesnier,            [14] P. M. Chen, E. K. Lee, G. A. Gibson, R. H. Katz, and D. A.
+     M. Prasad, B. Salmon, R. R. Sambasivan, S. Sinnamo-                 Patterson. Raid: High-performance, reliable secondary
+     hideen, J. D. Strunk, E. Thereska, M. Wachs, and J. J.              storage. ACM Computing Surveys, 26(2), 1994.
+
+
+                                                               14
+
+396 11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14)                           USENIX Association
+[15] A. Cidon, S. Rumble, R. Stutsman, S. Katti, J. Ousterhout,        [31] M. Holland and G. A. Gibson. Parity declustering for
+     and M. Rosenblum. Copysets: Reducing the frequency of                  continuous operation in redundant disk arrays. In Pro-
+     data loss in cloud storage. In Proceedings of the Usenix               ceedings of the International Conference on Architectural
+     Annual Technical Conference (ATC), 2013.                               Support for Programming Languages and Operating Sys-
+[16] Facebook Groups. Facebook groups. https://www.                         tems (ASPLOS), 1992.
+     facebook.com/help/groups.                                         [32] J. H. Howard, M. L. Kazar, S. G. Menees, D. A. Nichols,
+                                                                            M. Satyanarayanan, R. N. Sidebotham, and M. J. West.
+[17] Facebook Mobile Photo Sync.   Facebook mobile
+                                                                            Scale and performance in a distributed ﬁle system. ACM
+     photo sync.   https://www.facebook.com/help/
+                                                                            Transactions on Computer Systems (TOCS), 6(1), 1988.
+     photosync.
+                                                                       [33] C. Huang, H. Simitci, Y. Xu, A. Ogus, B. Calder,
+[18] S. Ghemawat, H. Gobioff, and S.-T. Leung. The google
+                                                                            P. Gopalan, J. Li, S. Yekhanin, et al. Erasure coding
+     ﬁle system. In Proceedings of the nineteenth ACM sympo-
+                                                                            in windows azure storage. In Proceedings of the Usenix
+     sium on Operating systems principles (SOSP), 2003.
+                                                                            Annual Technical Conference (ATC), 2012.
+[19] G. A. Gibson, D. F. Nagle, K. Amiri, J. Butler, F. W.             [34] Q. Huang, K. Birman, R. van Renesse, W. Lloyd, S. Ku-
+     Chang, H. Gobioff, C. Hardin, E. Riedel, D. Rochberg,                  mar, and H. C. Li. An analysis of facebook photo caching.
+     and J. Zelenka. A cost-effective, high-bandwidth storage               In Proceedings of the Symposium on Operating Systems
+     architecture. In ACM SIGPLAN Notices, 1998.                            Principles (SOSP), Nov. 2013.
+[20] A. Glacier. https://aws.amazon.com/glacier/.                      [35] J. Kubiatowicz, D. Bindel, Y. Chen, S. Czerwinski,
+[21] Google.    Durable reduced availability storage.                       P. Eaton, D. Geels, R. Gummadi, S. Rhea, H. Weather-
+     https://developers.google.com/storage/                                 spoon, W. Weimer, et al. Oceanstore: An architecture for
+     docs/durable-reduced-availability, 2014.                               global-scale persistent storage. ACM Sigplan Notices, 35
+                                                                            (11), 2000.
+[22] V. Guruswami and M. Sudan. Improved decoding of
+     reed-solomon and algebraic-geometry codes. IEEE Trans-            [36] E. K. Lee and C. A. Thekkath. Petal: Distributed virtual
+     actions on Information Theory, 1999.                                   disks. In Proceedings of the Architectural support for pro-
+                                                                            gramming languages and operating systems (ASPLOS),
+[23] A. Haeberlen, A. Mislove, and P. Druschel. Glacier:                    1996.
+     Highly durable, decentralized storage despite massive cor-
+     related failures. In Proceedings of the Conference on             [37] M. Li and P. P. C. Lee. Stair codes: A general family of
+     Symposium on Networked Systems Design & Implementa-                    erasure codes for tolerating device and sector failures in
+     tion (NSDI), 2005.                                                     practical storage systems. In Proceedings of the USENIX
+                                                                            Conference on File and Storage Technologies (FAST),
+[24] J. L. Hafner. Weaver codes: Highly fault tolerant erasure              2014.
+     codes for storage systems. In Proceedings of the USENIX
+                                                                       [38] B. Liskov, S. Ghemawat, R. Gruber, P. Johnson, L. Shrira,
+     Conference on File and Storage Technologies (FAST),
+                                                                            and M. Williams. Replication in the harp ﬁle system.
+     2005.
+                                                                            In Proceedings of the ACM Symposium on Operating
+[25] J. L. Hafner. Hover erasure codes for disk arrays. In                  Systems Principles (SOSP), 1991.
+     International Conference on Dependable Systems and
+                                                                       [39] M. N. Nelson, B. B. Welch, and J. K. Ousterhout. Caching
+     Networks (DSN), 2006.
+                                                                            in the sprite network ﬁle system. ACM Transaction on
+[26] R. Hagmann. Reimplementing the cedar ﬁle system                        Computer Systems (TOCS), 6(1), 1988.
+     using logging and group commit. In Proceedings of                 [40] J. Niccolai. Facebook puts 10,000 blu-ray discs in low-
+     the ACM Symposium on Operating Systems Principles                      power storage system. http://tinyurl.com/qx759f4,
+     (SOSP), 1987.                                                          2014.
+[27] R. W. Hamming. Error detecting and error correcting               [41] R. Nishtala, H. Fugal, S. Grimm, M. Kwiatkowski, H. Lee,
+     codes. Bell System technical journal, 29(2), 1950.                     H. C. Li, R. McElroy, M. Paleczny, D. Peek, P. Saab,
+[28] T. Harter, C. Dragga, M. Vaughn, A. C. Arpaci-Dusseau,                 D. Stafford, T. Tung, and V. Venkataramani. Scaling mem-
+     and R. H. Arpaci-Dusseau. A ﬁle is not a ﬁle: Under-                   cache at facebook. In Proceedings of the USENIX Sympo-
+     standing the i/o behavior of apple desktop applications.               sium on Networked Systems Design and Implementation
+     In Proc. Symposium on Operating Systems Principles                     (NSDI), 2013.
+     (SOSP), 2011.                                                     [42] Open Compute.     Open compute.             http://www.
+[29] T. Harter, D. Borthakur, S. Dong, A. S. Aiyer, L. Tang,                opencompute.org/.
+     A. C. Arpaci-Dusseau, and R. H. Arpaci-Dusseau. Analy-            [43] D. A. Patterson, G. Gibson, and R. H. Katz. A case
+     sis of hdfs under hbase: A facebook messages case study.               for redundant arrays of inexpensive disks (raid). In
+     In Proceedings of the USENIX Conference on File and                    Proceedings of the 1988 ACM SIGMOD International
+     Storage Technologies (FAST), 2014.                                     Conference on Management of Data, 1988.
+[30] J. H. Hartman and J. K. Ousterhout. The zebra striped             [44] J. S. Plank et al. A tutorial on reed-solomon coding for
+     network ﬁle system. ACM Transactions on Computer                       fault-tolerance in raid-like systems. Software: Practice
+     Systems (TOCS), 13(3), 1995.                                           and Experience, 27(9), 1997.
+
+
+                                                                  15
+
+USENIX Association                11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14) 397
+[45] K. Rashmi, N. B. Shah, D. Gu, H. Kuang, D. Borthakur,              [50] M. Sivathanu, V. Prabhakaran, A. C. Arpaci-Dusseau,
+     and K. Ramchandran. A hitchhikers guide to fast and                     and R. H. Arpaci-Dusseau. Improving storage system
+     efﬁcient data reconstruction in erasure-coded data centers.             availability with d-graid. ACM Transactions on Storage
+     In Proceedings of the ACM conference on SIGCOMM,                        (TOS), 1(2), 2005.
+     2014.                                                              [51] D. Stodolsky, G. Gibson, and M. Holland. Parity log-
+                                                                             ging overcoming the small write problem in redundant
+[46] I. S. Reed and G. Solomon. Polynomial codes over certain
+                                                                             disk arrays. In Proceedings of the Annual International
+     ﬁnite ﬁelds. Journal of the Society for Industrial and
+                                                                             Symposium on Computer Architecture (ISCA), 1993.
+     Applied Mathematics, 8, 1960.
+                                                                        [52] H. Weatherspoon and J. D. Kubiatowicz. Erasure coding
+[47] M. Rosenblum and J. K. Ousterhout. The design and                       vs. replication: A quantitative comparison. In Interna-
+     implementation of a log-structured ﬁle system. ACM                      tional workshop on Peer-To-Peer Systems (IPTPS. 2002.
+     Transactions of Computer Systems (TOCS), 10(1), 1992.              [53] S. A. Weil, S. A. Brandt, E. L. Miller, D. D. E. Long,
+                                                                             and C. Maltzahn. Ceph: A scalable, high-performance
+[48] M. Satyanarayanan, J. J. Kistler, P. Kumar, M. E. Okasaki,
+                                                                             distributed ﬁle system. In In Proceedings of Symposium
+     E. H. Siegel, and D. C. Steere. Coda: A highly available
+                                                                             on Operating Systems Design and Implementation (OSDI),
+     ﬁle system for a distributed workstation environment.
+                                                                             2006.
+     IEEE Transactions on Computers, 39(4), 1990.
+                                                                        [54] J. Wilkes, R. Golding, C. Staelin, and T. Sullivan. The hp
+[49] S. Savage and J. Wilkes. Afraid: A frequently redundant                 autoraid hierarchical storage system. ACM Transactions
+     array of independent disks. In Proceedings of the Usenix                on Computer Systems (TOCS), 14(1), 1996.
+     Annual Technical Conference (ATC), 1996.
+
+
+
+
+                                                                   16
+
+398 11th USENIX Symposium on Operating Systems Design and Implementation (OSDI ’14)                              USENIX Association
+

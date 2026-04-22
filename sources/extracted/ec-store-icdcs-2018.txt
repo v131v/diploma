@@ -1,0 +1,788 @@
+   EC-Store: Bridging the Gap Between Storage and
+    Latency in Distributed Erasure Coded Systems
+                                 Michael Abebe, Khuzaima Daudjee, Brad Glasbergen, Yuanfeng Tian
+                                    Cheriton School of Computer Science, University of Waterloo
+                                        {mtabebe, kdaudjee, bjglasbe, y48tian}@uwaterloo.ca
+
+
+
+
+                                                                         resp. time (ms)
+   Abstract—Cloud storage systems typically choose between
+replicating or erasure encoding data to provide fault tolerance.                           30                               31.9
+Replication ensures that data can be accessed from a single site                           20      20.9
+but incurs a much higher storage overhead, which is a costly
+downside for large-scale storage systems. Erasure coding has a                             10                           1.9 0.9
+                                                                                                1.6 0.8        0.0                      0.8
+lower storage requirement but relies on encoding/decoding and                               0
+distributed data retrieval, which can result in straggling requests                             Replication            Erasure Coding
+that increase response times. We propose strategies for data
+access and data movement within erasure-coded storage systems                              Metadata access Access Planning Data retrieval Decoding
+that significantly reduce data retrieval times. We present EC-        Fig. 1: Response time breakdown for replication and erasure
+Store, a system that incorporates these dynamic strategies for
+                                                                      coding under skewed access. Data retrieval times dominate the
+data access and movement based on workload access patterns.
+Through detailed evaluation using two benchmark workloads,            overall response time.
+we show that EC-Store incurs significantly less storage overhead
+than replication while achieving better performance than both         the time it takes to retrieve data, which dominates overall
+replicated and erasure-coded storage systems.                         response times. However, while both systems can tolerate the
+                                                                      same number of faults (two, in the example of Figure 1), the
+  Keywords-distributed storage, erasure coding, replication, data
+movement, data placement                                              replicated system stores 50% more data than the erasure-coded
+                                                                      system. These differences motivate a fault tolerant storage
+                       I. I NTRODUCTION                               system that can achieve the best of both worlds: low storage
+   The need to store and retrieve big data has fueled the             overhead and low latency data retrieval.
+development and adoption of cloud storage systems. In cloud              When compared to replicated data stores, retrieval costs are
+deployments, however, machines frequently experience down-            higher for erasure-coded storage systems because of the effects
+time. For example, Google observed that at any point in               of stragglers: the time taken to retrieve the slowest, or strag-
+time, up to 5% of the nodes within their storage system               gling, data chunk dominates retrieval time [19,29]. Even when
+were unavailable [12]. To ensure data remains available in            parallelism is leveraged, straggler effects are more pronounced
+the presence of these failures, systems must be fault tolerant.       in systems that must wait for multiple requests to complete
+Large-scale distributed storage systems typically provide fault       (e.g. in erasure-coded storage) than in systems that wait for
+tolerance either by replicating [4,14] or erasure encoding data       only a single request to complete (e.g. in replicated stor-
+[11,15,19,23,30,52]. Replication creates complete copies of           age) [9,26,46,49,53]. Given that large-scale storage systems
+data, incurring a significant storage overhead over erasure           are typically deployed in distributed environments, concurrent
+coding that partitions data and stores the partitions and their       clients issuing requests in parallel over the distributed storage
+parity fragments on multiple nodes to provide the same level          system inevitably result in the occurrence of stragglers [9].
+of fault tolerance as replication. Consequently, while erasure           In our erasure-coded storage system, EC-Store, we propose
+encoding stores less data, accessing it requires multi-node           a novel approach to the stragglers problem: intelligently select
+retrieval resulting in an increase in data access cost compared       chunks to retrieve so as to avoid stragglers. This dynamic data
+to replication [51].                                                  access strategy uses chunk location information to generate
+   To demonstrate that performance in erasure-coded dis-              a cost-effective strategy on-the-fly for data retrieval. By in-
+tributed storage systems is largely determined by the cost of         corporating this strategy in EC-Store, we reduce data access
+data retrieval, we show a breakdown of average response times         latencies and satisfy our best of both worlds goal.
+in Figure 1 for a workload that retrieves multiple 100 KB
+                                                                         To mitigate the effects of stragglers, some systems use a
+blocks.1 The response time is divided into four categories:
+                                                                      late binding strategy [19,38,49] in which additional requests
+the cost of locating data (metadata access), determining which
+                                                                      are made and the slowest responses are ignored. Late binding
+data chunks to retrieve (access planning), retrieving data, and
+                                                                      can reduce response time but places additional load on the
+decoding data. As Figure 1 shows, the performance difference
+                                                                      system: responses that will be ignored must still be generated.
+between replication and erasure coding is primarily due to
+                                                                      In contrast, EC-Store’s dynamic data access strategy offers
+  1 Details are in Section VI.                                        excellent performance and places little additional load on the
+system. Moreover, if additional load can be tolerated, EC-Store                                          (a) Under load
+can incorporate late binding by intelligently issuing additional
+requests and ignoring the slowest responses.
+   EC-Store is designed to take advantage of workloads that
+contain multi-item retrievals. Such workloads are common [21,
+31,39]; for example, all images on a web page are retrieved
+from a storage system. The items in multi-item requests are
+often correlated by application semantics [21,28,39]. EC-Store
+leverages these correlated access patterns to dynamically co-
+locate data items that are accessed together, thereby reducing
+chunk retrieval times. EC-Store considers the location of
+the chunks and their correlations to generate effective data                                          (b) After movement
+placement and flexible data access plans that enable efficient
+                                                                               Fig. 2: Data access and movement strategies improve perfor-
+data retrieval.
+                                                                               mance. Client R3 is offered a load aware strategy and does
+   The contribution of our work is three-fold: (i) We demon-
+                                                                               not access the overloaded site S5 . Client R4 accesses fewer
+strate how the performance of erasure-coded storage systems
+                                                                               sites after A3 is moved from S5 to site S4 .
+can be improved significantly through dynamic data placement
+and data access to mitigate retrieval costs (Section III). We                  a decoding step to reconstruct the data. In this paper, we
+formulate our data access and movement strategies as cost                      focus on encoding schemes that access k chunks without the
+functions with the aim of minimizing expected cost (Sec-                       presence of a complete copy of a data block, such as in
+tion IV). (ii) We present EC-Store, a system that incorporates                 Facebook’s f4 [30] and Windows Azure Storage [19], because
+the efficient design and implementation of our techniques                      these schemes reduce the storage overhead.
+(Section V). (iii) Through detailed evaluation of EC-Store                        Like other erasure coded storage systems, EC-Store pro-
+using both the Yahoo! Cloud Serving Benchmark [7] and a real                   vides an interface to access and store data as blocks [4,11,
+workload trace of Wikipedia image accesses [47], we validate                   19,52]. Each block is identified by a primary key and has a
+that our techniques deliver low overhead, fault tolerant, low                  well-known size, although EC-Store can flexibly accommodate
+latency data access for storage systems (Section VI).                          used-defined block sizes.
+  II. E RASURE C ODED S TORAGE AND FAULT T OLERANCE                                              III. M OTIVATING E XAMPLE
+   Formally, systems provide r-fault tolerance if they can                        Straggling chunks lead to stalls in data retrieval for erasure-
+tolerate r independent faults.2 Replicated storage systems                     coded storage: a client cannot continue until all k chunks
+provide r-fault tolerance under the fail silent assumption [5]                 have been retrieved. Thus, one slow chunk retrieval request
+by writing data to r + 1 different locations. Therefore, if r                  can drastically increase the overall request latency. Straggling
+copies of the data become unavailable due to failures, one copy                chunks occur when a site is unable to keep up with the rate
+remains available. Many systems default to storing a total of                  that other sites service retrieval requests. Therefore, where
+three copies of each data item [4,14].                                         data is placed — and how it is accessed — plays a crucial
+   Erasure codes can provide the same or better fault toler-                   role in performance. We demonstrate the effect that dynamic
+ance guarantees than replication, but with significantly lower                 data access and movement strategies can have on performance
+storage requirements [51]. Maximum distance separable codes,                   using a simple example. Figure 2 shows the storage of data
+such as Reed-Solomon (RS) codes, create k +r chunks of data                    using an RS(2,1) encoding scheme. This scheme requires
+from an original block of data so that it is possible to recreate              storing each data item as three chunks, and reconstructing the
+the original data from any of the k chunks [40]. Data encoded                  data item requires retrieving any two of its chunks.
+with these codes are able to tolerate the unavailability of any                   In Figure 2a, data item A has chunks A1 , A2 , A3 stored
+r of its k + r chunks of data, and is therefore r-fault tolerant.              at sites S2 , S3 , S5 respectively. Suppose a client R1 wishes
+   For a block of data encoded with RS codes parameterized                     to retrieve data items A and B. The arrows indicate that R1
+by k and r (denoted as RS(k, r)), the original block of data                   retrieves data from sites S1 , S3 and S5 . The presence of a
+is divided into k ≥ 2 chunks from which r parity chunks                        popular chunk H1 on site S5 , accessed by a second client
+are generated. Therefore, storing data that has been encoded                   R2 , causes S5 to be under higher load. Consequently, R1 ’s
+requires a factor of k+r
+                       k times the amount of storage needed                    request at S5 is slow and the request becomes a straggler. An
+for a single copy of the data. Because replication stores r + 1                alternative, load-aware data access strategy is offered to client
+times the amount of data, and k ≥ 2, erasure coding uses less                  R3 , allowing it to avoid requesting a chunk of A from S5 and
+space to provide the same level of fault tolerance. However,                   instead retrieve it from site S2 . This data access strategy avoids
+unlike replication, erasure coding requires that a block access                accessing the overloaded site S5 and waiting for a straggling
+retrieves k of the blocks’ chunks in parallel followed by                      chunk. We can improve performance further by moving chunk
+  2 We avoid using the terminology k-fault tolerance, as the variables k and   A3 from site S5 to S4 , as in Figure 2b. This movement allows
+r conflict with standard notation used to describe erasure coding.             for co-located data access for client R4 that can now retrieve
+                                                                                       Chunk and Site Selection Variables
+A and B by accessing only two sites. By accessing fewer                C = ci,j = 1    State of blocks in system: Bi has a chunk at Sj
+sites, the number of requests that must be issued and serviced         si,j = 1        Bi ’s chunk at Sj was selected to be read
+is reduced thereby reducing the likelihood of stragglers and           aj = 1          Site Sj was selected to be accessed.
+consequently improving performance [9]. The movement of                                             Formula
+                                                                                       The estimated read cost of performing request Q
+A3 will reduce load on S5 , resulting in additional improvement        cost(C, Q)
+                                                                                       when the system is in state C
+in performance for client R2 .                                                         The estimated gain of moving Bb ’s chunk from site
+                                                                       ∆(C, b, s, d)
+   Although Figure 2 presents a simple motivating example, re-                         Ss to Sd
+                                                                                             Cost Model Parameters
+ality presents a much more complex and challenging environ-            oj              The performance overhead of accessing site Sj
+ment. In large-scale storage systems, data is distributed across                       The overhead of performing a read on the storage
+                                                                       mj
+many sites, and access patterns resulting from concurrent                              media present at site Sj
+                                                                       zi              The size of block Bi ’s chunks
+client workloads typically overlap. As a result, the objectives
+to co-locate data and maintain even load distribution can                     TABLE I: Notation used and their meaning
+conflict. Erasure coding provides great flexibility for how data     of (ki , ri ) erasure coding, there are exactly ki + ri such ci,j
+should be accessed and placed. We leverage this flexibility by       that are 1. That is, two chunks from the same block cannot
+constructing a cost model that captures and compares different       be located at the same site as otherwise the r-fault tolerance
+data access and placement options to select the most effective       guarantees are violated. We consider the state of the system
+strategy for minimizing access cost. In the next section, we         to be a numBlocks × numSites matrix C with entries ci,j
+describe how we formulate this model and solve the data              representing the chunk placements.
+access and movement problem, allowing us to overcome the                To denote access decisions, we use the binary variable
+aforementioned challenges.                                           si,j = 1 to indicate that a chunk from block Bi located at
+                                                                     site Sj was selected for access. To indicate    that site Sj was
+        IV. DYNAMIC DATA ACCESS AND M OVEMENT                                                                 W
+                                                                     accessed, we use the shorthand aj = i si,j .
+                            S TRATEGIES
+   In addition to load imbalance, several other factors can also     B. Estimating Data Access Cost
+cause straggling chunks. For instance, the rate at which data is        For evaluating the cost of performing a read request, EC-
+retrieved from a storage device, how quickly data is sent over       Store considers two key factors: the overhead of accessing a
+the network, and the rate at which client requests are serviced      remote site, and the retrieval cost of each requested chunk at
+all contribute to slow chunk retrieval times. Load imbalance         that site.
+itself can be the result of skew in item popularity, data size,         Modelling Access Costs: Given an access plan that satisfies
+or the number of items that are retrieved [46,53].                   a request for a set of blocks Q = {Bi }, we model the access
+   With these factors in mind, we have developed data access         cost cost(Q) in Equation 1 as follows. For each site Sj that is
+strategies that minimize expected retrieval time. As shown           considered accessed, that is aj = 1, there is an associated
+in Figure 2, our data access strategy reduces the number of          overhead of accessing that site denoted by oj that can be
+distributed requests by accessing sites that have co-located         determined dynamically and allows adaptation as system load
+data. By placing data so as to minimize distributed access,          changes. This overhead includes factors such as the network
+we develop a data movement strategy that promotes data co-           latency of accessing a remote site, and the time between when
+location based on application access patterns. To ensure that        a request is received and when it is processed at a remote site.
+load remains evenly distributed, our data movement strategy          This time interval is influenced by site load — a site under
+uses load statistics to relocate data to spread load away            high load will experience a longer delay before a request is
+from overloaded sites. Finally, as data access and movement          finished processing. The cost of retrieving a chunk from a site
+strategies allow for alternate choices, we develop our strate-       depends on the rate that I/O can be performed on the storage
+gies as optimization problems. This optimization formulation         media at the site, represented by mj , and the amount of data
+quantifies the effects of different data movement choices and        that is retrieved, zi . Our model incorporates this access cost
+allows us to efficiently select access strategies that minimize      by multiplying these factors (mj · zi ).
+                                                                                         X                 X                   
+expected costs, enabling the selection of data movement plans                cost(Q) =        (oj · aj ) +    (si,j · mj · zi )  (1)
+that improve both data access performance and load balance.                               j                 Bi ∈Q
+   As our formulations for data access and movement strategies          Satisfying Access Constraints: Given our cost model, a
+rely on descriptions of system state, we introduce notation to       client should minimize the cost of access while satisfying the
+describe state next.                                                 constraints imposed by the system state, the request, and the
+                                                                     erasure coding parameters. To determine the optimal access
+A. Notation                                                          plan, we minimize cost(Q) over all valid combinations of the
+   Table I summarizes our notation. We refer to an individual        binary decision variables si,j . Observe that for any instance of
+block as Bi , and the size of its chunks as zi . We refer to the     the problem, oj , mj and zi are constant and therefore cost(Q)
+j-th site (physical machine) as Sj . We use a binary variable        is a linear function in terms of si,j . Thus, if we can also
+ci,j to indicate whether a chunk of Bi is present at site Sj .       define linear constraints that generate valid combinations of
+Note that if Bi is a (ki , ri )-encoded block, from the definition   si,j , we can exploit existing integer linear programming (ILP)
+tools to compute an optimal solution. We present two linear                      separately before merging them into a single cost function.
+inequalities in Equations 2 and 3 that provide the necessary                     Each computation is formulated such that a positive result
+constraints for our ILP formulation.                                             represents an expected performance improvement, a zero result
+   The first constraint (Equation 2) ensures that any access                     denotes no expected change in performance, and a negative
+plan retrieves at least ki chunks for each block Bi in the                       value implies an expected performance degradation.
+request, guaranteeing that the block can be reconstructed by                        Consider the case where we wish to evaluate moving block
+the property of maximum distance separable codes. A chunk                        Bb ’s chunk from source site Ss to destination site Sd . To
+must both exist at a site (ci,j = 1) and be selected for access                  ensure r-fault tolerance, site Sd must be chosen so that it does
+(si,j = 1) for it to be counted towards Bi ’s required ki chunks                 not already contain a chunk of Bb . We represent this change
+for retrieval. The second constraint (Equation 3) enforces that                  in system state by creating a new state matrix C b,s,d from C.4
+a site sj is considered accessed, that is aj = 1, if any chunk                      Change in Data Access Costs: To estimate the change in
+                                     3                                           data access costs, we compare the cost of data access under
+located at that site
+                   Xis accessed.
+                      (ci,j · si,j ) ≥ ki , ∀Bi ∈ Q          (2)                 the existing system state to the cost of the next future state. It
+                       j                                                         is infeasible to consider the effect of chunk movement on all
+                               X                                                queries, so we assemble a set of queries that reflect how block
+                     |Q| · aj −   si,j ≥ 0, ∀Sj                           (3)
+                                                                                 Bb has been historically accessed. Specifically, we generate
+                                     Bi ∈Q
+   Selecting an Optimal Access Plan: Our cost model is used                      queries that are of the form {Bb , Bi }, such that Bi is a block
+to determine the optimal data access plan and the associated                     that has appeared in a prior client query that also contained Bb ,
+cost of that access. We denote this cost as cost(C, Q) as it                     that is {Bb , Bi } ⊆ Q for some client submitted query Q. To
+depends not only on the query Q but also on the state of the                     ensure that infrequent accesses are not considered as important
+system, C. We formally define the ILP problem as follows:                        as frequent accesses, we weight the change in data access
+                   cost(C, Q) = min cost(Q)                                      costs by the likelihood that Bb and Bi were accessed together,
+                                   C                     (4)                     captured statistically as λb,i = P ({Bb , Bi } ⊆ Q|Bb ∈ Q).
+          subject to constraints in Equations 2 and 3.                           Equation 5 summarizes how we quantify the change in data
+                                                                                 access costs, comparing the before and after costs for each
+1) Late Binding                                                                  generated query weighted by access likelihood:
+   As mentioned earlier, late binding [38] is a complementary                     E(C, b, s,d) =
+approach to our techniques. Late binding requests k+δ chunks                          X
+                                                                                            cost(C, {Bb , Bi }) − cost(C b,s,d , {Bb , Bi }) · λb,i
+                                                                                                                                            
+where 0 < δ ≤ r, but waits for only the first k responses. Our
+                                                                                      bi ∈B
+cost model can support late binding with a slight modification.
+                                                                                                                                                (5)
+By changing the right hand side of Equation 2 to ≥ ki +δ, our                    For the example in Figure 2, we would observe that accessing
+cost model incorporates the late binding strategy by enforcing                   data would have lower estimated cost after moving A3 , as
+a data access plan that will retrieve ki +δ chunks for each block                in Figure 2b. As a result, this movement plan would have a
+in the request. Furthermore, our cost model will optimize the                    positive value for E(C, b, s, d).
+request for an additional δ chunks so that data access has the                      Quantifying System Load: In addition to the estimated
+lowest cost estimate.                                                            change in data access costs, we consider the effect of moving
+                                                                                 a chunk on the load of a system. Recall that high load at a
+C. Estimating Chunk Movement Gain
+                                                                                 site can slow data retrieval requests at that site, which leads
+   As data movement affects data accesses, we use our cost
+                                                                                 to stragglers [19]. To avoid the effects of skewed load, we
+model to estimate access costs after movement. Our data
+                                                                                 strive to distributed load evenly across sites. To achieve this
+movement strategy considers the effect of moving a single
+                                                                                 load balance, we promote data movement from heavily loaded
+chunk at a time. By doing so, we efficiently compute the
+                                                                                 sites to lightly ones. We model site load before and after data
+expected performance gains from moving the chunk. In this
+                                                                                 movement to quantify load balance improvements.
+section, we describe our function that quantifies the effect                        We calculate the load at site Sj in state C as ω(C, Sj )
+of moving a chunk, deferring discussion to Section IV-D for                      from the site’s CPU utilization and I/O load. We observed that
+how this function is used. Similarly to our methodology for                      these factors were correlated with the rate at which requests
+estimating the cost of executing a request, by quantifying the                   were serviced. To model the load at a site after movement,
+effects of movement, we are able to compare multiple data                        ω(C b,s,d , Sj ), we proportionally shift the CPU utilization and
+movement strategies and select the best strategy for execution.                  I/O load from the source site to the destination site based on
+   EC-Store considers two important factors when measuring                       chunk size and chunk access likelihood.
+how moving a chunk affects the system: how movement affects                         Normalizing System Load: To represent the degree to
+data access costs, and how it affects the distribution of load                   which a site has diverged from the average load ω̃(C), we
+to sites that store data. We present each of these factors                                                                                ω(C,S )
+                                                                                 define a site load balance factor as: Ω(C, Sj ) = 1 − ω̃(C)j .
+  3 If a site is accessed then
+                                 P
+                                Bi ∈Q si,j ≥ 1. However, no more than |Q|          4 To change the system state we set cb,s,d to 0, cb,s,d to 1, and leave other
+chunks can be requested from a single site. Therefore, if the site is accessed                                          b,s          b,d
+then aj must be set to 1 for the inequality to hold.                             values in C b,s,d unchanged from C.
+Algorithm 1 selectMovementPlan
+ 1: blocksUnderConsideration =
+     GET C ANDIDATE B LOCKS (); . Recent & frequent blocks
+ 2: Scoreopt = 0;    . Init. Bb−opt , Ss−opt , Sd−opt to N ULL
+ 3: for all Block Bb : blocksUnderConsideration do
+ 4: candidateDestinations =
+      GET C ANDIDATE D ESTINATIONS (Bb ); . Exclude sites
+     where Bb ’s chunks are present
+ 5:  for all Chunk c : Bb .chunks do
+ 6:   Site Ss = c.chunk location;         . Ss is the source site;
+ 7:   for all Site Sd : candidateDestinations do        . Sd is a
+    potential destination;
+ 8:     Score = ∆(C, Bb , Ss , Sd );                                      Fig. 3: System architecture showing division of control and
+ 9:     if Score > Scoreopt then                                          data planes including processes for reading (R1-R3) and
+10:       (Scoreopt , Bb−opt , Ss−opt , Sd−opt ) =                        writing data (W1-W3).
+           (Score, Bb , Ss , Sd );
+11: return (Bb−opt , Ss−opt , Sd−opt );
+                                                                          to compute expected performance gains exhaustively for every
+                                                                          movement plan (Bb , Ss , Sd ), we employ a heuristic strategy
+If Ω(C, Sj ) = 0 then Sj has exactly average load, but as                 for generating movement plans. Our heuristic is guided by two
+Ω(C, Sj ) continues to increase, Sj drifts away from average              principles: recently accessed blocks are likely to be accessed
+load. In Figure 2a, site S5 would have a larger Ω(C, S5 ) value           again [21], and sites that are under heavy load contribute to
+than Ω(C, S4 ) as S5 is under higher than average load.                   the straggling chunk problem [19].
+   Estimating Change in System Load: We consider the                         We summarize how we select a plan for data movement
+effect of load created by data movement on both the source and            in Algorithm 1. We first retrieve a set of blocks that are
+destination site by using the load balance factor of the most             candidates for movement because they have been recently
+imbalanced site. To represent the load of the most imbalanced             accessed (Line 1). We probabilistically generate this set based
+site, we construct Ω(C, Ss , Sd ) given by Equation 6:                    on access likelihood, which allows us to explore the effect of
+           Ω(C, Ss , Sd ) = max(Ω(C, Ss ), Ω(C, Sd ))              (6)    moving many other different data items. For each candidate
+                                                      b,s,d               block, we consider moving its chunks to new destination
+The difference between Ω(C, Ss , Sd ) and Ω(C               , Ss , Sd )
+                                                                          locations (Line 4). Finally, for each candidate movement
+represents the change in load balance factors at the source
+                                                                          plan, we compute the expected benefit of executing the move
+and destination as a result of chunk movement, which we
+                                                                          (Line 8).
+summarize as I(C, b, s, d) in Equation 7. In Figure 2, we
+                                                                             At any point in time we can halt execution of Algorithm 1
+observe that moving data from site S5 to S4 will decrease the
+                                                                          and execute the movement plan that has the best score so far.
+load factor of S5 , resulting in a positive I(C, b, s, d) value.
+                                                                          Therefore, we use early stopping conditions when searching
+        I(C, b, s, d) = Ω(C, Ss , Sd ) − Ω(C b,s,d , Ss , Sd )     (7)    for candidate plans and greedy subroutines that return lists
+   Estimating Benefit from Chunk Movement:                                of candidates ordered by the best candidate first. For instance,
+   To combine the two factors, namely, effect of data access              Line 5 iterates over chunks ordered by site load so that chunks
+and effect on load, we sum Equations 5 and 7. To control the              located at the most heavily loaded site are evaluated first.
+relative influence of the two factors, we use weight parameters
+w1 and w2 . The total estimated benefit of moving block Bb ’s               V. EC-S TORE : A RCHITECTURE AND I MPLEMENTATION
+chunk from source site Ss to destination Sd when the system                  We have developed EC-Store, a system that incorporates the
+is in state C is represented by ∆(C, b, s, d) in Equation 8.              design and implementation of our data access and movement
+∆(C, b, s, d) is positive if the movement of the chunk is                 strategies. Similar to other systems, EC-Store clients store and
+expected to be beneficial and negative if it is expected to               access data by communicating with a service API to put a
+worsen costs.                                                             block, read block(s), or delete a block [4,11,19,52]. Figure 3
+    ∆(C, b, s, d) = w1 · E(C, b, s, d) + w2 · I(C, b, s, d) (8)           shows the steps involved for reading and writing data. Our
+                                                                          system inserts an additional step to decide how data should
+D. Selecting Chunks for Movement                                          be placed (W1) and accessed (R2).
+   The previous section described how expected changes in                    EC-Store’s architecture is logically separated into two com-
+system performance are measured both in terms of data                     ponents: a control plane and a data plane. The data plane
+accesses and load distribution when moving chunks. We select              consists of sites that execute a storage service to manage the
+chunks for movement and their target destinations through                 storage and retrieval of chunks. The location of each block’s
+the use of movement plans. A movement plan consists of                    encoded chunks within the data plane are managed by the
+a block Bb , a site Ss containing a chunk of Bb , and a                   metadata service in the control plane, which implements the
+candidate destination site for that chunk Sd . As it is infeasible        strategies described in Section IV.
+   EC-Store services were developed in C++ and communicate           sites in the plan are examined, sites for the remaining chunks
+with each other using remote procedure calls through the             are randomly selected.
+Apache Thrift library [44]. We use the Jerasure 2.0 library [34]        An access plan cache miss triggers a background worker
+for encoding and decoding blocks. Next, we describe the              thread that solves the data access problem using the ILP solver.
+functionality and implementation of the statistics, chunk place-     Once the ILP solution is computed, it is stored in the cache
+ment, and repair services.                                           and replaces the greedy solution, enabling all future requests
+                                                                     for the same blocks to use the ILP solution without the need
+A. Statistics Service                                                to solve the ILP problem. When the cost parameters in the
+   To maintain load and access correlation statistics used by the    ILP problem change as a result of new system state, we
+data movement strategies described in Section IV, a statistics       dynamically reload solutions.
+service is provided. This service approximates each site’s load
+by tracking the CPU utilization, I/O load, and the number            2) Chunk Mover
+of chunks stored at each site. These values are reported by             The chunk mover is responsible for asynchronously mov-
+storage services to the statistics service at regular intervals,     ing chunks within the system to improve block co-access
+and used as ωj in our data movement strategy. Statistics             performance and load balance. The chunk mover executes
+are reported every 5-10 seconds, which we found provided             Algorithm 1 to select a movement plan to copy the chunk
+up-to-date information. The statistics service also maintains        from source to destination. The block metadata is then updated
+information on sampled block access patterns within a slid-          to reflect the new chunk location, and the old chunk can be
+ing interval of previous requests. Each block co-access pair         deleted as all future accesses receive the new chunk location.
+(Bb , Bi ) within a sampled request is tracked to compute the        The chunk mover can throttle the rate at which chunks are
+conditional likelihood of block co-access, stored as λb,i . When     moved to ensure that data movement does not add overhead
+the access pattern exits the interval of previous requests, the      to the system, as we experimentally show in Section VI-C5.
+likelihood of co-access is adjusted so that the statistics service
+can capture changes in workload. Tracking likelihoods and            3) Parameter Choices
+reporting statistics more frequently would require more space           The data access and movement strategies employed by the
+and increase communication overheads but provide higher              chunk placement service are parameterized for generality. The
+accuracy. In our experiments, we tracked a sliding interval          cost model depends on two factors: oj and mj that reflect
+of 5000 requests which was large enough to capture access            the cost of accessing a site and the cost of reading from a
+correlations.                                                        site, respectively. We dynamically set oj for each site based
+                                                                     on the average response time of periodic load-status requests
+B. Chunk Placement Service                                           to storage services. These requests are decoupled from data
+   The chunk placement service consists of two sub-modules           access requests and therefore measure request processing time.
+that provide EC-Store with strategies for data access and data       Thus, an increase in load proportionally increases the response
+movement: the chunk read optimizer and the chunk mover.              time of load-status requests. We empirically determined mj
+                                                                     by measuring the time taken to retrieve increasing numbers
+1) Chunk Read Optimizer                                              of chunks from a single site. Because our experiments were
+   To access data, the client service calls into a local chunk       conducted on homogeneous hardware, we set mj to be the
+read optimizer, which receives chunk locations for a set of          same value for each machine. We found that an approximate
+blocks that a client wishes to read and returns the set of chunks    value of mj , normalized to an average value of oj , was mj = 1
+that should be retrieved from each site. The read strategy is        when oj = 5. Both the chunk read optimizer and chunk mover
+computed by finding the solution to the cost(C, Q) function          receive the oj and mj parameters from the statistics service
+as described in Section IV-B using the SCIP library [1] as an        to support dynamic strategies for data access and movement.
+ILP solver.                                                             In our data movement strategy, w1 and w2 weight the
+   Preliminary experiments showed that solving the ILP prob-         expected improvement in query performance and expected
+lem to decide on a data access strategy took in the order of         improvement in load balance, respectively. The largest value
+tens of milliseconds, which is much higher than the access           for I(C, b, s, d) is 1, and occurs when the system state changes
+costs that were observed in Figure 1. To address this latency        from unbalanced to perfectly balanced. Figure 2 shows an
+concern, we cache and reuse previous access plans that satisfy       example of accessing one less site after data movement, which
+a new request for data access. If there is no access plan in the     results in E(C, b, s, d) = avg(oj ). Initially, we set w1 = 1
+cache that can satisfy the request then we generate an access        and w2 = avg(oj ) = 5 to balance the factors, but then
+plan using a greedy heuristic, which works as follows. We            performed a parameter search by varying w2 . Empirically, we
+decide for each block whether a given chunk will be retrieved        found that (w1 = 1, w2 = 3) yielded the best performance,
+based on the state of the existing access plan. If a chunk for       which indicates that expected query performance is the more
+the requested block is present at an accessed site, that chunk       dominant factor in the data movement strategy.
+is added to the access plan. If k chunks for the block have not         As discussed in Section II, erasure coded storage systems
+been added to the access plan, after all previously accessed         must choose parameters k and r. By default, we use a k =
+2, r = 2 encoding scheme. Choosing a value of k poses a             B. Benchmarks
+trade-off: larger values of k reduce the storage overhead, but         We use two benchmarks that store and retrieve objects
+must access more sites in parallel and therefore incur higher       of various sizes to evaluate our data access strategies and
+access costs. Hence, k = 2 is a popular option for applications     techniques. The first benchmark is the popular YCSB-E
+aiming to reduce access costs [38].                                 workload [7] that retrieves ranges of keys together as in a
+                                                                    messaging system. Items within the same range are correlated
+C. Repair Service                                                   and accessed together, representing a chain of messages within
+   To ensure availability in the presence of node failures, EC-     a conversation [7]. The second benchmark is a trace of pages
+Store reconstructs chunks on sites that have failed. The repair     of Wikipedia image accesses [47]. All images on a page
+service polls each site’s storage service and marks the site        are retrieved when a page is loaded, resulting in correlations
+unavailable for access if it does not respond. The repair service   between images that appear on the same page. The likelihood
+waits 15 minutes, as in GFS [12], before reconstructing chunks      of retrieving a page of images is derived from the trace and
+using our data movement strategy to select chunk destinations.      follows a Zipf distribution [47]. Both the number of images
+                                                                    on a page and image sizes follow a power law distribution.
+             VI. E XPERIMENTAL E VALUATION                          The median page consisted of about 10 images, and the
+  In this section, we present an experimental evaluation of         median image was approximately 500 KB in size. Images on
+our EC-Store system. We first describe the experimental setup       Wikipedia are treated as static resources, making them good
+and then present system performance results.                        candidates for storing within a block storage system.
+                                                                       Both benchmarks employ a configurable number of concur-
+A. Experimental Setup                                               rent clients that submit requests independently with zero think
+   The objective of our experiments is to evaluate how our          time between requests. Unless otherwise stated, our default
+data placement and access strategies improve performance,           number of clients was 100. Our experimental methodology is
+and to verify that our system operates with low overhead. We        as follows. For the YCSB-E benchmark workload, the system
+compare our techniques against replication (R) and traditional      is first loaded with 1 million blocks of fixed size. A warm
+erasure coding (EC), which use the strategies of random data        up scan workload is run for 20 minutes, accessing keys with
+placement and access [38]. Although strategies exist for re-        a uniform distribution. A second scan workload is then run
+ducing replication response times as discussed in Section VII,      for 20 minutes over which we collect performance measure-
+we use a randomized strategy because it offers a baseline           ments, this time accessing keys using a power law distribution
+comparable to erasure coding, and it is common in many              (with default exponent 1) to effect workload change. For our
+systems [10,24]. We compare these baselines against our two         Wikipedia experiments, each trace requests a set of blocks
+configurations of data access: (i) erasure coding with our cost     corresponding to the images found on a specific page over a
+model (EC+C), and (ii) erasure coding with our cost model           measurement interval of 20 minutes after a warm-up run of
+and chunk movement (EC+C+M). This setup allows us to                the same type and duration as in the YCSB experiments.
+differentiate the performance contribution of the cost model
+for data access from that of data movement. To investigate the      C. Experimental Results
+effects of additional requests, we also evaluate erasure coding        In this section, we present and discuss results for our
+with late binding (EC+LB) and our data movement and access          experiments with the YCSB and Wikipedia workloads. All
+strategy with late binding (EC+C+M+LB). All configurations          results presented are the average of five runs with bars around
+are implemented into EC-Store.                                      the mean representing 95% confidence intervals.
+   Our experimental testbed consists of 36 identical machines,
+of which 32 machines are used to co-locate the I/O intensive        1) Response Time
+storage service with the compute intensive EC-Store client             We study data access performance using a YCSB-E work-
+service. The remaining four machines are allocated, one each,       load and show the average response time, over time in
+to the metadata service, the chunk placement service, the           Figure 4a, for each of the configurations. In this figure,
+statistics service, and for running the benchmark workload.         response time for our data access strategy (EC+C) and our
+All machines are within the same local area network, in-            access and movement strategy (EC+C+M) start similarly before
+terconnected by a 10 Gb Ethernet link. Each machine runs            EC+C+M decreases over the first 8 minutes. The movement
+Ubuntu 16.04, and has 12 physical cores (two Intel E5-2620v2        strategy quickly learns the workload pattern and moves data to
+processors), 32 GB of memory, and 1 TB of local disk storage        balance load and co-locate co-accessed data items that together
+(Seagate Constellation ES.3 6 Gb/s SATA hard drives).               improve response times. Recall that the workload change
+   To tolerate two faults, we use a RS(2,2) block encoding          results from inducing skew in data item access. Therefore, our
+scheme for erasure coding, and keep 3 copies of all blocks for      movement strategy reduces response times is a consequence of
+replication. Under these configurations replication stores three    dissipating the effects of skew. By the end of the experiment,
+times, and erasure coding two times, the amount of original         we observe that our data access and movement strategies
+data. Therefore, replication stores 50% more data than erasure      achieve a 40% improvement in latency over baseline erasure
+coding while providing the same level of fault tolerance.           coding. Furthermore, we reduce latencies by 20% compared
+                                                                    40                                            400
+
+
+
+
+response time (ms)
+                      40                                                             35
+
+
+
+
+                                                                                                                                                                 Read I/O (MB / s)
+                                                                                                                                                                                     25
+                                                                                                   30
+                      35                                            30                        28                  300                                                                20
+                                                                               23
+                                                                                                        20
+                      30                                            20               32                      18   200                                                                15
+                                                                                              24   27
+                                                                               21
+                      25                                                                                17
+                                                                    10
+                                                                                                             15   100                                                                10
+                      20                                                                                            0                                                                 5
+                           0         5 10 15                 20          0     R     EC EC+ EC+ EC+ EC+              80         85 90 95                  100                               1         8    16 24           32
+                                                                                        LB C C+M C+M
+                                      time (min)                                                    +LB                           Percentile                                                          Site number
+                     (a) Response time over time                         (b) YCSB (100 KB Blocks)                  (c) Tail Lat. (YCSB 100 KB)                            (d) Read I/O (YCSB 100 KB)
+                      250            219                                                                                       190
+                                                                                                                  200                                            1,000
+
+
+
+
+response time (ms)
+                                                                    40
+                      200                                                                                                                   159                    900
+                                                                                                                                      148
+                               151         143 145                  35                                            150 139                         126              800
+                      150                              119                                                                                               109
+                                                                                                                                                                   700
+                                     207                            30                                            100 134 173 131 142
+                      100 147                                 87                                                                                                   600
+                                           133 134                                                                                                109
+                                                       108          25                                                                                   94        500
+                       50                                     77                                                   50                                              400
+                                                                    20                                                                                             300
+                        0                                                                                           0
+                               R     EC EC+ EC+ EC+ EC+                          1          2                             R     EC EC+ EC+ EC+ EC+                    90 92 94 96 98 100
+                                        LB C C+M C+M                                                                                LB C C+M C+M
+                                                    +LB                      Num. Unavailable Sites                                            +LB                         Percentile
+                      (e) YCSB (1 MB Blocks)                        (f) Response time with failures                           (g) Wikipedia                                          (h) Tail Lat. (Wikipedia)
+             Metadata access         Access planning   Chunk retrieval       Block decoding             R    EC   EC+C        EC+C+M        EC+LB         EC+C+M+LB                             R    EC    EC+C   EC+C+M
+
+Fig. 4: Experimental results for YCSB-E and Wikipedia experiments. Data access and movement strategies significantly improve
+performance over standard techniques, by reducing the time taken to retrieve chunks.
+
+
+                                                                                                                              Tech-                           EC                     EC             EC      EC+C
+to replication while using only two-thirds of the storage space                                                               nique
+                                                                                                                                       R          EC
+                                                                                                                                                              +LB                    +C             +C+M    +M+LB
+that replication uses. Our data access strategy (EC+C) alone                                                                  λ        45.4       43.0        22.8                   31.1           24.5    19.8
+reduces response time by 15% compared to erasure coding,                                                          TABLE II: λ values for experimental techniques in YCSB 100
+demonstrating the benefit of our cost model.                                                                      KB block experiment. Lower λ values indicate lower levels of
+   Figure 4b shows a breakdown of average response time                                                           load imbalance.
+from the YCSB experiment into four categories: accessing
+metadata, determining an access strategy, retrieving chunks,                                                      difference between replication and erasure coding is the time
+and decoding the chunks into a block. As noted in Section I,                                                      taken to decode blocks. At the tail, overall response times
+the most dominant factor in the response time is retrieval of                                                     increase because chunk retrieval time increases but the other
+chunks from the storage services and not the overhead from                                                        components of response time remain constant. More con-
+block decoding. Metadata access and generation of strategy                                                        cretely tail retrieval times are where the effects of straggling
+for data access also make up a small portion of the remaining                                                     chunks are observed, presenting as a sharp increase in latency.
+response time. The figure demonstrates that the improvements                                                      Therefore, by examining tail latencies, we can see the effect
+come from reducing data retrieval time resulting from the                                                         that different techniques have on reducing stragglers.
+utilization of our techniques.                                                                                       As Figure 4c shows, intelligently selecting chunk accesses
+                                                                                                                  (EC+C) reduces the percentage of requests that experience
+   The figure also includes late binding (δ = 1), a common ap-
+                                                                                                                  the straggler effect compared to baseline erasure coding (EC).
+proach for improving erasure-coded storage data retrieval per-
+                                                                                                                  Data movement in addition to data access strategies (EC+C+M)
+formance. EC+C+M’s proactive data movement and minimiza-
+                                                                                                                  mitigate the effects of stragglers further. Data movement is
+tion of access costs reduces the time taken to retrieve data by
+                                                                                                                  effective because it reduces the number of sites needed for
+30% when compared to late binding (EC+LB). Our technique
+                                                                                                                  access, and helps balance load. Although late binding (EC+LB)
+places little extra load on the storage system (Section VI-C5),
+                                                                                                                  also reduces the effects of stragglers, EC+C+M has a lower
+but late binding increases load by making additional chunk
+                                                                                                                  99th percentile latency than EC+LB because the extra requests
+requests (Section VI-C2). Because our techniques and late
+                                                                                                                  made by late binding place additional load on the storage sites.
+binding are complimentary, they can be combined as described
+                                                                                                                  We further examine the effects of load in the next section.
+in Section IV-B1. This tandem approach (EC+C+M+LB) re-
+duces the retrieval latency of late binding (EC+LB) by 40%.                                                       2) Effect on Load
+   In Figure 4c, we plot a cumulative distribution function                                                         Figure 4d shows the average amount of data that is read
+(CDF) of the tail response times from the YCSB experiment.                                                        per second from each site during the experiment. While a
+We observed that in the lower percentiles, the performance                                                        decrease in latency increases throughput, it causes more data to
+                                                                              Resource Usage    Statistics   Chunk Read Optimizer   Chunk Mover
+be read, which does not always improve performance. For late                  Memory            2.8 GB       10.5 MB                80 MB
+binding (EC+LB), the additional requests result in more data                  CPU               <0.5%        0.5%                   15%
+being read than with our data access and movement techniques                  Network           20 KB/s      <1 KB/s                500 KB/s
+(EC+C+M) while EC+C+M has lower data retrieval times. Late                         TABLE III: Physical resources used by EC-Store.
+binding’s increase in the amount of data read is the result of
+making δ extra chunk requests when retrieving a block, not                   detected, requests are routed to only the available nodes. In
+from performing more block reads than EC+C+M.                                Figure 4f, we present the average response times for requests
+   Our techniques help reduce the load imbalance experienced                 after 1 or 2 nodes have failed. Compared to when there are
+in erasure-coded systems. To demonstrate this effect, we define              no failures (Figures 4a and 4b), the average response time
+I/O load to be the amount of data read per site, and compare                 increases by about 1 ms and 5 ms for all systems when
+the I/O load imbalance factor λ for each configuration in                    there are 1 and 2 node failures, respectively. Unlike the 1
+Table II.5 As shown, our data access strategy (EC+C) reduces                 node failure, when 2 nodes fail some blocks will have chunks
+load imbalance compared to both baseline erasure coding and                  located on both of the failed nodes, causing our data access
+replication. This improvement is due to our cost model that                  strategy (EC+C) to formulate a data access plan in which the
+considers site load through the oj parameter. Intuitively, our               remaining available 2 chunks must be retrieved. However, as
+cost model creates a feedback loop: lightly loaded sites are                 our strategy considers the cost of accessing a site, the access
+preferred for access over heavily loaded sites, so load shifts               plans for the remaining blocks can adapt as site load increases.
+from heavily loaded sites to lightly loaded sites to reach a                 As our data movement strategy (EC+C+M) moves chunks to
+steady state of balanced load. Actively moving data (EC+C+M)                 help balance overall system load, the relative performance
+and considering load when doing so further improves load                     improvements persist when failures occur.
+balance. Late binding can improve load balance [38], and our                 5) Resource Consumption
+techniques provide similar levels of balance. However, late                     Table III summarizes the physical resources used by the
+binding makes extra requests that increase system load while                 chunk placement service (chunk read optimizer and chunk
+our techniques place minimal additional load on the system                   mover) and the statistics service during a YCSB experiment
+(Section VI-C5), achieving load balance through load-aware                   with 1 million 1-megabyte blocks. The chunk placement
+data movement and access strategies.                                         service uses resources to generate background access plans,
+                                                                             manage the plan cache, and to create and cost movement plans.
+3) Block Size
+   We also experimented with varying block sizes, both smaller               For these components, the resource usage scales with the num-
+(10 KB) and larger (1 MB), and have observed similar                         ber of blocks accessed in a request, which is generally small,
+trends in performance as previously described. We show the                   (e.g. 10 [21,31,39]) and the number of blocks considered for
+breakdown of response times for our experiment with 1 MB                     movement, which our movement heuristics limit.
+blocks in Figure 4e. In this experiment, we found that EC+C+M                   The statistics service uses memory exclusively to track
+techniques reduced data retrieval latency by a greater margin                access patterns. As more blocks are stored, the relative amount
+(nearly 50% over EC, 27% over R, and 21% over EC+LB)                         of space needed for the statistics service decreases because
+than with the smaller block size of 100 KB. The reduction is                 there is a long tail of blocks that are infrequently accessed, that
+greater because large blocks are more expensive to retrieve and              therefore require little space for tracking access correlations.
+therefore magnify the effects of load imbalance, and stragglers,             However, if there is a uniform distribution of block accesses
+that our techniques mitigate. The time taken to generate an                  then the space required for tracking access correlations can
+access strategy for our techniques (EC+C and EC+C+M) is the                  increase substantially. Overall, to provide dynamic data access
+same as for replication and erasure coding irrespective of block             and movement strategies, EC-Store used only an additional
+size. This indicates that our mechanisms for fast access plan                0.3% of the space needed to store data.
+generation using the plan cache, which had a 90% hit rate, and                  The network overhead of our techniques is also minimal.
+a greedy solution on cache miss, are effective in minimizing                 We limit the chunk mover to moving less than one chunk
+the latency overhead of the ILP solver. These results confirm                per second, so the data transfer necessary for dynamic data
+that our techniques are effective over a range of block sizes.               movement is less than 1 additional block request every second.
+                                                                             Consequently, EC-Store incurs a network overhead of less than
+4) Fault Tolerance                                                           0.1% compared to the total data transferred during the bench-
+   To show that our techniques are robust in the presence of                 mark. Comparatively, late binding adds an additional chunk
+failures, we performed our 100 KB YCSB experiments when                      request to every data item access (50% more chunk requests
+some nodes were unavailable. To do so, we purposefully failed                in our experiments). These results show our techniques use
+the storage service on n nodes chosen at random, but did                     meager resources to achieve large performance gains.
+not trigger reconstruction of unavailable data. Consequently,
+requests to unavailable nodes fail and when the failure is                   6) Wikipedia Results
+                                                                               We performed experiments using the Wikipedia image ac-
+         L     −L
+   5 λ = ( max   avg∗
+             Lavg∗
+                      ) ∗ 100, where the load on the maximally loaded site   cesses as described in Section VI-B, and show average re-
+is denoted by Lmax and the average load by Lavg∗ [38].                       sponse times in Figure 4g. The figure shows that our dynamic
+data movement and access strategies (EC+C+M) significantly          single storage site, which does not hold for encoded data. EC-
+reduce the time taken to retrieve data: over erasure coding (EC)    Store builds upon the ideas of these systems by tracking access
+by 40%, replication (R) by 20%, and late binding (EC+LB)            history, co-locating data, and dynamically moving data. EC-
+by 17%. Our techniques achieve these improvements without           Store offers erasure-coded storage systems a holistic approach
+making extra requests that late binding generates, storing 50%      for data access, placement, and movement by incorporating
+less data than replication, and using little additional resources   system load, block access patterns, and access frequency into
+(Table III). The results show that our intelligent data access      its strategies. In contrast, WPS [50] makes data placement
+strategy (EC+C) provides about half of the overall reduction        decisions using only chunk access frequency statistics, and
+in latency. As with the YCSB experiments, when late binding         does not specify strategies for data access.
+is combined with our approach (EC+C+M+LB), data retrieval              The Triones [45] tool proposes to place encoded chunks
+times are reduced by an additional 15%.                             across data centers to provide availability in the presence of
+   Figure 4h shows a tail latency (CDF) graph for the               entire data center failures. Triones considers the monetary cost
+Wikipedia experiments. Unlike the YCSB experiment (Fig-             of data access and storage as the primary objective for static
+ure 4c), the Wikipedia graph is smoother in appearance and          data placement while EC-Store dynamically optimizes for data
+lacks the sharp increase in latency that occurs from stragglers.    access latencies within storage nodes in a data center.
+This difference is due to the distribution in block sizes              There has been work that focuses on repair performance by
+that appear in the Wikipedia workload but not the YCSB              clustering anti-correlated blocks [18,58]. In these approaches,
+workload. As Section VI-C3 noted, the time taken to retrieve        an original copy of data is kept at one site and erasure-
+data increases as block size increases. Therefore, a straggling     coded chunks at other sites for fault tolerance. These encoded
+request for small chunks can have the same retrieval latency        chunks are accessed for repair only if the original data copy is
+as a straggler-free request for large chunks. This property         unavailable, unlike in EC-Store where encoded data is always
+makes the effects of stragglers less prominent in a single CDF.     accessed. These systems offer access strategies but do not
+We observe that EC+C+M and EC+C+M+LB have the lowest                perform dynamic data movement like EC-Store.
+latencies for the entire distribution of requests, and it is only      Encoding-aware replication [27] supports both encoded and
+at the extreme tail that late binding (EC+LB) has comparable        replicated data to decrease chunk access times. Other sys-
+latency to EC+C+M. These improvements are possible due to           tems [3,13,16] improve response times by caching chunks or
+our techniques providing a size-aware access and movement           complete copies of data. These approaches increase storage
+strategy to ensure that load remains balanced in the presence       overheads and do not lower response times more than replica-
+of varying I/O costs for different requests.                        tion, unless the copies are stored on faster storage media. EC-
+                                                                    Store outperforms replication without increasing the storage
+                      VII. R ELATED W ORK                           overhead of erasure coding. Other work [25,54] focuses on
+   Erasure-coded storage is popularly used by industrial com-       choosing erasure coding parameters that minimize response
+panies that have designed large-scale (distributed) storage         times for hot data items at the cost of increased storage
+systems [11,15,30,32]. Some systems [43,56,57] have used            overheads by decreasing or increasing k. As described in
+erasure coding to build highly available key-value stores. EC-      Section V-B3, EC-Store targets performance improvements of
+Store’s distributed architecture is motivated by these systems,     erasure coded storage regardless of choices for k and r.
+but differs in its dynamic data access and placement strategies.
+   To avoid the straggling chunks problem, several systems use                            VIII. C ONCLUSION
+                                                                       We presented EC-Store, a distributed erasure-coded stor-
+a late binding strategy [19,38,49]. Our work demonstrates that
+                                                                    age system that is designed for dynamic data access and
+dynamic data movement as well as dynamic access strategies,
+                                                                    movement. Our optimization-driven approach allows for data
+in addition to being complementary to late binding, can
+                                                                    accesses that minimize response times. By considering access
+provide performance gains over late binding.
+                                                                    patterns, EC-Store improves the distribution of load within
+   To reduce the overhead of encoding, researchers have de-
+                                                                    the system and supports efficient retrieval by co-locating
+signed new erasure codes [19,22,36,37,42,48] or exploited
+                                                                    frequently accessed data items. EC-Store reduces the average
+their algebraic properties [29]. These approaches do not ad-
+                                                                    time to retrieve data by nearly 50% when compared to standard
+dress strategies for placement and access of encoded data.
+                                                                    erasure coding techniques, and 30% compared to replication.
+Theoretical work has examined bounds on latency in erasure-
+                                                                    EC-Store improves the state-of-the-art in storage systems
+coded storage systems [2,6,41,55]. Instead of a single static
+                                                                    by incorporating the best of both erasure-coded storage and
+placement policy, our work contributes algorithms for dynamic
+                                                                    replication to provide fault tolerance, low latency data access
+data movement and placement including a practical system
+                                                                    and low overhead storage.
+using these strategies. This design allows EC-Store to adapt
+to changing workloads and access patterns.                                            ACKNOWLEDGMENTS
+   Data access and placement strategies have been proposed            Funding for this project was provided by the Natural
+for replicated data [8,17,20,33,35,39,46] but they cannot be        Sciences and Engineering Research Council of Canada, the
+used for erasure coded systems as they rely on the assumption       University of Waterloo, Canada Foundation for Innovation,
+that a complete copy of every data item is accessible at a          Ontario Research Fund, and the province of Ontario.
+                               R EFERENCES                                            [21] H UANG , Q., B IRMAN , K., VAN R ENESSE , R., L LOYD , W., K UMAR , S.,
+ [1] ACHTERBERG , T. Scip: solving constraint integer programs. Mathe-                     AND L I , H. C. An analysis of facebook photo caching. In Proceedings
+     matical Programming Computation 1, 1 (2009), 1–41.                                    of the Twenty-Fourth ACM Symposium on Operating Systems Principles
+                                                                                           (2013), ACM, pp. 167–181.
+ [2] AGGARWAL , V., A L -A BBASI , A. O., FAN , J., AND L AN , T. Taming tail
+     latency for erasure-coded, distributed storage systems. arXiv preprint           [22] K HAN , O., B URNS , R., P LANK , J., P IERCE , W., AND H UANG , C.
+     arXiv:1703.08337 (2017).                                                              Rethinking erasure codes for cloud file systems: minimizing i/o for
+                                                                                           recovery and degraded reads. In Proceedings of the 10th USENIX con-
+ [3] AGGARWAL , V., C HEN , Y.-F. R., L AN , T., AND X IANG , Y. Sprout:                   ference on File and Storage Technologies (2012), USENIX Association,
+     A functional caching approach to minimize service latency in erasure-                 pp. 20–20.
+     coded storage. In Distributed Computing Systems (ICDCS), 2016 IEEE
+     36th International Conference on (2016), IEEE, pp. 753–754.                      [23] K UBIATOWICZ , J., B INDEL , D., C HEN , Y., C ZERWINSKI , S., E ATON ,
+                                                                                           P., G EELS , D., G UMMADI , R., R HEA , S., W EATHERSPOON , H.,
+ [4] B ORTHAKUR , D. Hdfs architecture guide, 2008.                                        W EIMER , W., ET AL . Oceanstore: An architecture for global-scale
+ [5] B RASILEIRO , F. V., E ZHILCHELVAN , P. D., S HRIVASTAVA , S. K.,                     persistent storage. ACM Sigplan Notices 35, 11 (2000), 190–201.
+     S PEIRS , N. A., AND TAO , S. Implementing fail-silent nodes for                 [24] L AKSHMAN , A., AND M ALIK , P. Cassandra: a decentralized structured
+     distributed systems. IEEE Transactions on Computers 45, 11 (1996),                    storage system. ACM SIGOPS Operating Systems Review 44, 2 (2010),
+     1226–1238.                                                                            35–40.
+ [6] C HEN , S., S UN , Y., KOZAT, U. C., H UANG , L., S INHA , P., L IANG , G.,      [25] L I , J., AND L I , B. Zebra: Demand-aware erasure coding for distributed
+     L IU , X., AND S HROFF , N. B. When queueing meets coding: Optimal-                   storage systems. In 2016 IEEE/ACM 24th International Symposium on
+     latency data retrieving scheme in storage clouds. In INFOCOM, 2014                    Quality of Service (IWQoS) (June 2016), pp. 1–10.
+     Proceedings IEEE (2014), IEEE, pp. 1042–1050.
+                                                                                      [26] L I , J., S HARMA , N. K., P ORTS , D. R., AND G RIBBLE , S. D. Tales
+ [7] C OOPER , B. F., S ILBERSTEIN , A., TAM , E., R AMAKRISHNAN , R.,                     of the tail: Hardware, os, and application-level sources of tail latency.
+     AND S EARS , R. Benchmarking cloud serving systems with ycsb. In
+                                                                                           In Proceedings of the ACM Symposium on Cloud Computing (2014),
+     Proceedings of the 1st ACM symposium on Cloud computing (2010),                       ACM, pp. 1–14.
+     ACM, pp. 143–154.
+                                                                                      [27] L I , R., H U , Y., AND L EE , P. P. Enabling efficient and reliable transition
+ [8] C URINO , C., J ONES , E., Z HANG , Y., AND M ADDEN , S. Schism:                      from replication to erasure coding for clustered file systems. In
+     a workload-driven approach to database replication and partitioning.                  2015 45th Annual IEEE/IFIP International Conference on Dependable
+     Proceedings of the VLDB Endowment 3, 1-2 (2010), 48–57.                               Systems and Networks (2015), IEEE, pp. 148–159.
+ [9] D EAN , J., AND BARROSO , L. A. The tail at scale. Communications of             [28] L I , Z., C HEN , Z., S RINIVASAN , S. M., AND Z HOU , Y. C-miner:
+     the ACM 56, 2 (2013), 74–80.                                                          mining block correlations in storage systems. In Proceedings of the 3rd
+[10] D E C ANDIA , G., H ASTORUN , D., JAMPANI , M., K AKULAPATI , G.,                     USENIX conference on File and storage technologies (2004), USENIX
+     L AKSHMAN , A., P ILCHIN , A., S IVASUBRAMANIAN , S., VOSSHALL ,                      Association, pp. 13–13.
+     P., AND VOGELS , W. Dynamo: amazon’s highly available key-value                  [29] M ITRA , S., PANTA , R., R A , M.-R., AND BAGCHI , S. Partial-parallel-
+     store. In ACM SIGOPS operating systems review (2007), vol. 41, ACM,                   repair (ppr): a distributed technique for repairing erasure coded storage.
+     pp. 205–220.                                                                          In Proceedings of the Eleventh European Conference on Computer
+[11] F IKES , A.        Storage architecture and challenges.         http://static.        Systems (2016), p. 30.
+     googleusercontent.com/external content/untrusted dlcp/research.                  [30] M URALIDHAR , S., L LOYD , W., ROY, S., H ILL , C., L IN , E., L IU ,
+     google.reverse-proxy.org/en/us/university/relations/facultysummit2010/                W., PAN , S., S HANKAR , S., S IVAKUMAR , V., TANG , L., ET AL . f4:
+     storage architecture and challenges.pdf, 2010. Accessed: 2010-07-29.                  Facebook’s warm blob storage system. In 11th USENIX Symposium
+[12] F ORD , D., L ABELLE , F., P OPOVICI , F. I., S TOKELY, M., T RUONG ,                 on Operating Systems Design and Implementation (OSDI 14) (2014),
+     V.-A., BARROSO , L., G RIMES , C., AND Q UINLAN , S. Availability in                  pp. 383–398.
+     globally distributed storage systems. In OSDI (2010), vol. 10, pp. 1–7.          [31] N ISHTALA , R., F UGAL , H., G RIMM , S., K WIATKOWSKI , M., L EE , H.,
+[13] F RIEDMAN , R., K ANTOR , Y., AND K ANTOR , A. Replicated erasure                     L I , H. C., M C E LROY, R., PALECZNY, M., P EEK , D., S AAB , P., ET AL .
+     codes for storage and repair-traffic efficiency. In Peer-to-Peer Computing            Scaling memcache at facebook. In NSDI (2013).
+     (P2P), 14-th IEEE International Conference on (2014), IEEE, pp. 1–10.            [32] OVSIANNIKOV, M., RUS , S., R EEVES , D., S UTTER , P., R AO , S., AND
+[14] G HEMAWAT, S., G OBIOFF , H., AND L EUNG , S.-T. The google file                      K ELLY, J. The quantcast file system. Proceedings of the VLDB
+     system. In ACM SIGOPS operating systems review (2003), vol. 37,                       Endowment 6, 11 (2013), 1092–1101.
+     ACM, pp. 29–43.                                                                  [33] PAIVA , J., RUIVO , P., ROMANO , P., AND RODRIGUES , L. Auto placer:
+[15] H AEBERLEN , A., M ISLOVE , A., AND D RUSCHEL , P. Glacier: Highly                    Scalable self-tuning data placement in distributed key-value stores. ACM
+     durable, decentralized storage despite massive correlated failures. In                Transactions on Autonomous and Adaptive Systems (TAAS) 9, 4 (2015),
+     Proceedings of the 2nd conference on Symposium on Networked Sys-                      19.
+     tems Design & Implementation-Volume 2 (2005), USENIX Association,                [34] P LANK , J. S., AND G REENAN , K. M. Jerasure: A library in c facilitating
+     pp. 143–158.                                                                          erasure coding for storage applications–version 2.0. Tech. rep., Technical
+[16] H ALALAI , R., F ELBER , P., K ERMARREC , A.-M., AND TA ÏANI , F.                    Report UT-EECS-14-721, University of Tennessee, 2014.
+     Agar: A caching system for erasure-coded data. In Distributed Com-               [35] Q UAMAR , A., K UMAR , K. A., AND D ESHPANDE , A. Sword: scalable
+     puting Systems (ICDCS), 2017 IEEE 37th International Conference on                    workload-aware data placement for transactional workloads. In Pro-
+     (2017), IEEE, pp. 23–33.                                                              ceedings of the 16th International Conference on Extending Database
+[17] H OSE , K., AND S CHENKEL , R. Warp: Workload-aware replication and                   Technology (2013), ACM, pp. 430–441.
+     partitioning for rdf. In Data Engineering Workshops (ICDEW), 2013                [36] R ASHMI , K., NAKKIRAN , P., WANG , J., S HAH , N. B., AND R AM -
+     IEEE 29th International Conference on (2013), IEEE, pp. 1–6.                          CHANDRAN , K. Having your cake and eating it too: Jointly optimal
+[18] H U , Y., AND N IU , D. Reducing access latency in erasure coded cloud                erasure codes for i/o, storage, and network-bandwidth. In 13th USENIX
+     storage with local block migration. In IEEE INFOCOM 2016 - The 35th                   Conference on File and Storage Technologies (FAST 15) (2015), pp. 81–
+     Annual IEEE International Conference on Computer Communications                       94.
+     (April 2016), pp. 1–9.                                                           [37] R ASHMI , K., S HAH , N. B., AND R AMCHANDRAN , K. A piggybacking
+[19] H UANG , C., S IMITCI , H., X U , Y., O GUS , A., C ALDER , B., G OPALAN ,            design framework for read-and download-efficient distributed storage
+     P., L I , J., AND Y EKHANIN , S. Erasure coding in windows azure storage.             codes. In Information Theory Proceedings (ISIT), 2013 IEEE Interna-
+     In Presented as part of the 2012 USENIX Annual Technical Conference                   tional Symposium on (2013), IEEE, pp. 331–335.
+     (USENIX ATC 12) (2012), pp. 15–26.                                               [38] R ASHMI , K. V., C HOWDHURY, M., KOSAIAN , J., S TOICA , I., AND
+[20] H UANG , J., AND A BADI , D. J. Leopard: lightweight edge-oriented                    R AMCHANDRAN , K. Ec-cache: Load-balanced, low-latency cluster
+     partitioning and replication for dynamic graphs. Proceedings of the                   caching with online erasure coding. In 12th USENIX Symposium on
+     VLDB Endowment 9, 7 (2016), 540–551.                                                  Operating Systems Design and Implementation (OSDI 16) (Savannah,
+                                                                                           GA, Nov. 2016), USENIX Association, pp. 401–417.
+[39] R EDA , W., C ANINI , M., S URESH , L., KOSTI Ć , D., AND B RAITH -        [49] V ENKATARAMAN , S., PANDA , A., A NANTHANARAYANAN , G.,
+     WAITE , S. Rein: Taming Tail Latency in Key-Value Stores via Multiget            F RANKLIN , M. J., AND S TOICA , I. The power of choice in data-aware
+     Scheduling. In Proceedings of the 7th ACM european conference on                 cluster scheduling. In Proceedings of the 11th USENIX conference
+     Computer Systems (EuroSys’17) (Apr 2017).                                        on Operating Systems Design and Implementation (2014), USENIX
+[40] R EED , I. S., AND S OLOMON , G. Polynomial codes over certain finite            Association, pp. 301–316.
+     fields. Journal of the society for industrial and applied mathematics 8,    [50] WANG , S., H UANG , J., Q IN , X., C AO , Q., AND X IE , C. Wps: A
+     2 (1960), 300–304.                                                               workload-aware placement scheme for erasure-coded in-memory stores.
+[41] S HAH , N. B., L EE , K., AND R AMCHANDRAN , K. The mds queue:                   In Networking, Architecture, and Storage (NAS), 2017 International
+     Analysing the latency performance of erasure codes. In Information               Conference on (2017), IEEE, pp. 1–10.
+     Theory (ISIT), 2014 IEEE International Symposium on (2014), IEEE,           [51] W EATHERSPOON , H., AND K UBIATOWICZ , J. D. Erasure coding vs.
+     pp. 861–865.                                                                     replication: A quantitative comparison. In International Workshop on
+[42] S HAH , N. B., R ASHMI , K., K UMAR , P. V., AND R AMCHANDRAN , K.               Peer-to-Peer Systems (2002), Springer, pp. 328–337.
+     Distributed storage codes with repair-by-transfer and nonachievability      [52] W EIL , S. A., B RANDT, S. A., M ILLER , E. L., L ONG , D. D., AND
+     of interior points on the storage-bandwidth tradeoff. IEEE Transactions          M ALTZAHN , C. Ceph: A scalable, high-performance distributed file
+     on Information Theory 58, 3 (2012), 1837–1852.                                   system. In Proceedings of the 7th symposium on Operating systems
+[43] S HANKAR , D., L U , X., AND PANDA , D. K. High-performance and                  design and implementation (2006), USENIX Association, pp. 307–320.
+     resilient key-value store with online erasure coding for big data work-     [53] W U , Z., Y U , C., AND M ADHYASTHA , H. V. Costlo: Cost-effective
+     loads. In Distributed Computing Systems (ICDCS), 2017 IEEE 37th                  redundancy for lower latency variance on cloud storage services. In 12th
+     International Conference on (2017), IEEE, pp. 527–537.                           USENIX Symposium on Networked Systems Design and Implementation
+[44] S LEE , M., AGARWAL , A., AND K WIATKOWSKI , M. Thrift: Scalable                 (NSDI 15) (Oakland, CA, 2015), USENIX Association, pp. 543–557.
+     cross-language services implementation. White Paper: https://thrift.        [54] X IA , M., S AXENA , M., B LAUM , M., AND P EASE , D. A tale of two
+     apache.org/static/files/thrift-20070401.pdf, 2007.                               erasure codes in hdfs. In FAST (2015), pp. 213–226.
+[45] S U , M., Z HANG , L., W U , Y., C HEN , K., AND L I , K. Systematic data   [55] X IANG , Y., L AN , T., AGGARWAL , V., AND C HEN , Y.-F. Optimizing
+     placement optimization in multi-cloud storage for complex requirements.          differentiated latency in multi-tenant, erasure-coded storage. IEEE
+     IEEE Transactions on Computers 65, 6 (2016), 1964–1977.                          Transactions on Network and Service Management 14, 1 (2017), 204–
+[46] S URESH , P. L., C ANINI , M., S CHMID , S., AND F ELDMANN , A. C3:              216.
+     Cutting tail latency in cloud data stores via adaptive replica selection.
+                                                                                 [56] Y IU , M. M., C HAN , H. H., AND L EE , P. P. Erasure coding for small
+     In NSDI (2015), pp. 513–527.
+                                                                                      objects in in-memory kv storage. In Proceedings of the 10th ACM
+[47] U RDANETA , G., P IERRE , G., AND VAN S TEEN , M. Wikipedia work-                International Systems and Storage Conference (2017), ACM, p. 14.
+     load analysis. Vrije Universiteit, Amsterdam, The Netherlands, Tech.
+                                                                                 [57] Z HANG , H., D ONG , M., AND C HEN , H. Efficient and available in-
+     Rep. IR-CS-041, Sepember (2007).
+                                                                                      memory kv-store with hybrid erasure coding and replication. In 14th
+[48] VAJHA , M., R AMKUMAR , V., P URANIK , B., K INI , G., L OBO , E.,               USENIX Conference on File and Storage Technologies (FAST 16) (2016),
+     S ASIDHARAN , B., K UMAR , P. V., BARG , A., Y E , M., NARAYANA -                pp. 167–180.
+     MURTHY, S., H USSAIN , S., AND NANDI , S. Clay codes: Moulding
+                                                                                 [58] Z HU , Y., L IN , J., L EE , P. P., AND X U , Y. Boosting degraded reads
+     MDS codes to yield an MSR code. In 16th USENIX Conference on File                in heterogeneous erasure-coded storage systems. IEEE Transactions on
+     and Storage Technologies (FAST 18) (Oakland, CA, 2018), USENIX                   Computers 64, 8 (2015), 2145–2157.
+     Association, pp. 139–154.
+

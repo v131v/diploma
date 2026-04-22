@@ -1,0 +1,1225 @@
+4392                                                                             IEEE TRANSACTIONS ON INFORMATION THEORY, VOL. 68, NO. 7, JULY 2022
+
+
+
+
+   Convertible Codes: Enabling Efficient Conversion
+        of Coded Data in Distributed Storage
+                    Francisco Maturana , Student Member, IEEE, and K. V. Rashmi , Member, IEEE
+
+
+
+   Abstract— Erasure codes are essential for providing efficient
+resilience against node failures in distributed storage. Typically,
+an [n, k] erasure code encodes k symbols into n symbols
+which are then stored in different nodes. Recent work by
+Kadekodi et al. shows that the failure rates of storage nodes
+vary significantly over time, and that changing the rate of the
+code (via a change in n and k) in response to such variations
+provides substantial storage space savings. However, the resource
+overhead of re-encoding the already encoded data is prohibitively                Fig. 1. (From [10]) The left y-axis shows the percentage of disk IO utilized
+                                                                                 by conversion (called “transition” in [10]) against time simulated from a trace
+high. We present a new theoretical framework formalizing code                    of a production Google cluster. The right y-axis shows the size of the cluster
+conversion—the process of converting data encoded with an                        in number of disks against time. Code conversions can result in big spikes in
+[nI , kI ] code into data encoded with an [nF , kF ] code while                  disk IO consumption that can overwhelm the cluster for several days.
+maintaining desired decodability properties. We then introduce
+convertible codes, a new class of codes that allow for code
+conversions in a resource-efficient manner. This paper begins                       A key factor that determines the choice of parameters n and
+the study on convertible codes by focusing on linear MDS codes
+and the access cost of conversion. We derive a lower bound on                    k is the failure rate of the storage devices. It has been shown
+the access cost of conversion and present an explicit optimal                    that failure rates of storage devices in large-scale storage
+construction matching this bound for an important subclass of                    systems can vary significantly over time and that changing
+conversions. Additionally, we propose constructions with low                     the code rate, by changing n and k, in response to these
+field-size requirement for a broad subset of parameters. Our                     variations yields substantial savings in storage space and hence
+results show that it is possible to achieve code conversions
+with significantly less resources than the default approach of                   the operating costs [9]. For example, in [9], the authors show
+re-encoding for a wide range of parameters.                                      that 11% to 44% reduction in storage space can be achieved
+                                                                                 by tailoring n and k to changes in observed device failure
+   Index Terms— Convertible codes, storage codes, coding theory,
+distributed storage systems, re-encoding.                                        rates. Such a reduction in storage space requirement translates
+                                                                                 to significant savings in the cost of resources and energy con-
+                     I. I NTRODUCTION                                            sumed in large-scale storage systems. It is natural to think of
+                                                                                 potentially achieving such a change in code rate by changing
+E    RASURE codes have become an essential tool for pro-
+     tecting against node failures in distributed storage sys-
+tems [2]–[8]. Under erasure coding, a set of k data symbols
+                                                                                 only n while keeping k fixed. However, due to several practical
+                                                                                 system constraints, changing code rate in storage systems
+to be stored is encoded using an [n, k] code to generate n                       often necessitates change in both the parameters n and k [9].
+coded symbols, called a codeword (or stripe). Each of the                        We refer the reader to [9] for a more detailed discussion on the
+n symbols in a codeword is stored on a different storage                         practical benefits and constraints of adapting the erasure-code
+node, and the system as a whole typically contains several                       parameters to the variations in failure rates in storage systems.
+independent codewords distributed across different subsets of                       Changing n and k for codewords in a storage system,
+storage nodes in the cluster.                                                    from [nI , k I ], to [nF , k F ], would involve converting already
+                                                                                 encoded data from one code to another. Clearly, it is always
+  Manuscript received July 31, 2021; revised January 6, 2022; accepted           possible to re-encode the data in a codeword according to
+January 21, 2022. Date of publication March 2, 2022; date of current
+version June 15, 2022. This work was supported in part by NSF CAREER             a new code by accessing (and decoding if necessary) all
+Award under Grant 19434090, in part by NSF CNS under Grant 1956271,              the original message symbols. However, such an approach,
+in part by the Google Faculty Research Award, and in part by the Facebook        which we call the default approach, requires accessing a large
+Distributed Systems Research Award. An earlier version of this paper was
+presented in part at the 11th Innovations in Theoretical Computer Science        number of symbols (for example, for MDS codes, the initial
+Conference (ITCS) [1] [DOI: 10.4230/LIPIcs.ITCS.2020.66]. (Corresponding         value of k number of symbols need to be accessed from
+author: Francisco Maturana.)                                                     each codeword), reading out all the data, transferring over the
+  The authors are with the Computer Science Department, Carnegie Mel-
+lon University, Pittsburgh, PA 15213 USA (e-mail: fmaturan@cs.cmu.edu;           network, and re-encoding. Such conversions can generate a
+rvinayak@cs.cmu.edu).                                                            large amount of load on cluster resources, which adversely
+  Communicated by A. Thangaraj, Associate Editor for Coding and Decoding.        affects the foreground operations of the cluster. Figure 1
+  Color versions of one or more figures in this article are available at
+https://doi.org/10.1109/TIT.2022.3155972.                                        shows the IO load that would be caused by code conversions
+  Digital Object Identifier 10.1109/TIT.2022.3155972                             on a Google cluster with multiple hundreds of thousands of
+                      0018-9448 © 2022 IEEE. Personal use is permitted, but republication/redistribution requires IEEE permission.
+                                    See https://www.ieee.org/publications/rights/index.html for more information.
+
+
+
+        Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+MATURANA AND RASHMI: CONVERTIBLE CODES: ENABLING EFFICIENT CONVERSION OF CODED DATA IN DISTRIBUTED STORAGE                                                 4393
+
+
+
+disks [10]. As seen from the figure, IO load from conversions
+can easily overwhelm the cluster for long periods of time.
+Furthermore, in some cases conversions might need to be
+performed in an expedited manner, for example, to avoid the
+risk of data loss when facing an unexpected rise in failure rate.
+   High IO load is problematic for such conversions because
+it slows down conversion as well as other important clus-
+ter processes, such as serving client requests. While recent
+work [10] has initiated a study on systems techniques to
+mitigate the spikes in the IO load caused by conversions, the
+total amount of work necessary for conversion still remains
+considerably high and these systems techniques introduce                            Fig. 2. Example of code conversion: two codewords of a [5, 3] MDS code are
+                                                                                    converted into one codeword of a [8, 6] MDS code. Unshaded boxes represent
+restrictions on other operations of the cluster such as data                        data symbols, and shaded boxes represent parity symbols. Some of the initial
+placement.                                                                          symbols are kept unchanged in the final codewords, as shown by the dashed
+   Given that the root cause of the problem is the high                             arrows. Some initial symbols are read and downloaded (solid arrows). The
+                                                                                    downloaded data is then used to compute and write the remaining symbols
+resource overhead involved in performing conversions on the                         in the final codewords.
+underlying code, in this paper, we investigate the problem from
+a fundamental theoretical perspective.
+   There are also several other reasons to perform code con-                        To address the problem of code conversion, we then introduce
+versions in storage systems. One may convert data that is                           a new class of codes, which we call convertible codes, that
+frequently read into a code with a small k (in order to improve                     allow for resource-efficient conversions. The general formu-
+the performance of reconstructions) and convert data that is                        lation of code conversions provides a powerful framework to
+infrequently read into a code with large k (to achieve lower                        theoretically study convertible codes.
+storage overhead). In addition, code conversions may need                               We now present an example to elucidate the concept of code
+to be performed to keep the total size of the encoded data                          conversion in the convertible codes framework.
+under a given threshold, or to maximize the reliability given                           Example 1: Consider conversion from an [nI = 5, k I = 3]
+the available storage space.                                                        code C I to an [nF = 8, k F = 6] code C F . We will focus on
+   To the best of our knowledge, the existing literature                            the number of symbols read, i.e. read access cost, and on the
+[11]–[14] which formally studies the problem of changing the                        number symbols written, i.e. write access cost, for conversion.
+length and dimension of already encoded data does so from                           The default approach to conversion is to read k I = 3 symbols
+the perspective of the so-called scaling problem. The scaling                       from each of the two initial codewords belonging to C I ,
+problem [11] refers to the problem of evenly redistributing                         decoding the original data, and using it to write two symbols
+each codeword in a distributed storage system when additional                       of the final codeword belonging to C F , while keeping the
+nodes are added to the system and the level of failure tolerance                    three read symbols from each initial codeword unchanged as
+(specifically, (n − k)) is kept constant. Some works [12], [14]                     symbols of the final codeword. Thus, the default approach has
+generalize the scaling problem to broader cases where (n − k)                       a read access cost of 6 and write access cost of 2.
+need not remain constant. However, even in cases where the                              In the convertible codes framework, this conversion is
+scaling problem could be used to perform code conversion,                           achieved by converting two codewords of the initial code into a
+it has several drawbacks that make it inefficient for conver-                       single codeword of the final code, as depicted in Figure 2. This
+sion. For example, using the approach of scaling to achieve                         approach uses specially designed systematic codes C I and C F .
+conversion requires accessing every symbol in each codeword                         Let Fq be the finite field of size q = 37. Let a, b, c ∈ Fq be
+and performing a significant amount of data movement to keep                        the data symbols of the first initial codeword, d, e, f ∈ Fq
+the amount stored in each node the same. While these costs are                      be the data symbols of the second initial codeword. Let
+necessary to fulfill the goals of the scaling problem, they are                     p1 , p2 : F3q → Fq be the parity functions for the initial code
+unnecessary to achieve code conversion, making this approach                        C I , and q1 , q2 : F6q → Fq be the parity functions for the final
+inefficient. A more detailed discussion of the scaling problem                      code C F . The parity functions are chosen as below:
+and other related work is provided in Section II-A.
+                                                                                          p1 (a, b, c) = a + b + c, p2 (a, b, c) = a + 2b + 4c.
+   In this paper, we propose a theoretical framework to model
+the code conversion problem. Our approach is based on                               This is an example of the general construction presented in
+the insight that the problem of changing code parameters                            Section V. The conversion procedure keeps the data symbols
+in a storage system can be viewed as converting multiple                            from each initial codeword unchanged in the final codeword,
+codewords of an [nI , k I ] code (denoted by C I ) into (potentially                and then constructs the first (resp. second) parity of the final
+multiple) codewords of an [nF , k F ] code (denoted by C F ),1                      codeword as a linear combination of the first (resp. second)
+with desired constraints on decodability, such as both codes                        parity of each initial codeword. The final parity functions are
+satisfying the maximum distance separability (MDS) property.                        chosen to satisfy the equation below:
+                                                                                              q1 (a, b, c, d, e, f ) = p1 (a, b, c) + p1 (d, e, f ),
+  1 The superscripts I and F stand for initial and final respectively, represent-
+ing the initial and final state of the conversion.                                            q2 (a, b, c, d, e, f ) = p2 (a, b, c) + 8p2 (d, e, f ).
+
+
+         Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+4394                                                                               IEEE TRANSACTIONS ON INFORMATION THEORY, VOL. 68, NO. 7, JULY 2022
+
+
+
+It is straightforward to check that the initial and final codes                                                       TABLE I
+defined by these parity functions have the MDS property. This                      M AIN R ESULTS FOR THE A CCESS C OST OF C ONVERSIONS IN THE M ERGE
+conversion procedure requires reading two symbols from each                             R EGIME , I . E . A (nI , k I ; nF , k F = ςk I ) C ONVERTIBLE C ODE
+
+initial codeword and writing two symbols, resulting in a total
+read access cost of 4 and a write access cost of 2, a reduction
+of 33.3% in the read access cost as compared to the default
+approach. This is also the minimum possible read cost, as will
+be shown in Section IV.                                          
+   In this paper, we begin the exploration of convertible codes
+by focusing on convertible codes which are linear and MDS.
+The properties of linear MDS codes have been well studied,
+and they are widely used in practice due to their relative
+simplicity and their storage overhead. As such they constitute
+a good starting point for studying convertible codes. Further-
+more, we focus on the access cost of conversion. Access cost
+corresponds to the total number of symbols that are either
+read or written during conversion, which is a fundamental
+quantity that directly affects important metrics such as network
+bandwidth, IO and CPU resource usage.
+   Within the class of linear MDS codes, we focus on an
+important subclass of conversions, which we refer to as the
+merge regime. The merge regime corresponds to conversions
+where multiple codewords are merged into a single codeword.
+In other words, k F = ςk I for some integer ς ≥ 2, with
+arbitrary values of nI and nF . Using the convertible codes                        the optimal tradeoff between failure tolerance and storage
+framework, we prove a tight lower bound on the access cost                         overhead [16], [17]. However, the use of erasure codes in
+of conversions for linear MDS codes in the merge regime                            storage systems raises a host of other aspects to optimize for.
+(Section IV). This lower bound identifies a broad region where                     Several works in the literature have studied these aspects and
+significant savings in access cost are possible, and shows that                    proposed codes that optimize them.
+in its complement region, linear MDS codes cannot achieve                             One aspect of storage codes that received considerable
+lower access cost than the default approach.                                       attention early on is the computational overhead involved
+   We cast the problem of constructing optimal convertible                         in encoding and decoding of data. Array codes [18]–[21]
+codes into a problem of constructing matrices which satisfy                        are designed to use XOR operations exclusively, which are
+some special structural properties. Using this insight, we first                   typically faster to execute, and aim to decrease the complexity
+propose a simple construction (Section V) which works for                          of encoding and decoding.
+all parameters in the merge regime, but requires a large field                        Another aspect of storage codes that has received consid-
+size (exponential in the lengths of the codes). To address this                    erable attention in the recent past is related to the resource
+issue, we introduce a sequence of constructions of convertible                     overhead associated with repair of failed nodes. Several
+codes that have significantly lower field size requirements                        approaches have been proposed to alleviate this problem.
+(Section VI). Our main results are summarized in Table I.                          Dimakis et al. [22] proposed a new class of codes called
+   Throughout our analysis of convertible codes, we assume                         regenerating codes that minimize the amount of network
+the values of the parameters (nI , k I ) and (nF , k F ) are known                 bandwidth consumed during repair operations. Under the
+and fixed. However, in practice the value of (nF , k F ) might                     regenerating codes model [22], each symbol (i.e., node) is
+not be known at the time of code construction, since it depends                    represented as an α-dimensional vector over a finite field.
+on the future failure rates of storage devices. To address this                    During repair of a failed node, download of elements of the
+problem, we also show that the constructions presented in                          finite field (i.e., “sub-symbols”) is allowed as opposed to the
+this paper can support access-optimal conversion for multiple                      whole vector (i.e., one “entire” symbol). This line of research
+possible values of (nF , k F ) simultaneously.                                     has led to several constructions [23]–[42], generalizations
+                                                                                   [43]–[45], and more efficient repair algorithms for Reed-
+       II. R ELATED W ORK , BACKGROUND AND N OTATION                               Solomon codes [46]–[53]. Several of these constructions [26],
+  In this section, we place convertible codes within the larger                    [35], [54]–[56] minimize the amount of IO consumed during
+context of traditional codes and more recent works on codes                        repairs in addition to minimizing the network bandwidth
+for distributed storage. Then, we review some basic concepts                       consumption. It has been shown that meeting the lower
+and notation that will be used throughout the paper.                               bound on the network bandwidth required by repair when
+                                                                                   MDS property and high rate are desired necessitates large
+A. Related Work                                                                    sub-packetization [54], [56]–[58], which negatively affects
+  MDS erasure codes, such as Reed-Solomon codes [15],                              certain key performance metrics in storage systems [6], [7].
+are widely used in storage systems because they achieve                            To overcome this issue, several works [59], [60] have proposed
+
+
+          Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+MATURANA AND RASHMI: CONVERTIBLE CODES: ENABLING EFFICIENT CONVERSION OF CODED DATA IN DISTRIBUTED STORAGE                                                  4395
+
+
+
+code constructions that relax the requirement of meeting lower                     In [91], which appeared after the publication of the con-
+bounds on IO and bandwidth for repair operations in order to                    ference version of this paper [1], the authors propose a code
+reduce the degree of sub-packetization.                                         construction for improving the efficiency of conversion. This
+   The challenge of code repair has also been addressed                         construction performs conversion by acting on initial code-
+by another class of codes, called locally repairable codes                      words that are encoded differently, i.e. a different (k I × nI )
+(LRCs) [61]–[77]. These codes focus on the locality of code-                    generator matrix is used for each initial codeword. The focus
+word symbols during repair, that is, the number of nodes that                   of Wu et al. [91] is on a practical code construction for a spe-
+need to be accessed when repairing a single failure. LRCs                       cific parameter regime and they do not investigate theoretical
+improve repair performance, since missing information can                       modeling and fundamental limits. All the lower bounds derived
+be recovered by accessing a small subset of symbols. LRCs                       in our work continue to hold even if each codeword is encoded
+and convertible codes optimized for access cost both aim to                     differently. The approach of using multiple different initial
+minimize the number of symbols that need to be accessed,                        codes has the advantage of simplifying the code construction:
+albeit for different operations in storage systems.                             a final MDS code C F is chosen first, and then the encoding of
+   Recent literature on storage codes has also considered the                   each initial codeword is chosen to fit C F . However, such an
+problem of redistributing data when additional devices are                      approach has several disadvantages. First, conversion can only
+added to a distributed storage system, which is known as                        happen among specific groups of initial codewords, making
+the scaling problem [11], [12], [14], [78]–[86]. The setting                    the conversion process more rigid as codewords cannot be
+considered consists of an n node distributed storage system                     freely chosen. Second, this approach increases the overhead
+where the data is encoded using an [n, k] MDS code, where                       of codeword management, as the system needs to keep track
+the n symbols of each codeword are spread across evenly                         of the code of each codeword. Third, it only considers one
+on all the n nodes in the system. Then, s new empty nodes                       specific known value for the final parameters (nF , k F ). On the
+are added to the system, and the data (which was encoded                        other hand, the framework of convertible codes that we pro-
+under an [n, k] MDS code) needs to be updated to an [n =                       pose allows one to choose any set of initial codewords for
+n + s, k  = k + s] MDS code. The central goal of this                          conversion (since they all use the same code), is independent of
+problem is to evenly redistribute each codeword across all                      data placement, and the proposed code constructions support
+n nodes while reducing the total amount of data transferred                    access-optimal conversion for any (nF , k F ) in a set of possible
+across nodes and ensuring the MDS property holds. In some                       final parameter values.
+cases, it is additionally required that the ratio of data to parity
+in each node is the same (e.g. [83]). Some works consider                       B. Background
+more general scaling scenarios: for example [14] considers the                     In this subsection we introduce some basic definitions and
+case where k < k  and n < n , and [12] considers arbitrary                    notation related to linear codes. Let Fq be a finite field of
+n > k  . The scaling problem is fundamentally different from                  size q. An [n, k] linear code C over Fq is a k-dimensional
+the conversion problem that we study in this paper because                      subspace C ⊆ Fnq . Here, n is called the length of the code,
+of the need to evenly redistribute data across nodes under                      and k is called the dimension of the code. A generator matrix
+scaling. Hence, some of the key constraints and limitations                     of an [n, k] linear code C over Fq is a k × n matrix G over
+of the scaling problem do not apply to code conversion.                         Fq such that the rows of G form a basis of the subspace C.
+For example, scaling necessitates modifying every node in                       A k × n generator matrix G is said to be systematic if it has
+the system (incurring a high access cost) and necessitates                      the form G = [I | P], where I is the k × k identity matrix and
+transfer of data not for the purpose of conversion (i.e. changing               P is a k × (n − k) matrix. Even though the generator matrix
+n and k) but for the purpose of rebalancing the amount                          of a code C is not unique, we will sometimes associate a code
+of data stored by each codeword in a given node. On the                         C to a specific generator matrix G, which will be clear from
+other hand, under the code conversion problem, we do not                        context. The encoding of a message m ∈ Fkq under an [n, k]
+impose any requirements on data balancing. This is because,                     code C with generator matrix G is denoted C(m) = mT G.
+typically, large-scale distributed storage systems balance data                    Let [n] denote the set {1, 2, . . . , n} for n ≥ 1, and the empty
+across nodes at a higher level rather than at the level of each                 set for n ≤ 0. A linear code C is maximum distance separable
+codeword [2], [5].                                                              (MDS) if the minimum distance of the code is the maximum
+   Several works have studied scenarios where encoded data is                   possible:
+transformed to conform to a different code. In [87], [88], the
+authors propose a two-stage encoding process, where in the                          min-dist(C) = min
+                                                                                                   
+                                                                                                      |{i ∈ [n] : ci = ci }| = n−k + 1,
+                                                                                                        c=c ∈ C
+first stage data is encoded using a [n, k] MDS code, and in
+the second stage (n − n) additional parities are generated to                  where ci ∈ Fq denotes the i-th coordinate of c. Equivalently,
+form a codeword from a [n , k] MDS code. This process can                      a linear code C is MDS if and only if every k × k submatrix
+be seen as a special case of convertible codes, i.e. an (n, k; n ,             of its generator matrix G is non-singular [92].
+k) convertible code. In [89], the authors propose a distributed                    A matrix M is said to be superregular if every square
+storage system which alternates between two specific erasure                    submatrix of M is nonsingular.2 The following property is
+codes in response to variations in workload. In [90], the                       a key property that will be used in this paper.
+authors propose a scheme for changing the parameters of an                        2 This definition of superregularity is stronger than the definition introduced
+erasure code in the context of coded matrix multiplication.                     in [93] in the context of convolutional codes.
+
+
+
+       Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+4396                                                                             IEEE TRANSACTIONS ON INFORMATION THEORY, VOL. 68, NO. 7, JULY 2022
+
+
+
+   Proposition 2 ([92]): Let C be an [n, k] code with generator
+matrix G = [I|P ]. Then C is MDS if and only if P is
+superregular.
+   Let v ∈ Fnq be a vector. We interpret vectors as column
+vectors by convention. We denote the transpose of a vector (or
+matrix) as vT . Given a set of coordinates I ⊆ [n], we denote
+                                                                    |I|
+the projection of v to the coordinates in I as v|I ∈ Fq . For
+a set of vectors V we define projI (V) = {v|I | v ∈ V}.
+   We use the following notation for submatrices: let M be
+a n × m matrix, the submatrix of M defined by row indices
+{i1 , . . . , ia } ⊆ [n] and column indices {j1 , . . . , jb } ⊆ [m] is
+denoted by M [i1 , . . . , ia ; j1 , . . . , jb ]. For conciseness, we use
+∗ to denote all row or column indices, e.g., M [∗; j1 , . . . , jb ]
+denotes the submatrix composed by columns {j1 , . . . , jb },
+                                                                                 Fig. 3. Conversion from [nI , k I ] initial code to [nF , k F ] final code. Each
+and M [i1 , . . . , ia ; ∗] denotes the submatrix composed by rows               box denotes a symbol, and they are grouped into codewords. Dotted boxes
+{i1 , . . . , ia }.                                                              denote retired symbols, and cross-hatched boxes denote new symbols. The c
+                                                                                 node denotes the location where new symbols are computed from the symbols
+                                                                                 read during conversion. Solid arrows denote a transfer of symbols (read or
+III. A F RAMEWORK FOR S TUDYING C ODE C ONVERSIONS                               write) and dashed arrows denote unchanged symbols.
+   In this section, we formally define the new framework for
+studying code conversions and introduce convertible codes.
+While we use the notation of linear codes introduced in                             Definition 3 (Code Conversion): A conversion from an ini-
+Section II-B, the framework introduced in this section can                       tial code C I to a final code C F with initial partition P I and
+be applied to arbitrary (not necessarily linear) codes. Suppose                  final partition P F is a procedure, denoted by TC I→C F , that
+one wants to convert data that is already encoded using an                       for any m, takes the set of initial codewords {C I (m|PiI ) |
+[nI , k I ] initial code C I into data encoded using an [nF , k F ]              PiI ∈ P I } as input, and outputs the corresponding set of final
+final code C F where both codes are over the same field Fq .                     codewords {C F (m|PjF ) | PjF ∈ P F }.                           
+In the initial and final configurations, the system must store the                                                              I   I  F   F
+                                                                                    Definition 4 (Convertible Code): An (n , k ; n , k ) con-
+same information, but encoded differently. In order to capture                   vertible code over Fq is defined by: (1) a pair of codes
+the changes in the dimension of the code during conversion,                      (C I , C F ) where C I is an [nI , k I ] code over Fq and C F is
+we consider M = lcm(k I , k F ) number of “message” symbols                      an [nF , k F ] code over Fq ; (2) a pair of partitions P I , P F of
+(i.e., the data to be stored) over a finite field Fq , denoted by                [M = lcm(k I , k F )] such that each subset in P I is of size k I
+m ∈ FM                                I         I
+          q . This corresponds to λ = M/k codewords in the                       and each subset in P F is of size k F ; and (3) a conversion
+                               F         F
+initial configuration and λ = M/k codewords in the final                         procedure TC I→C F that on input {C I (m|PiI ) | PiI ∈ P I }
+configuration. Let rI = (nI − k I ) and rF = (nF − k F ).                        outputs {C F (m|PjF ) | PjF ∈ P F }, for any m ∈ FM   q .        
+   Figure 3 shows the conversion process for general initial and                    Typically, additional constraints would be imposed on C I
+final codes. We note that this need for considering multiple                     and C F , for example, decodability constraints such as requiring
+codewords in order to capture the smallest instance of the                       both codes to be MDS.
+problem deviates from existing literature on the code repair                        The cost of conversion is determined by the cost of the
+(e.g., [22], [23], [47], [59]) and code locality (e.g., [61], [66],              conversion procedure TC I→C F , as a function of the parameters
+[76]), where a single codeword is sufficient to capture the                      (nI , k I ; nF , k F ). Towards minimizing the overhead of the
+problem.                                                                         conversion, our general objective is to design codes (C I , C F ),
+   Since there are multiple codewords, we first specify an ini-                  partitions (P I , P F ) and conversion procedure TC I→C F that
+tial partition P I and a final partition P F of the set [M ], which              satisfy Definition 4 and minimize the conversion cost for given
+map the message symbols of m to their corresponding initial                      parameters (nI , k I ; nF , k F ), subject to desired decodability
+and final codewords. The initial partition P I = {P1I , . . . , PλII }           constraints on C I and C F .
+is composed of λI disjoint subsets of size |PiI | = k I (i ∈ [λI ]),                Depending on the relative importance of various resources
+and the final partition P F = {P1F , . . . , PλFF } is composed of               in the cluster, one might be interested in optimizing the
+λF disjoint subsets of size |PjF | = k F (j ∈ [λF ]). In the initial             conversion with respect to various types of costs such as
+(respectively, final) configuration, the data indexed by each                    symbol access, computation (CPU), communication (network
+subset PiI ∈ P I (respectively, PjF ∈ P F ) is encoded using the                 bandwidth), read/writes (disk IO), etc., or a combination of
+code C I (respectively, C F ). The codewords {C I (m|PiI ) | PiI ∈               these costs. The general formulation of code conversions above
+P I } are referred to as initial codewords, and the codewords                    provides a powerful framework to theoretically reason about
+{C F (m|PjF ) | PjF ∈ P F } are referred to as final codewords.                  convertible codes. In this paper, we focus on a specific cost
+The descriptions of the initial and final partitions and codes,                  model.
+along with the conversion procedure, define a convertible code.                     As a measure of cost, we consider the access cost of code
+We now proceed to define conversions and convertible codes                       conversion, which measures the number of symbols that are
+formally.                                                                        affected by the conversion.
+
+
+        Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+MATURANA AND RASHMI: CONVERTIBLE CODES: ENABLING EFFICIENT CONVERSION OF CODED DATA IN DISTRIBUTED STORAGE                                                 4397
+
+
+
+                                                                           TABLE II
+                                                               N OTATION U SED IN THE PAPER
+
+
+
+
+   Definition 5 (Access Cost): The read access cost of a con-                     towards a fundamental theoretical understanding of the access
+version procedure is defined as the total number of symbols                       cost of conversions, in this paper we focus in a particular
+read during the procedure. Similarly, the write access cost                       subclass of conversions that we term merge regime. The merge
+of a conversion procedure is the total number of symbols                          regime correspond to code conversions where multiple initial
+written during the procedure. The access cost of a conversion                     codewords are combined into a single codeword. In other
+procedure is the sum of its read and write access costs. The                      words, the merge regime consists of convertible codes where
+access cost of a convertible code is the access cost of its                       k F = ςk I , for some integer ς ≥ 2, and nI , nF are arbitrary.
+conversion procedure.                                                             In addition to this, in this paper we focus exclusively on codes
+   Each symbol read from the initial codewords requires one                       that are both linear and MDS.
+symbol access and each symbol written to the final codewords                          In particular, our goal is to find linear MDS codes which can
+requires one symbol access. Therefore, minimizing access cost                     achieve conversion with the minimum possible access cost.
+amounts to minimizing the sum of the number of symbols read                           Definition 7 (Access-Optimal): A linear MDS (nI , k I ; nF ,
+                                                                                    F
+from the initial codewords and the number of symbols written                      k ) convertible code is said to be access-optimal if and only
+to the final codewords.3 Keeping this number small makes                          if it attains the minimum access cost over all linear MDS (nI ,
+code conversion less disruptive and allows the unaffected sym-                    k I ; nF , k F ) convertible codes.                               
+bols to remain available for normal operation. Furthermore,                           We will study the precise cost of access-optimal convertible
+reducing the number of accesses also reduces the amount of                        codes in the merge regime in Section IV.
+computation and communication required in contrast to the                             In practice, the final parameters (nF , k F ) might not be
+default approach.                                                                 known at the time of code construction because they might
+   In order to understand the necessary access cost of conver-                    depend on future failure rates. To address this, we also con-
+sion, we classify symbols into three categories: (1) unchanged                    sider designing codes which have the ability to be converted
+symbols, which refers to symbols in the initial codewords that                    to multiple final codes of different length and dimension with
+remain as is in the final codewords; (2) retired symbols, which                   optimal access cost. This way, instead of having to decide
+refers to the remaining symbols of the initial codewords that                     (nF , k F ) in advance, the user can specify a subset S ⊆ (N×N)
+are discarded; and (3) new symbols, which refers the symbols                      of possible values for the pair (nF , k F ) and construct an initial
+in the final stripes which are not unchanged (and therefore                       code with the ability to be converted to an [nF , k F ] final
+must be written during conversion). For example, in Figure 3,                     code for any (nF , k F ) ∈ S. At the time of conversion, the
+unchanged symbols are unshaded, retired symbols in the initial                    user simply chooses the desired pair from S and converts.
+codewords are dotted, and new symbols in the final codewords                      We introduce the following definition to help describe such
+are cross-hatched.                                                                codes.
+   Having unchanged symbols has many practical benefits,                              Definition 8 (Access-Optimally Convertible): A linear [nI ,
+because when conversion is implemented, such symbols can                          k ] MDS code C I is said to be (nF , k F )-access-optimally
+                                                                                    I
+
+stay in the same location and only their corresponding meta-                      convertible if and only if it is the initial code of an access-
+data needs to be updated. We introduce the following definition                   optimal (nI , k I ; nF , k F ) convertible code.                  
+to capture codes that maximize the number of such symbols.
+   Definition 6 (Stable Convertible Code): An (nI , k I ; nF ,                    A. Notation for Linear Convertible Codes in the Merge
+  F
+k ) MDS convertible code is said to be stable if it uses the                      Regime
+maximum number of unchanged symbols over all (nI , k I ;
+                                                                                     In this paper, we focus exclusively on convertible codes
+nF , k F ) MDS convertible codes.                             
+                                                                                  in the merge regime where C I and C F are linear. To this
+   We will see in Section IV, that stable convertible codes play
+                                                                                  end, we introduce some notation for describing and analyzing
+an important role in minimizing access cost.
+                                                                                  this class of codes. Table II summarizes the most important
+   The convertible codes framework defined in this work is
+                                                                                  notation used for easy reference.
+flexible and allows for the initial and final codes to have
+                                                                                     First, we make some observations that help simplify the
+any parameters and be of any kind. However, as a step
+                                                                                  notation for the merge regime. In the merge regime k F = ςk I
+  3 Readers who are familiar with the literature on regenerating codes might
+                                                                                  and, as a consequence, the length of the message m will be
+observe that convertible codes optimizing for the access cost are “scalar”        M = lcm(k I , k F ) = k F . Furthermore, the number of initial
+codes as opposed to being “vector” codes.                                         codewords will be λI = ς and the number of final codewords
+
+
+         Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+4398                                                                            IEEE TRANSACTIONS ON INFORMATION THEORY, VOL. 68, NO. 7, JULY 2022
+
+
+
+will be λF = 1. Therefore, we need not specify which final
+codeword we refer to, as there is only one.
+   Let ♦ ∈ {I, F }. The generator matrix of C ♦ is a (k ♦ ×
+                                                    ♦
+n ) matrix G♦ = [g1♦ · · · gn♦♦ ], where gj♦ ∈ Fkq (j ∈ [n♦ ])
+  ♦
+
+denotes the j-th encoding vector of C ♦ . Consequently, the j-th
+symbol of the i-th codeword corresponds to (m|P ♦ )T gj♦ .
+                                                      i
+   In order to analyse linear convertible codes, we also view
+each code symbol in relation to the whole message m. Accord-
+                                                                                Fig. 4. Comparison of the read access cost of the optimal conversion of
+ingly, we view the j-th symbol of the i-th initial codeword as                  a (nI , k I ; nF , k F = ςk I ) convertible code and the default approach for a
+mT g̃i,j
+       I                                  I
+          , where the encoding vector g̃i,j ∈ FM q is defined to                variable value of r F (x-axis) when r I < k I (left side) and r I ≥ k I (right
+                I                       I      I
+be equal to gj for coordinates in Pi , i.e. g̃i,j |PiI = gjI , and              side). When r F < min{k I , r I }, optimal conversion achieves lower cost than
+                                                                                the default approach, and when r F > min{k I , r I }, the default approach
+equal to 0 everywhere outside of PiI . Note that mT g̃i,j   I
+                                                                =               is (trivially) optimal. The optimal write access cost in the merge regime is
+          T I                             I
+(m|PiI ) gj for all i ∈ [ς] and j ∈ [n ]. In general, we will                   always r F .
+refer to a code symbol and its corresponding encoding vector
+interchangeably.                                                                                                  TABLE III
+   Let SiI = {g̃i,j
+                  I
+                      | j ∈ [nI ]} denote theencoding vectors                      A CCESS C OST S AVINGS FOR D IFFERENT E XAMPLE PARAMETERS
+of initial codeword i ∈ [ς], let S I = i∈[ς] SiI , and let
+S F = {gjF | j ∈ [nF ]}. Define Ui = (SiI ∩ S F ) denoting the
+unchanged symbols of initial codeword i, and let U = (S I ∩
+S F ) denote all unchanged vectors. We define the read access
+set of a convertible code as a set of tuples D ∈ [λI ] × [nI ],
+where (i, j) ∈ D corresponds to the j-th symbol of initial
+codeword i. Furthermore, we use Di = {j | (i, j) ∈ D},
+∀i ∈ [λI ] to denote the symbols read from initial codeword
+i. Note that the read access cost is given by |D|. Let Ai =
+   I
+{g̃i,j  | j ∈ Di } denote the encoding vectors of the symbols                      In this section, we present lower bounds on the access cost
+from initial codeword i ∈ [λI ] that are part of the read access                of linear MDS convertible codes in the merge regime. Our
+                             I
+set D, and define A = {g̃i,j     | (i, j) ∈ D} as the set of all                main result is summarized by the following theorem, which
+encoding vectors of the symbols in the read access set. Finally,                will be proved at the end of this section.
+let N = (S F \ S I ) denote the new vectors. Notice that it must                   Theorem 9: For all linear MDS (nI , k I ; nF , k F = ςk I )
+hold that N ⊆ span(A), since the new vectors are obtained                       convertible codes, the read access cost of conversion is at
+as linear combinations of the encoding vectors of the symbols                   least ς min{k I , rF } and the write access cost is at least rF .
+in the read access set.                                                         Furthermore, if rI < rF , the read access cost of conversion
+                                                                                is at least ςk I .
+B. The Case of k I = k F                                                           As we will show in Section V, this lower bound is achiev-
+   Before analyzing the conversion in the merge regime,                         able and it therefore corresponds to the optimal access cost in
+we briefly study the exceptional conversion case where k I =                    the merge regime. Figure 4 shows a plot comparing the optimal
+k F . Conversion with parameters k I = k F is not considered as                 access cost against the access cost of the default approach for
+part of the merge regime because it does not have the same                      different parameter values, and Table III shows these costs for
+behavior. However, we analyze this case here for complete-                      some concrete conversion examples.
+ness. Observe that in the case where nI ≥ nF , conversion for                      We break down the proof of this result into four steps:
+any MDS code can be carried out with zero access cost by                           1) We show that in the merge regime, all possible pairs
+simply retiring any (nI − nF ) symbols. In the complementary                          of partitions P I and P F partitions are equivalent up
+case where nI < nF , it is necessary to access at least k I                           to relabeling, and hence do not need to be specified
+symbols and write at least (nF − nI ) symbols (i.e. it is not                         (Lemma 10).
+possible to beat the default approach). This is apparent from                      2) An upper bound on the maximum number of unchanged
+the fact that in an [n, k] MDS code, any subset of k−1 symbols                        symbols is proved. As described in Definition 6, con-
+gives no information about any one of the remaining symbols.                          vertible codes that meet this bound are called stable
+Therefore, in the remainder of this paper, we consider ς ≥ 2.                         (Lemma 11).
+                                                                                   3) Lower bounds on the access cost of linear MDS convert-
+       IV. L OWER B OUNDS ON THE ACCESS C OST OF                                      ible codes are proved under the added restriction that the
+       C ONVERTIBLE C ODES IN THE M ERGE R EGIME                                      codes are stable (Lemmas 12 and 13 and Theorem 14).
+   In this paper, we focus on studying the merge regime.                           4) The stability restriction is removed, by showing that
+Recall, from Section III, that the merge regime corresponds                           non-stable linear MDS convertible codes necessarily
+to conversion where multiple codewords are combined into a                            incur higher access cost, and hence it suffices to consider
+single codeword (i.e. k F = ςk I for an integer ς ≥ 2). This                          only stable MDS convertible codes (Lemma 16 and
+implies that M = k F , λI = ς, and λF = 1.                                            Theorem 9).
+
+
+       Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+MATURANA AND RASHMI: CONVERTIBLE CODES: ENABLING EFFICIENT CONVERSION OF CODED DATA IN DISTRIBUTED STORAGE                                                4399
+
+
+
+   In general, partitions need to be specified since they indicate               initial codeword i ∈ [ς], take the set of all unchanged encoding
+how message symbols from the initial codewords are mapped                        vectors from other codewords ∪=i U , and additionally pick
+into the final codewords. However in the merge regime,                           any subset of new encoding vectors W ⊆ N of size |W| =
+the choice of the partitions are equivalent, and hence are                       min{k I , rF }. The following holds for set V = (∪=i U ∪ W):
+inconsequential as shown below.
+   Lemma 10: For every (nI , k I ; nF , k F = ςk I ) convertible                       V ⊆ S F and |V| = (ς − 1)k I + min{k I , rF } ≤ k F .
+code, all possible pairs of initial and final partitions (P I , P F )            Therefore, all the encoding vectors in V are linearly
+are equivalent up to relabeling of nodes.                                        independent.
+     Proof: We have that k I | k F . Thus λF = (M/k F ) =                           Notice that the encoding vectors in (V \ W) contain no
+1 and P F = {[M ]} always holds. Because of this, all data                       information about initial codeword i and complete information
+will be mapped to the same final codeword, regardless of the                     about every other initial codeword  = i. Therefore, the
+                                                                   
+initial partition. Therefore, for any two partitions P I and P I ,               information about initial codeword i in each encoding vector
+                                                                
+there exists some permutation σ of [ςk I ] such that P I =                       in W has to be linearly independent since, otherwise, V could
+{σ(P ) | P ∈ P I }, i.e., different partitions differ only on the                not be linearly independent. Formally, it must be the case that
+way nodes are labeled.                                                           Wi = projPiI (W) has rank equal to min{k I , rF } (recall that
+   Since one of the terms in access cost is the number of new                    PiI is the set of symbols corresponding to initial codeword i).
+symbols, a natural way to reduce access cost is to maximize                      However, by definition, the subset Wi must be contained in
+the number of unchanged symbols. However, there is a limit                       the span of Ai . Therefore, the rank of Ai is at least that of
+on the number of symbols that can remain unchanged which                         Wi , which implies that |Di | ≥ min{k I , rF }.
+is characterized below.                                                             We next show that when the number of new symbols rF is
+   Lemma 11: In an MDS (nI , k I ; nF , k F = ςk I ) convertible                 greater than rI in a MDS stable convertible code in the merge
+code, there can be at most k I unchanged symbols from each                       regime, then the default approach is optimal in terms of access
+initial codeword.                                                                cost.
+     Proof: By the MDS property of C I every subset of k I + 1                      Lemma 13: For every linear stable MDS (nI , k I ; nF ,
+symbols is linearly dependent. Hence, there can be at most k I                   k = ςk I ) convertible code, if rI < rF then the read access
+                                                                                   F
+unchanged symbols from each initial codeword for C F to be                       set Di from each initial codeword i ∈ [ς] satisfies |Di | ≥ k I .
+MDS. In other words, |Ui | ≤ k I for all i ∈ [ς].                                     Proof: When rF ≥ k I , this lemma is equivalent to
+   This implies that there are at most ςk I unchanged symbols                    Lemma 12, so assume rI < rF < k I . From the proof of
+and at least rF new symbols in total. Thus, the number of                        Lemma 12, for every initial codeword i ∈ [ς] it holds that
+symbols that need to be written in a stable code is at least rF .                |Di | ≥ rF . Since rF > rI , this implies that Di must contain
+   Now, we focus on bounding the total number of symbols                         at least one index of an unchanged encoding vector.
+read, that is, the size of the read access sets. The general                        Choose a subset of at most k F = ςk I encoding vectors
+strategy we use to obtain bounds on the size of read access                      from S F , which must be linearly independent by the MDS
+sets is to consider a specially chosen set of k F encoding                       property. In this subset, include all the unchanged encoding
+vectors from the final codeword, which by the MDS property                       vectors from the other initial codewords, ∪l=i Ul . Then, choose
+of the final code is linearly independent. We then use the fact                  all the unchanged encoding vectors from initial codeword i
+that final codewords are the result of conversion to identify                    that are accessed during conversion, W1 = (Ai ∩ Ui ). For the
+the encoding vectors in each initial codeword that span the                      remaining vectors (if any), choose an arbitrary subset of new
+selected final encoding vectors. The MDS property of the                         encoding vectors, W2 ⊆ N, such that:
+initial code and the fact that different initial codewords contain
+different information will allow us to derive a lower bound on                                       |W2 | = min{k I − |W1 |, rF }.                       (1)
+the number of read symbols in each initial codeword.
+                                                                                 It is easy to check that the subset V = (∪l=i Ul ∪W1 ∪W2 ) is of
+   Intuitively, having more new symbols means that more
+                                                                                 size at most k F = ςk I , and therefore it is linearly independent.
+symbols have to be read in order to construct them, resulting in
+                                                                                 This choice of V follows from the idea that the information
+higher access cost. With this intuition in mind, we first focus
+                                                                                 contributed by W1 to the new encoding vectors is already
+on stable convertible codes, which minimize the number of
+                                                                                 present in the unchanged encoding vectors, which will be at
+new symbols (Definition 6). We first prove lower bounds on
+                                                                                 odds with the linear independence of V.
+the access cost of stable linear MDS convertible codes, and
+                                                                                     Since the elements of W1 and W2 are the only encoding
+then show that the minimum access cost of conversion in MDS
+                                                                                 vectors in V that contain information from initial codeword i,
+codes without this stability property can only be higher. The                                                  = (proj I (W1 ) ∪ proj I (W2 ))
+                                                                                 it must be the case that W               Pi               Pi
+first lower bound on the size of each Di (i ∈ [ς]) is given by
+                                                                                 has rank (|W1 |+ |W2 |). Moreover, W   is contained in the span
+the interaction between new symbols and the MDS property.
+   Lemma 12: For every linear stable MDS (nI , k I ; nF ,                        of Ai by definition, so it holds that:
+k F = ςk I ) convertible code, the read access set Di from each                                            |Di | ≥ |W1 | + |W2 |.                         (2)
+initial codeword i ∈ [ς] satisfies |Di | ≥ min{k I , rF }.
+     Proof: For convenience, readers can recall the notation                       From Equation 1, there are two cases:
+from Table II. By the MDS property, every subset V ⊆ S F                           Case 1: (k I − |W1 |) ≤ rF . Then |W2 | = (k I − |W1 |) and
+of size at most k F = ςk I is linearly independent. For any                      by Equation 2 it holds that |Di | ≥ (|W1 | + |W2 |) = k I .
+
+
+        Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+4400                                                                            IEEE TRANSACTIONS ON INFORMATION THEORY, VOL. 68, NO. 7, JULY 2022
+
+
+
+  Case 2: (k I − |W1 |) > rF . Then |W2 | = rF and by                              By the MDS property, V is a linearly independent set of
+Equation 2 it holds that:                                                       encoding vectors of size k F , and thus, must contain all the
+                                                                                information to recover the contents of every initial codeword,
+                         |Di | ≥ |W1 | + rF .                           (3)
+                                                                                and in particular, initial codeword i. Since all the information
+Notice that there are only rI retired (i.e. not unchanged)                      in V about codeword i is in either W3 or the accessed encoding
+encoding vectors in codeword i. Since every accessed encod-                     vectors, it must hold that:
+ing vector is either in W1 or is a retired encoding vector,
+it holds that:                                                                                              |Di | + |W3 | ≥ k I .                        (6)
+                      |Di | ≤ |W1 | + rI .              (4)
+                                                                                  From Equation 5, there are two cases:
+By combining Equation 3 and Equation 4, we arrive at the
+                                                                                  Subcase 2.1: (|W2 | − rF ) ≤ 0. Then |W3 | = 0, and by
+contradiction rF ≤ rI , which occurs because there are not
+                                                                                Equation 6 it holds that |Di | ≥ k I , which matches the bound
+enough retired symbols in the initial codeword i to ensure that
+                                                                                of Lemma 13.
+the final code has the MDS property. Therefore, case 1 must
+                                                                                  Subcase 2.2: (|W2 | − rF ) > 0. Then |W3 | = (|W2 | − rF ),
+always hold, and |Di | ≥ k I .
+                                                                                and by Equation 6 it holds that:
+   Combining the above results leads to the following theorem
+on the lower bound of read access set size of linear stable MDS
+                                                                                                        |Di | + |W2 | − rF ≥ k I .                       (7)
+convertible codes.
+   Theorem 14: For all stable linear MDS (nI , k I ; nF ,
+                                                                                The initial codeword i has (k I + rI ) symbols. By the principle
+k = ςk I ) convertible codes with read access set D, it holds
+  F
+                                                                                of inclusion-exclusion we have that:
+that |D| ≥ ς min{k I , rF }. Furthermore, if rI < rF , then
+|D| ≥ k F .
+                                                                                                    |Di | + |Ui | − |W1 | ≤ k I + rI .                   (8)
+    Proof: Follows directly from Lemma 12 and Lemma 13.
+                                                                                By using Equation 7, Equation 8 and the fact that |W2 | =
+   We next show that this lower bound generally applies even
+                                                                                (|Ui | − |W1 |), we conclude that rI ≥ rF , which is a
+for non-stable convertible codes by proving that increasing the
+                                                                                contradiction and means that subcase 2.1 always holds in this
+number of new symbols from the minimum possible does not
+                                                                                case.
+decrease the lower bound on the size of the read access set D.
+                                                                                   The above result, along with the fact that the lower bound
+   Lemma 15: The lower bounds on the size of the read access
+                                                                                in Theorem 14 is achievable (as will be shown in Section V),
+set from Lemma 14 hold for all linear MDS (nI , k I ; nF ,
+                                                                                implies that all access-optimal linear MDS convertible codes
+k F = ςk I ) convertible codes.
+                                                                                in the merge regime are stable.
+    Proof: We show that, even for non-stable convertible
+                                                                                   Lemma 16: All access-optimal linear MDS (nI , k I ; nF ,
+codes, that is, when there are more than rF new symbols,
+                                                                                k = ςk I ) convertible codes are stable.
+                                                                                  F
+the bounds on the read access set D from Theorem 14 still
+                                                                                    Proof: Lemma 15 shows that the lower bound on the
+hold.
+                                                                                read access set D for stable linear MDS convertible codes
+   Case 1: rI ≥ rF . Let i ∈ [ς] be an arbitrary initial
+                                                                                continues to hold in the non-stable case. Furthermore, this
+codeword. We lower bound the size of Di by invoking the
+                                                                                bound is achievable by stable linear MDS convertible codes in
+MDS property on a subset V ⊆ S F of size |V| = ςk I that
+                                                                                the merge regime (as will be shown in Section V). The number
+minimizes the size of the intersection |V ∩ Ui |. There are
+                                                                                of new blocks written during conversion under stable MDS
+exactly rF encoding vectors in (S F \ V), so the minimum
+                                                                                convertible codes is rF . On the other hand, the number of new
+size of the intersection |V ∩ Ui | is max{|Ui | − rF , 0}. Clearly,
+                                                                                symbols under a non-stable convertible code is strictly greater
+the subset projPiI (V) has rank k I due to the MDS property.
+                                                                                than rF . Thus, the overall access cost of a non-stable MDS
+Therefore, it holds that |Di | + max{|Ui | − rF , 0} ≥ k I .
+                                                                                (nI , k I ; nF , k F = ςk I ) convertible code is strictly greater than
+By reordering, the following is obtained:
+                                                                                the access cost of an access-optimal (nI , k I ; nF , k F = ςk I )
+       |Di | ≥ k I − max{|Ui | − rF , 0} ≥ min{rF , k I },                      convertible code.
+                                                                                   Thus, for MDS convertible codes in the merge regime,
+which means that the bound on Di established in Lemma 12
+                                                                                it suffices to focus only on stable codes. Combining all the
+continues to hold for non-stable codes.
+                                                                                results above, leads to the main theorem presented at the
+   Case 2: rI < rF . Let i ∈ [ς] be an arbitrary initial
+                                                                                beginning of this section.
+codeword, let W1 = (Ai ∩ Ui ) be the unchanged encoding
+                                                                                      Proof of Theorem 9: Follows from Theorem 14 and
+vectors that are accessed during conversion, and let W2 =
+                                                                                Lemmas 15 and 16, and the fact that at least rF new symbols
+(Ui \ W1 ) be the unchanged encoding vectors that are not
+                                                                                must be written.
+accessed during conversion. Consider the subset V ⊆ S F of
+                                                                                   Next, in Section V we show that the lower bound of
+|V| = k F encoding vectors from the final codeword such that
+                                                                                Theorem 9 is achievable for all parameters. Thus, Theorem 9
+V ⊇ W1 and the size of the intersection W3 = (V ∩ W2 ) is
+                                                                                implies that it is possible to perform conversion of MDS
+minimized. Since V may exclude at most rF encoding vectors
+                                                                                convertible codes in the merge regime with significantly less
+from the final codeword, it holds that:
+                                                                                access cost than the default approach if and only if rF ≤ rI
+                  |W3 | = max{0, |W2 | − rF }.                          (5)     and rF < k I .
+
+
+       Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+MATURANA AND RASHMI: CONVERTIBLE CODES: ENABLING EFFICIENT CONVERSION OF CODED DATA IN DISTRIBUTED STORAGE                                               4401
+
+
+
+     V. ACHIEVABILITY: E XPLICIT ACCESS -O PTIMAL                               (every square submatrix of them is invertible). In addition,
+      C ONVERTIBLE C ODES IN THE M ERGE R EGIME                                 to be access-optimal during conversion in the non-trivial case,
+   In this section, we present an explicit construction of access-              the new symbols (corresponding to the columns of PF ) have
+optimal MDS convertible codes for all parameters in the                         to be such that they can be generated by accessing rF symbols
+merge regime. In other words, we present a construction that                    from the initial codewords (corresponding to columns of GI ).
+matches the access cost lower bound presented in Section IV.                       During conversion, the encoding vectors of symbols from
+In Section V-A, we present the construction of the generator                    the initial codewords are represented as ςk I -dimensional vec-
+matrices for the initial and final code. Then, in Section V-B,                  tors, where each initial codeword occupies a disjoint subset
+we describe sufficient conditions for optimality and show that                  of k I coordinates. To capture this property, we introduce the
+this construction satisfies these conditions and thus yields                    following definition.
+access-optimal convertible codes. Our constructions in this and                    Definition 17 (t-Column Block-Constructible): We will say
+the following section work over any finite field of sufficient                  that an n × m1 matrix M1 is t-column constructible from
+size (which we explicitly specify), but for the sake of illustra-               an n × m2 matrix M2 if and only if there exists a subset
+tion we use prime fields in our examples.                                       S ⊆ cols(M2 ) of size t, such that the m1 columns of M1 are
+                                                                                in the span of S. We say that a λn×m1 matrix M1 is t-column
+                                                                                block-constructible from an n × m2 matrix M2 if and only if
+A. Explicit Construction of Generator Matrices                                  for every i ∈ [ς], the submatrix M1 [(i − 1)n + 1, . . . , in; ∗] is
+   Recall that, in the merge regime, k F = ςk I , for an integer                t-column constructible from M2 .                                  
+ς ≥ 2, while nI > k I and nF > k F are arbitrary. Also,                            Theorem 18: A systematic (nI , k I ; nF , k F = ςk I ) convert-
+recall that rI = (nI − k I ) and rF = (nF − k F ). Notice                       ible code with k I × rI initial parity generator matrix PI and
+that when rI < rF or k I ≤ rF , constructing an access-                         k F × rF final parity generator matrix PF is MDS and access-
+optimal convertible code is trivial, since the default approach                 optimal, if the following two conditions hold: (1) if rI ≥ rF
+to conversion is optimal. Thus, assume rF ≤ min{rI , k I }.                     then PF is rF -column block-constructible from PI , and (2)
+   Let Fq be a finite field of size q = pD , where p is any prime               PI , PF are superregular.
+(in particular, we can have p = 2, i.e. a binary field) and the                      Proof: Follows from Proposition 2 and the fact that PF
+degree D is determined by a function of the convertible code                    must be generated by accessing just rF symbols from each
+parameters (discussed later in this subsection). The degree D                   initial codeword (Lemma 12).
+required by this construction is O((max{nI , nF })3 ), that is,                    Thus, we can reduce the problem of proving the optimality
+the field size requirement is exponential in the length of the                  of a systematic MDS convertible code in the merge regime
+code. Let θ be a primitive element of Fq . Let GI = [I|PI ] and                 to that of showing that matrices PI and PF satisfy the two
+GF = [I|PF ] be systematic generator matrices of C I and C F                    properties mentioned in Theorem 18.
+over Fq , where PI is a k I × rI matrix and PF is a k F × rF                       We first show that the construction specified in Section V-A
+matrix.                                                                         satisfies condition (1) of Theorem 18.
+                                      I      I
+   Define entry (i, j) of PI ∈ Fkq ×r as θ(i−1)(j−1) , where                       Lemma 19: Let PI , PF be as defined in Section V-A. Then
+                                                                                P is rF -column block-constructible from PI .
+                                                                                  F
+                                                              F F
+(i, j) ranges over [k I ] × [rI ]. Entry (i, j) of PF ∈ Fkq ×r
+is defined identically as θ(i−1)(j−1) , where (i, j) ranges over                     Proof: Consider the first rF columns of PI , which we
+[k F ] × [rF ]. That is, PI and PF are as follows:                              denote as PIrF = PI [∗; 1, . . . , rF ]. Notice that PF can be
+            ⎡                                               ⎤                   written as the following block matrix:
+              1      1          1       ···          1
+                                                                                              ⎡                                                ⎤
+            ⎢1                                  θ(r −1) ⎥
+                                                     I
+            ⎢        θ         θ2       ···                 ⎥                                                 PIrF
+            ⎢                                     2(r I −1) ⎥                            ⎢ PI diag(1, θk , θ2k , . . . , θ(r −1)k ) ⎥
+       I
+     P =⎢   ⎢ 1     θ  2
+                               θ  4
+                                        · · ·   θ           ⎥,                           ⎢
+                                                                                                                    I I            F      I
+                                                                                                                                               ⎥
+                                                            ⎥                            ⎢ Ir
+                                                                                              F
+            ⎢ ..     ..         ..      ..            ..    ⎥                                           2kI     2·2kI             (r F −1)2kI ⎥
+            ⎣.        .          .          .          .    ⎦                         F  ⎢ P
+                                                                                     P = ⎢ rF diag(1, θ     , θ       , . . . , θ            ) ⎥,
+                                                                                                                                               ⎥
+                    I             I
+       1 θ(k −1) θ2(k −1) · · · θ(k −1)(r −1)
+                                                     I       I                           ⎢                       ..                            ⎥
+                                                                                         ⎣                        .                            ⎦
+      ⎡                                         ⎤                                                                         I           F            I
+       1    1        1     ···           1                                                      PIrF diag(1, θ(ς−1)k , . . . , θ(r −1)(ς−1)k )
+      ⎢1             θ2    ···      θ(r −1) ⎥
+                                         F
+      ⎢     θ                                   ⎥
+      ⎢                               2(r F −1) ⎥                               where diag(a1 , a2 , . . . , an ) is the n × n diagonal matrix with
+    F ⎢
+   P =⎢1    θ  2
+                     θ  4
+                           · · ·    θ           ⎥.
+                                                ⎥                               (a1 , . . . , an ) as the diagonal elements. From this representa-
+      ⎢ ..   ..       ..    ..            ..    ⎥
+      ⎣.      .        .       .           .    ⎦                               tion, it is clear that PF can be constructed from the first rF
+            F         F             F        F
+       1 θ(k −1) θ2(k −1) · · · θ(k −1)(r −1)                                   columns of PI .
+   Notice that this construction is stable, because it is access-                  It only remains to show that the construction in Section V-A
+optimal (recall Lemma 16). The unchanged symbols of the                         satisfies condition (2) of Theorem 18, that is, that PI and PF
+initial code are exactly the systematic symbols.                                are superregular.
+                                                                                   Lemma 20: Let PI , PF be as defined in Section V-A. Then
+                                                                                PI and PF are superregular, for sufficiently large field size.
+B. Proof of Optimality                                                               Proof: Let R be a t×t submatrix of PI or PF , determined
+   Recall from Proposition 2, that if the constructed code is                   by the row indices i1 < i2 < · · · < it and the column indices
+to be MDS, then both PI and PF need to be superregular                          j1 < j2 < · · · < jt , and denote entry (i, j) of R as R[i, j].
+
+
+       Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+4402                                                                              IEEE TRANSACTIONS ON INFORMATION THEORY, VOL. 68, NO. 7, JULY 2022
+
+
+
+The determinant of R is defined by the Leibniz formula:                           Recall that we defined the field size as q = pD for any prime p.
+                                                         t
+                                                                                  We set D = (E ∗ (ς, k I , rI , rF ) + 1). Then, if det(R) = 0 for
+             det(R) =                          sgn(σ)         R[l, σ(l)]   (9)    some submatrix R, θ is a root of fR , which is a contradiction
+                                                        l=1
+                                                                                  since θ is a primitive element and the minimal polynomial of
+                             σ∈Perm(t)
+                                                                                  θ over Fp has degree D > deg(fR ) [92].
+                        =                      sgn(σ)θEσ                             Combining the above results leads to the following key
+                             σ∈Perm(t)                                            result on the achievability of the lower bounds on access cost
+                                           t                                      derived in Section IV.
+              where          Eσ =               (il − 1)(jσ(l) − 1),                 Theorem 21: The explicit construction provided in
+                                          l=1                                     Section V-A yields access-optimal linear MDS convertible
+Perm(t) is the set of all permutations on t elements, and                         codes for all parameter values in the merge regime.
+sgn(σ) ∈ {−1, 1} is the sign of permutation σ. Clearly,                               Proof: Follows from Theorem 18, Lemma 19, and
+det(R) defines a univariate polynomial fR ∈ Fp [θ]. We will                       Lemma 20.
+now show that deg(fR ) = tl=1 (il − 1)(jl − 1) by showing                            The construction presented in this section is practical only
+that there is a unique permutation σ ∗ ∈ Perm(t) for which                        for small values of the parameters since the required field
+Eσ∗ achieves this value, and that this is the maximum over all                    size grows exponentially with the lengths of the initial and
+permutations in Perm(t). This means that fR has a leading                         final codes. In Section VI we present practical low-field-size
+term of degree Eσ∗ .                                                              constructions.
+    To prove this statement, we show that any permutation σ ∈
+Perm(t)\{σ ∗ } can be modified into a permutation σ  such                          VI. L OW F IELD -S IZE C ONVERTIBLE C ODES BASED ON
+that Eσ > Eσ . Specifically, we show that σ ∗ = σid , the                                   S UPERREGULAR H ANKEL A RRAYS
+identity permutation. Consider σ ∈ Perm(t)\{σid }: let a be                          In this section we present alternative constructions for (nI ,
+the smallest index such that σ(a) = a, let b = σ −1 (a), and                     k ; nF , k F = ςk I ) convertible code that require a significantly
+                                                                                    I
+
+let c = σ(a). Let σ  be such that σ  (a) = a, σ  (b) = c, and                  lower (polynomial) field size than the construction presented
+σ  (d) = σ(d) for d ∈ [t]\{a, b}. In other words, σ  is the                     in Section V. We start by explaining the key ideas behind
+result of “swapping” the images of a and b in σ. Notice that                      these constructions and present two examples that represent
+a < b and a < c. Then, we have that:                                              two extremes of a tradeoff between field size and coverage of
+                                                                                  parameter values. In Section VI-A, we describe the general
+       Eσ − Eσ = (ia − 1)(ja − 1) + (ib − 1)(jc − 1)                             construction, which includes codes at the two extremes of
+                   − (ia − 1)(jc − 1) − (ib − 1)(ja − 1)                          the tradeoff and a sequence of constructions in between.
+                     = (ib − ia )(jc − ja ) > 0                                   In Section VI-B, we show that the proposed code construction
+                                                                                  can support access-optimal conversion even when parameters
+The last inequality comes from the fact that a < b implies                        of the final code are a priori unknown.
+ia < ib and a < c implies ja < jc . Therefore, deg(fR ) =                            The key idea behind our constructions is to take the matrices
+maxσ∈Perm(t) Eσ = Eσid .                                                          PI and PF as cleverly-chosen submatrices from a specially
+   Let E ∗ (ς, k I , rI , rF ) be the maximum degree of fR over                   constructed triangular array of the following form:
+all submatrices R of PI or PF . Then, E ∗ (ς, k I , rI , rF )                                            b1      b2 b3 · · · bm−1 bm
+corresponds to the diagonal with the largest elements in PI or                                           b2      b3 · · · · · · bm
+PF . In PF this is the diagonal of the square submatrix formed                                                    ..     .    .
+by the bottom rF rows. In PI it can be either the diagonal                                               b3        . .. ..
+                                                                                               Tm :                                                        (10)
+of the square submatrix formed by the bottom rI rows, or by                                               ..       ..    .
+                                                                                                           .        . ..
+the right k I columns. Thus, we have that:
+                                                                                                       bm−1      bm
+                 ∗       I    I       F                                                                 bm
+              E (ς, k , r , r ) = max{E1 , E2 , E3 }
+                                                                                  with the property that every submatrix of Tm is superregular
+                             r F −1                                               (the submatrix must lie completely within the triangular array).
+          where E1 =                  i(ςk I − rF + i)                            Here, (1) (b1 , . . . , bm ) are (not necessarily distinct) elements
+                              i=0                                                 from Fq , and (2) m is at most the field size q. The array
+                        = rF (rF − 1)(3ςk I − rF − 1)/6,                          Tm has Hankel form, that is, Tm [i, j] = Tm [i − 1, j + 1], for
+                                                                                  all i ∈ [2, m], j ∈ [m − 1]. We denote Tm a superregular
+                             r I −1
+                                                                                  Hankel array. Such an array can be constructed by employing
+                     E2 =             i(k I − rI + i)
+                                                                                  the algorithm proposed in [94] (where the algorithm was
+                              i=0
+                                                                                  employed to generate generalized Cauchy matrices to construct
+                        = rI (rI − 1)(3k I − rI − 1)/6,                           generalized Reed-Solomon codes). This algorithm is described
+                             kI −1                                                in Appendix for reference, although it is not necessary for
+                     E3 =             i(rI − k I + i)                             understanding the constructions in this section.
+                              i=0                                                    We construct the initial and final codes by taking submatri-
+                        = k I (k I − 1)(3rI − k I − 1)/6.                         ces PI and PF from superregular Hankel arrays in a special
+
+
+         Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+MATURANA AND RASHMI: CONVERTIBLE CODES: ENABLING EFFICIENT CONVERSION OF CODED DATA IN DISTRIBUTED STORAGE                                                 4403
+
+
+
+
+Fig. 5. Examples of constructions based on Hankel arrays: (a) Hankel-I construction parity generator matrices for systematic (9, 5; 12, 10) convertible code.
+Notice how matrix PF corresponds to the vertical concatenation of the first two columns and the last two columns of matrix PI . (b) Hankel-II construction
+parity generator matrices for systematic (7, 4; 10, 8) convertible code. Notice how matrix PF corresponds to the vertical concatenation of the first and second
+column of PI , and the second and third column of PI .
+
+
+
+manner. This guarantees that PI and PF are superregular.                          following structure:
+In addition, we exploit the Hankel form of the array by care-                                                                         ⎡ ⎤
+fully choosing the submatrices that form PI and PF to ensure                                                                         p1 p2
+                                                                                                                                      ⎢   ⊥⎥
+                                                                                                                
+that PF is rF -column block-constructible from PI . Given the                             PI = p1 p2 p3 p4 ,                     PF = ⎣ ⊥
+                                                                                                                                          ⎦.
+way we construct these matrices and the properties of Tm , all
+                                                                                                      ⊥    ⊥     ⊥ ⊥                   p3 p4
+                                                                                                                                              ⊥       ⊥
+the initial and final codes presented in this section turn out to                                                                   F
+be inside a well-studied class of codes known as (punctured)                      From this structure, it is clear that P is 2-column block-
+generalized doubly-extended Reed-Solomon codes [94].                              constructible from PI . Therefore, PI and PF satisfy the
+   The above idea yields a sequence of constructions with a                       sufficient conditions of Theorem 18, and define an access-
+tradeoff between the field size and the maximum value of rF                       optimal convertible code.                                      
+supported. We first present two examples that correspond to                         Example 23 (Hankel-II): Consider parameters (7, 4; 10, 8)
+the extreme ends of this tradeoff, which we call Hankel-I and                     and field F13 (any finite field of size at least 12 suffices, but
+Hankel-II. Construction Hankel-I, shown in Example 22, can                        we choose a prime field for ease of explanation). Notice that
+be applied whenever rF ≤ rI /ς, and requires a field size                        these parameters satisfy:
+of q ≥ (max{nI , nF } − 1). Construction Hankel-II, shown in                           rF = 2 ≤ rI − ς + 1 = 2 and q = 13 ≥ k I rI = 12
+Example 23, can be applied whenever rF ≤ (rI − ς + 1), and
+requires a field size of q ≥ k I rI .                                             First, construct a superregular Hankel array of size k I rI = 12,
+   Throughout this section we will assume that ς ≤ rI ≤ k I .                     T12 , by choosing q = 13 as the field size, and employing the
+The ideas presented here are still applicable when rI > k I ,                     algorithm in [94]. The submatrix PI ∈ F4×3 13 is formed by the
+but the constructions and analysis change in minor ways.                          top k I = 4 rows and columns {1, (k I +1) = 5, (2k I +1) = 9}
+   Example 22 (Hankel-I): Consider the parameters (9, 5; 12,                      of T12 , as shown in Figure 5b. The submatrix PF ∈ F8×2    13 is
+10) and the field F11 (any finite field of size at least 11 suffices,             formed by the top k F = 8 rows and columns {1, (k I +1) = 5}
+but we choose a prime field for ease of explanation). Notice                      of T12 , as shown in Figure 5b. It is easy to check that PI and
+that these parameters satisfy:                                                    PF are superregular, which follows from the superregularity
+                                                                                 of T12 . Furthermore, notice that the chosen parity matrices
+                           rI                                                     have the following structure:
+              rF = 2 ≤          = 2, and                                                                                      ⎡ ⎤
+                            ς
+                                                                                                                              p1 p2
+                q = 11 ≥ max{nI , nF } − 1 = 11.                                                                           ⎢      ⊥⎥
+                                                                                           PI = p1 p2 p3 ,             PF = ⎣ ⊥      ⎦.
+                                                                                                    ⊥   ⊥    ⊥                  p2 p3
+   First, construct a superregular Hankel array of size nF −1 =                                                                           ⊥       ⊥
+11, T11 , employing the algorithm in [94]. Then, divide the                                                        F
+                                                                                  It is easy to see that P is 2-column block-constructible
+rI = 4 initial parities into ς = 2 groups: encoding vectors                       from PI . Therefore, PI and PF satisfy the sufficient
+of parities in the same group will correspond to contiguous                       conditions of Theorem 18, and define an access-optimal
+columns of T11 . The submatrix PI ∈ F5×411 is formed from the                     convertible code.                                     
+top k I = 5 rows and columns 1, 2, k I + 1 = 6 and k I + 2 = 7
+of T11 , as shown in Figure 5a. The submatrix PF ∈ F10×2    11
+is formed from the top k I = 10 rows and columns 1, 2 of                          A. General Hankel-Array-Based Construction of convertible
+T11 , as shown in Figure 5a. Checking that these matrices                         codes
+are superregular follows from the superregularity of T11 .                           In this subsection, we present a sequence of Hankel-array-
+It is straightforward to check that both these matrices are                       based constructions of access-optimal MDS convertible codes.
+superregular, which follows from the superregularity of T11 .                     This sequence of constructions presents a tradeoff between
+Furthermore, notice that the chosen parity matrices have the                      field size and the range of rF supported. To index the sequence
+
+
+         Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+4404                                                                              IEEE TRANSACTIONS ON INFORMATION THEORY, VOL. 68, NO. 7, JULY 2022
+
+
+
+
+Fig. 6. Generator matrix for initial and final parities in Hankels construction. The vertical bars separate groups of columns. In matrix PI , the index i ranges
+from 1 to s. In matrix PF , the index i ranges from 1 to (s − ς + 1).
+
+
+
+we use s ∈ {ς, ς + 1, . . . , rI } which corresponds to the                       Tm and the manner in which PI and PF are constructed
+number of groups into which the initial parity encoding vectors                   guarantees that the l-th column of PF corresponds to the
+are divided. Given parameters {k I , rI , ς} and a field Fq ,                     vertical concatenation of columns {l, l + t, . . . , l + (ς − 1)t}
+construction Hankels (s ∈ {ς, ς + 1, . . . , rI }) supports:                      of PI . Thus, PF is rF -column block-constructible from
+                                                                                 PI . Furthermore, since PI and PF are submatrices of Tm ,
+    F                 rI
+   r ≤ (s − ς + 1)         + max{(rI mod s) − ς + 1, 0},                          they are superregular. Thus PI and PF satisfy both of the
+                       s
+                                                                                 properties laid out in Theorem 18 and hence the convertible
+                               I     rI
+       requiring q ≥ max{sk +                − 1, nI − 1}.                        code constructed by Hankels is access-optimal.
+                                      s                                              2) Conversion Procedure: During conversion, the k I data
+   Therefore, Hankel-I, from Example 22 corresponds to                            symbols from each of the ς initial codewords remain
+Hankelς and Hankel-II from Example 23 corresponds to                              unchanged, and become the k F = ςk I data symbols from
+HankelrI .                                                                        the final codeword. The rF new (parity) blocks from the
+   1) Construction of Hankels : Assume, for the sake of sim-                      final codeword are constructed by accessing symbols from the
+plicity, that k I ≥ rI , s | rI and let t = (rI /s). Now                          initial codewords as detailed below. To construct the l-th new
+we describe how to construct PI and PF over a field Fq                            symbol (corresponding to the l-th column of PF , l ∈ [rF ]),
+whenever:                                                                         read parity symbol (l + (i − 1)t) from each initial codeword
+                                                                                  i ∈ [ς], and then sum the ς symbols read. The encoding
+            rF ≤ (s − ς + 1)t and q ≥ sk I + t − 1.                               vector of the new symbol will be equal to the sum of the
+Without loss of generality, we consider rF = (s − ς + 1)t                         encoding vectors of the symbols read. This is done for every
+(lesser values of rF can be obtained by puncturing the final                      new encoding vector l ∈ [rF ].
+code, i.e., eliminating some of the final parities). Let Tm be as
+in Equation 10, with m = (sk I + t − 1). Divide the rI initial                    B. Handling a Priori Unknown Parameters
+parity encoding vectors into s disjoint sets (S1 , S2 , . . . , Ss ) of              In practice, the final parameters (nF , k F ) might be unknown
+size t each. We associate each set Si (i ∈ [s]) with a set                        at the time of code construction, as they might depend on
+of column indices col(Si ) = {(i − 1)k I + 1, (i − 1)k I +                        the empirically observed failure rates. Thus, it is of interest
+2, . . . , (i − 1)k I + t} of Tm . Matrix PI is the submatrix                     to construct initial codes that are (nF , k F )-access-optimally
+formed by the top k I rows and the columns indexed by the set                     convertible for all (nF , k F ) in a given set. The general con-
+(col(S1 ) ∪ · · · ∪ col(Ss )) of Tm . Matrix PF is the submatrix                  struction and the Hankel-array based constructions presented
+formed by the top ςk I rows and the columns indexed by                            above indeed provide such a property.
+the set (col(S1 ) ∪ · · · ∪ col(Ss−ς+1 )) of Tm . The resulting                      Proposition 25: Every initial code from an (nI , k I ; nF ,
+matrices PI and PF are shown in Figure 6. In the case where                       k = ςk I ) convertible code constructed using the construc-
+                                                                                    F
+                                                                                                                                           
+s  rI , we form an additional set Ss+1 with the remaining (rI                    tions in this section and Section V is also (nF , k F )-access-
+                                                                                                                                               
+mod s) initial parity encoding vectors, and proceed as above.                     optimally convertible for any k F = ς  k I and nF = (rF +
+                                                                                                      
+    Theorem 24: Given parameters k I , rI , ς, and a field Fq                     k F ) with 0 ≤ rF ≤ rF and 2 ≤ ς  ≤ ς.
+Hankels (s ∈ {ς, . . . , rI }) constructs an access-optimal (nI ,                       Proof: The conversion procedure can be easily modified to
+k I ; nF , k F = ςk I ) convertible code if:                                      take fewer initial codewords (i.e. by treating some of the initial
+                              
+      F                    rI                                                     codewords as all-zero codewords) or construct fewer parity
+     r ≤ (s − ς + 1)            + max{(rI mod s) − ς + 1, 0}                      symbols. Since the access cost associated with each initial
+                           s
+                                                                                 codeword is min{k I , rI }, and the access cost associated with
+                                 I     rI
+              and q ≥ max{sk +               − 1, nI − 1}.                        every parity symbol is ς +1, the resulting conversion procedure
+                                        s                                         has optimal access cost.
+    Proof: Consider the construction Hankels described in                            Thus, to support access-optimal conversion for all parame-
+this section, for some s ∈ {ς, . . . , rI }. The Hankel form of                   ters (nF = ςk I + rF , k F = ςk I ) in a given finite set of
+
+
+         Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+MATURANA AND RASHMI: CONVERTIBLE CODES: ENABLING EFFICIENT CONVERSION OF CODED DATA IN DISTRIBUTED STORAGE                                                 4405
+
+
+
+values for ς and rF , it suffices to construct an access-optimal                    3) Set bi = σi−1 , for all i ∈ [m].
+convertible code using the largest parameter ς and rF in the                     The resulting triangular array is superregular, that is, every
+set. Then, by Proposition 25, the initial code will support                      square submatrix taken from Tm is superregular. Please refer
+access-optimal conversion for all parameter values in the given                  to [94] for a proof of this fact.
+set.
+                                                                                                                R EFERENCES
+           VII. C ONCLUSION AND F UTURE W ORK
+                                                                                  [1] F. Maturana and K. V. Rashmi, “Convertible codes: New class of codes
+   In this paper, we introduce the code conversion problem, and                       for efficient conversion of coded data in distributed storage,” in Proc.
+the framework of convertible codes which lays the theoretical                         11th Innov. Theor. Comput. Sci. Conf. (ITCS), vol. 151, T. Vidick, Ed.
+                                                                                      Seattle, WA, USA: Schloss Dagstuhl-Leibniz-Zentrum für Informatik,
+foundation for the rigorous study of the code conversion prob-                        Jan. 2020, p. 66.
+lem. The proposed framework enables the investigation of the                      [2] S. Ghemawat, H. Gobioff, and S. Leung, “The Google file system,” ACM
+fundamental limits on the resource consumption of the code                            SIGOPS Operating Syst. Rev., vol. 37, no. 5, pp. 29–43, 2003.
+                                                                                  [3] D. Borthakur, R. Schmidt, R. Vadali, S. Chen, and P. Kling. HDFS
+conversion operation, as shown by our derivation of the tight                         RAID—Facebook (Presentation). Accessed: Jan. 6, 2022. [Online].
+lower bounds on the access cost of conversions. Furthermore,                          Available: http://www.slideshare.net/ydn/hdfs-raid-facebook
+we present explicit constructions of access-optimal convertible                   [4] C. Huang et al., “Erasure coding in Windows Azure storage,” in Proc.
+                                                                                      USENIX Annu. Tech. Conf. (ATC), 2012, pp. 15–26.
+codes for a wide range of parameter regimes. These results                        [5] Apache Software Foundation. Apache Hadoop Documentation: HDFS
+show that it is indeed possible to achieve code conversion                            Erasure Coding. Accessed: Jul. 23, 2019. [Online]. Available: https://
+using significantly fewer accesses than the default approach                          hadoop.apache.org/docs/r3.0.0/hadoop-project-dist/hadoop-hdfs/
+                                                                                      HDFSErasureCoding.html
+for a wide range of parameter regimes.                                            [6] K. V. Rashmi, N. B. Shah, D. Gu, H. Kuang, D. Borthakur, and
+   Convertible codes have a significant potential for real-world                      K. Ramchandran, “A solution to the network challenges of data recovery
+impact by enabling resource-efficient redundancy tuning which                         in erasure-coded distributed storage systems: A study on the Facebook
+                                                                                      warehouse cluster,” in Proc. 5th USENIX Workshop Hot Topics Storage
+has been shown to provide considerable cost benefits in                               File Syst. (HotStorage), Jun. 2013.
+large-scale cluster storage systems [9]. By laying the theo-                      [7] K. V. Rashmi, N. B. Shah, D. Gu, H. Kuang, D. Borthakur, and
+retical foundations for studying the code conversion problem,                         K. Ramchandran, “A ‘hitchhiker’s’ guide to fast and efficient data
+                                                                                      reconstruction in erasure-coded data centers,” in Proc. ACM Conf.
+this work has opened up a wide new space for design of                                SIGCOMM, 2014, pp. 331–342.
+codes for storage systems with a host of open problems, such                      [8] M. Asteris, D. Papailiopoulos, A. G. Dimakis, R. Vadali, S. Chen, and
+as studying different measures of conversion costs, studying                          D. Borthakur, “Xoring elephants: Novel erasure codes for big data,”
+                                                                                      Proc. VLDB Endowment, vol. 6, no. 5, pp. 325–336, 2013.
+conversion in non-MDS codes, and considering the efficiency                       [9] S. Kadekodi, K. V. Rashmi, and G. R. Ganger, “Cluster storage systems
+of conversion in conjunction with other properties such as                            gotta have HeART: Improving storage efficiency by exploiting disk-
+repair efficiency. Exploring these dimensions would include                           reliability heterogeneity,” in Proc. 17th USENIX Conf. File Storage
+                                                                                      Technol. (USENIX FAST), 2019, pp. 345–358.
+deriving fundamental limits on the chosen conversion cost,                       [10] S. Kadekodi, F. Maturana, S. J. Subramanya, J. Yang,
+proving achievability results via code constructions meeting                          K. V. Rashmi, and G. R. Ganger, “PACEMAKER: Avoiding HeART
+the lower bounds, and constructing practical, low-field-size                          attacks in storage clusters with disk-adaptive redundancy,” in Proc. 14th
+                                                                                      USENIX Symp. Operating Syst. Design Implement. (OSDI), Nov. 2020,
+convertible codes optimizing the conversion costs.                                    pp. 369–385. [Online]. Available: https://www.usenix.org/conference/
+                                                                                      osdi20/presentation/kadekodi
+                                                                                 [11] J. Huang, X. Liang, X. Qin, P. Xie, and C. Xie, “Scale-RS: An efficient
+                      A PPENDIX                                                       scaling scheme for RS-coded storage clusters,” IEEE Trans. Parallel
+     A LGORITHM FOR C ONSTRUCTING S UPERREGULAR                                       Distrib. Syst., vol. 26, no. 6, pp. 1704–1717, Jun. 2015.
+             H ANKEL T RIANGULAR A RRAYS                                         [12] B. K. Rai, V. Dhoorjati, L. Saini, and A. K. Jha, “On adaptive distributed
+                                                                                      storage systems,” in Proc. IEEE Int. Symp. Inf. Theory (ISIT), Jun. 2015,
+   In this appendix we describe the algorithm from [94] for                           pp. 1482–1486.
+constructing a superregular Hankel triangular array over any                     [13] M. Sonowal and B. K. Rai, “On adaptive distributed storage systems
+                                                                                      based on functional MSR code,” in Proc. Int. Conf. Wireless Commun.,
+finite field. This is provided as reference for completeness and                      Signal Process. Netw. (WiSPNET), Mar. 2017, pp. 338–343.
+is not necessary for understanding the constructions described                   [14] Y. Hu, X. Zhang, P. P. C. Lee, and P. Zhou, “Generalized optimal storage
+in this paper. We note that the algorithm outlined in [94] takes                      scaling via network coding,” in Proc. IEEE Int. Symp. Inf. Theory (ISIT),
+                                                                                      Vail, CO, USA, Jun. 2018, pp. 956–960.
+the field size q as input, and generates Tq as the output. It is                 [15] I. S. Reed and G. Solomon, “Polynomial codes over certain finite fields,”
+easy to see that Tq thus generated can be truncated to generate                       J. Soc. Ind. Appl. Math., vol. 8, no. 2, pp. 300–304, Jun. 1960.
+the triangular array Tm for any m ≤ q.                                           [16] D. A. Patterson, G. Gibson, and R. H. Katz, “A case for redundant
+                                                                                      arrays of inexpensive disks (RAID),” in Proc. ACM SIGMOD Int. Conf.
+   Let Fq be a given base field, and let m ≤ q be the size of                         Manage. Data, 1988, pp. 109–116.
+the output triangular array Tm . The triangular array Tm has                     [17] J. Plank, “T1: Erasure codes for storage applications,” in Proc. 4th
+Hankel form, as shown in Equation 10. Therefore, it suffices                          USENIX Conf. File Storage Technol., Jan. 2005, pp. 1–74.
+                                                                                 [18] M. Blaum, J. Brady, J. Bruck, and J. Menon, “EVENODD: An efficient
+to specify the entries b1 , b2 , . . . , bm in the first column of Tm .               scheme for tolerating double disk failures in RAID architectures,” IEEE
+On input m ≤ q, the algorithm proceeds as follows:                                    Trans. Comput., vol. 44, no. 2, pp. 192–202, Feb. 1995.
+   1) Consider the extension field Fq2 and choose an element                     [19] L. Xu and J. Bruck, “X-code: MDS array codes with optimal encoding,”
+                                                                                      IEEE Trans. Inf. Theory, vol. 45, no. 1, pp. 272–276, Jan. 1999.
+       β ∈ Fq2 such that β i ∈ Fq for i ∈ [q] and β q+1 ∈ Fq .                  [20] C. Huang and L. Xu, “STAR: An efficient coding scheme for correcting
+       Let p(x) = x2 + μ x + η be the minimal polynomial of                           triple storage node failures,” IEEE Trans. Comput., vol. 57, no. 7,
+       β over Fq2 .                                                                   pp. 889–901, Jul. 2008.
+                                                                                 [21] J. L. Hafner, “WEAVER codes: Highly fault tolerant erasure codes
+   2) Let σ−1 , σ0 , . . . , σm ∈ Fq be such that σ−1 =                               for storage systems,” in Proc. 4th Conf. USENIX Conf. File Storage
+       −η −1 , σ0 = 0, and σi = −μ σi−1 − η σi−2 , for i ∈ [m].                       Technol., Berkeley, CA, USA, vol. 4, 2005, p. 16.
+
+
+
+        Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+4406                                                                              IEEE TRANSACTIONS ON INFORMATION THEORY, VOL. 68, NO. 7, JULY 2022
+
+
+
+[22] A. G. Dimakis, P. B. Godfrey, Y. Wu, M. J. Wainwright, and                   [45] V. Abdrashitov, N. Prakash, and M. Medard, “The storage vs repair
+     K. Ramchandran, “Network coding for distributed storage systems,”                 bandwidth trade-off for multiple failures in clustered storage networks,”
+     IEEE Trans. Inf. Theory, vol. 56, no. 9, pp. 4539–4551, Sep. 2010.                in Proc. IEEE Inf. Theory Workshop (ITW), Nov. 2017, pp. 46–50.
+[23] K. V. Rashmi, N. B. Shah, and P. V. Kumar, “Optimal exact-regenerating       [46] K. Shanmugam, D. S. Papailiopoulos, A. G. Dimakis, and G. Caire,
+     codes for distributed storage at the MSR and MBR points via a                     “A repair framework for scalar MDS codes,” IEEE J. Sel. Areas
+     product-matrix construction,” IEEE Trans. Inf. Theory, vol. 57, no. 8,            Commun., vol. 32, no. 5, pp. 998–1007, May 2014.
+     pp. 5227–5239, Aug. 2011.                                                    [47] V. Guruswami and M. Wootters, “Repairing Reed–Solomon codes,” in
+[24] N. B. Shah, K. V. Rashmi, P. V. Kumar, and K. Ramchandran,                        Proc. 48th Annu. ACM Symp. Theory Comput., Jun. 2016, pp. 216–226.
+     “Interference alignment in regenerating codes for distributed storage:       [48] M. Ye and A. Barg, “Explicit constructions of MDS array codes and
+     Necessity and code constructions,” IEEE Trans. Inf. Theory, vol. 58,              RS codes with optimal repair bandwidth,” in Proc. IEEE Int. Symp. Inf.
+     no. 4, pp. 2134–2158, Apr. 2012.                                                  Theory (ISIT), Jul. 2016, pp. 1202–1206.
+[25] C. Suh and K. Ramchandran, “Exact-repair MDS code construction               [49] H. Dau and O. Milenkovic, “Optimal repair schemes for some families of
+     using interference alignment,” IEEE Trans. Inf. Theory, vol. 57, no. 3,           full-length Reed–Solomon codes,” in Proc. IEEE Int. Symp. Inf. Theory
+     pp. 1425–1442, Mar. 2011.                                                         (ISIT), Jun. 2017, pp. 346–350.
+[26] Z. Wang, I. Tamo, and J. Bruck, “On codes for optimal rebuilding             [50] I. Tamo, M. Ye, and A. Barg, “Optimal repair of Reed–Solomon codes:
+     access,” in Proc. 49th Annu. Allerton Conf. Commun., Control, Comput.             Achieving the cut-set bound,” in Proc. IEEE 58th Annu. Symp. Found.
+     (Allerton), Sep. 2011, pp. 1374–1381.                                             Comput. Sci. (FOCS), Oct. 2017, pp. 216–227.
+[27] V. R. Cadambe, C. Huang, J. Li, and S. Mehrotra, “Polynomial                 [51] J. Mardia, B. Bartan, and M. Wootters, “Repairing multiple failures
+     length MDS codes with optimal repair in distributed storage,” in Proc.            for scalar MDS codes,” IEEE Trans. Inf. Theory, vol. 65, no. 5,
+     Conf. Rec. 45th Asilomar Conf. Signals, Syst. Comput. (ASILOMAR),                 pp. 2661–2672, May 2019.
+     Nov. 2011, pp. 1850–1854.                                                    [52] H. Dau, I. Duursma, H. M. Kiah, and O. Milenkovic, “Repairing Reed–
+[28] N. B. Shah, K. V. Rashmi, P. V. Kumar, and K. Ramchandran, “Dis-                  Solomon codes with multiple erasures,” IEEE Trans. Inf. Theory, vol. 64,
+     tributed storage codes with repair-by-transfer and nonachievability of            no. 10, pp. 6567–6582, Oct. 2018.
+     interior points on the storage-bandwidth tradeoff,” IEEE Trans. Inf.         [53] I. Tamo, M. Ye, and A. Barg, “The repair problem for Reed–Solomon
+     Theory, vol. 58, no. 3, pp. 1837–1852, Mar. 2012.                                 codes: Optimal repair of single and multiple erasures with almost opti-
+[29] Z. Wang, I. Tamo, and J. Bruck, “Long MDS codes for optimal                       mal node size,” IEEE Trans. Inf. Theory, vol. 65, no. 5, pp. 2673–2695,
+     repair bandwidth,” in Proc. IEEE Int. Symp. Inf. Theory, Jul. 2012,               May 2019.
+     pp. 1182–1186.                                                               [54] S. Balaji and P. V. Kumar, “A tight lower bound on the sub-packetization
+[30] I. Tamo, Z. Wang, and J. Bruck, “Zigzag codes: MDS array codes                    level of optimal-access MSR and MDS codes,” in Proc. IEEE Int. Symp.
+     with optimal rebuilding,” IEEE Trans. Inf. Theory, vol. 59, no. 3,                Inf. Theory (ISIT), Jun. 2018, pp. 2381–2385.
+     pp. 1597–1616, Mar. 2013.                                                    [55] K. V. Rashmi, P. Nakkiran, J. Wang, N. B. Shah, and K. Ramchandran,
+[31] V. R. Cadambe, S. A. Jafar, H. Maleki, K. Ramchandran, and                        “Having your cake and eating it too: Jointly optimal erasure codes for
+     C. Suh, “Asymptotic interference alignment for optimal repair of MDS              I/O, storage, and network-bandwidth,” in Proc. 13th USENIX Conf. File
+     codes in distributed storage,” IEEE Trans. Inf. Theory, vol. 59, no. 5,           Storage Technol. (FAST), 2015, pp. 81–94.
+     pp. 2974–2987, May 2013.                                                     [56] I. Tamo, Z. Wang, and J. Bruck, “Access versus bandwidth in codes
+[32] D. Papailiopoulos, A. G. Dimakis, and V. Cadambe, “Repair optimal                 for storage,” IEEE Trans. Inf. Theory, vol. 60, no. 4, pp. 2028–2037,
+     erasure codes through Hadamard designs,” IEEE Trans. Inf. Theory,                 Apr. 2014.
+     vol. 59, no. 5, pp. 3021–3037, May 2013.                                     [57] S. Goparaju, I. Tamo, and R. Calderbank, “An improved sub-
+[33] B. Sasidharan, G. K. Agarwal, and P. V. Kumar, “A high-rate MSR code              packetization bound for minimum storage regenerating codes,” IEEE
+     with polynomial sub-packetization level,” in Proc. IEEE Int. Symp. Inf.           Trans. Inf. Theory, vol. 60, no. 5, pp. 2770–2779, May 2014.
+     Theory (ISIT), Jun. 2015, pp. 2051–2055.                                     [58] O. Alrabiah and V. Guruswami, “An exponential lower bound on the
+[34] M. Ye and A. Barg, “Explicit constructions of optimal-access MDS                  sub-packetization of MSR codes,” in Proc. 51st Annu. ACM SIGACT
+     codes with nearly optimal sub-packetization,” IEEE Trans. Inf. Theory,            Symp. Theory Comput., New York, NY, USA, Jun. 2019, pp. 979–985.
+     vol. 63, no. 10, pp. 6307–6317, Oct. 2017.                                   [59] K. Rashmi, N. B. Shah, and K. Ramchandran, “A piggybacking design
+[35] M. Ye and A. Barg, “Explicit constructions of high-rate MDS array                 framework for read-and download-efficient distributed storage codes,”
+     codes with optimal repair bandwidth,” IEEE Trans. Inf. Theory, vol. 63,           IEEE Trans. Inf. Theory, vol. 63, no. 9, pp. 5802–5820, Sep. 2017.
+     no. 4, pp. 2001–2014, Apr. 2017.                                             [60] V. Guruswami and A. S. Rawat, “MDS code constructions with small
+[36] A. S. Rawat, O. O. Koyluoglu, and S. Vishwanath, “Progress on high-               sub-packetization and near-optimal repair bandwidth,” in Proc. 28th
+     rate MSR codes: Enabling arbitrary number of helper nodes,” in Proc.              Annu. ACM-SIAM Symp. Discrete Algorithms, Jan. 2017.
+     Inf. Theory Appl. Workshop (ITA), Jan. 2016, pp. 1–6.                        [61] P. Gopalan, C. Huang, H. Simitci, and S. Yekhanin, “On the locality
+[37] B. Sasidharan, M. Vajha, and P. V. Kumar, “An explicit, coupled-layer             of codeword symbols,” IEEE Trans. Inf. Theory, vol. 58, no. 11,
+     construction of a high-rate MSR code with low sub-packetization level,            pp. 6925–6934, Nov. 2011.
+     small field size and d < (n − 1),” in Proc. IEEE Int. Symp. Inf. Theory      [62] A. S. Rawat, O. O. Koyluoglu, N. Silberstein, and S. Vishwanath, “Opti-
+     (ISIT), Jun. 2017, pp. 2048–2052.                                                 mal locally repairable and secure codes for distributed storage systems,”
+[38] S. Goparaju, A. Fazeli, and A. Vardy, “Minimum storage regenerating               IEEE Trans. Inf. Theory, vol. 60, no. 1, pp. 212–236, Nov. 2013.
+     codes for all parameters,” IEEE Trans. Inf. Theory, vol. 63, no. 10,         [63] J. Katz and L. Trevisan, “On the efficiency of local decoding procedures
+     pp. 6318–6328, Oct. 2017.                                                         for error-correcting codes,” in Proc. 32nd Annu. ACM Symp. Theory
+[39] A. Chowdhury and A. Vardy, “New constructions of MDS codes with                   Comput., F. F. Yao and E. M. Luks, Eds. Portland, OR, USA: ACM
+     asymptotically optimal repair,” in Proc. IEEE Int. Symp. Inf. Theory              Press, May 2000, pp. 80–86.
+     (ISIT), Jun. 2018, pp. 1944–1948.                                            [64] M. Blaum, J. L. Hafner, and S. Hetzler, “Partial-MDS codes and their
+[40] K. Mahdaviani, A. Khisti, and S. Mohajer, “Bandwidth adaptive & error             application to RAID type of architectures,” IEEE Trans. Inf. Theory,
+     resilient MBR exact repair regenerating codes,” IEEE Trans. Inf. Theory,          vol. 59, no. 7, pp. 4510–4519, Jul. 2013.
+     vol. 65, no. 5, pp. 2736–2759, May 2019.                                     [65] P. Gopalan, C. Huang, B. Jenkins, and S. Yekhanin, “Explicit maximally
+[41] K. Mahdaviani, S. Mohajer, and A. Khisti, “Product matrix MSR codes               recoverable codes with locality,” IEEE Trans. Inf. Theory, vol. 60, no. 9,
+     with bandwidth adaptive exact repair,” IEEE Trans. Inf. Theory, vol. 64,          pp. 5245–5256, Sep. 2014.
+     no. 4, pp. 3121–3135, Apr. 2018.                                             [66] D. S. Papailiopoulos and A. G. Dimakis, “Locally repairable codes,”
+[42] A. S. Rawat, I. Tamo, V. Guruswami, and K. Efremenko, “MDS                        IEEE Trans. Inf. Theory, vol. 60, no. 10, pp. 5843–5855, Oct. 2014.
+     code constructions with small sub-packetization and near-optimal repair      [67] I. Tamo and A. Barg, “A family of optimal locally recoverable codes,”
+     bandwidth,” IEEE Trans. Inf. Theory, vol. 64, no. 10, pp. 6506–6525,              IEEE Trans. Inf. Theory, vol. 60, no. 8, pp. 4661–4676, May 2014.
+     Oct. 2018.                                                                   [68] G. M. Kamath, N. Prakash, V. Lalitha, and P. V. Kumar, “Codes with
+[43] N. B. Sha, K. V. Rashmi, and P. V. Kumar, “A flexible class of                    local regeneration and erasure correction,” IEEE Trans. Inf. Theory,
+     regenerating codes for distributed storage,” in Proc. IEEE Int. Symp.             vol. 60, no. 8, pp. 4637–4660, Aug. 2014.
+     Inf. Theory, Jun. 2010, pp. 1943–1947.                                       [69] V. R. Cadambe and A. Mazumdar, “Bounds on the size of locally recov-
+[44] K. W. Shum, “Cooperative regenerating codes for distributed storage               erable codes,” IEEE Trans. Inf. Theory, vol. 61, no. 11, pp. 5787–5794,
+     systems,” in Proc. IEEE Int. Conf. Commun. (ICC), Jun. 2011, pp. 1–5.             Nov. 2015.
+
+
+
+         Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+MATURANA AND RASHMI: CONVERTIBLE CODES: ENABLING EFFICIENT CONVERSION OF CODED DATA IN DISTRIBUTED STORAGE                                                 4407
+
+
+
+[70] I. Tamo, D. S. Papailiopoulos, and A. G. Dimakis, “Optimal locally           [88] S. Mousavi, T. Zhou, and C. Tian, “Delayed parity generation in MDS
+     repairable codes and connections to matroid theory,” IEEE Trans. Inf.             storage codes,” in Proc. IEEE Int. Symp. Inf. Theory (ISIT), Vail, CO,
+     Theory, vol. 62, no. 12, pp. 6661–6671, Dec. 2016.                                USA, Jun. 2018, pp. 1889–1893.
+[71] I. Tamo, A. Barg, and A. Frolov, “Bounds on the parameters of                [89] M. Xia, M. Saxena, M. Blaum, and D. Pease, “A tale of
+     locally recoverable codes,” IEEE Trans. Inf. Theory, vol. 62, no. 6,              two erasure codes in HDFS,” in Proc. 13th USENIX Conf.
+     pp. 3070–3083, Jun. 2016.                                                         File Storage Technol. (FAST), J. Schindler and E. Zadok, Eds.
+[72] A. Barg, K. Haymaker, E. W. Howe, G. L. Matthews, and A. Várilly-                 Santa Clara, CA, USA: USENIX Association, Feb. 2015, pp. 213–226.
+     Alvarado, “Locally recoverable codes from algebraic curves and sur-               [Online]. Available: https://www.usenix.org/conference/fast15/technical-
+     faces,” in Algebraic Geometry for Coding Theory and Cryptography.                 sessions/presentation/xia
+     Cham, Switzerland: Springer, 2017, pp. 95–127.                               [90] X. Su, X. Zhong, X. Fan, and J. Li, “Local re-encoding for coded
+[73] S. L. Frank-Fischer, V. Guruswami, and M. Wootters, “Locality via                 matrix multiplication,” in Proc. IEEE Int. Symp. Inf. Theory (ISIT),
+     partially lifted codes,” in Approximation, Randomization, and Combina-            Los Angeles, CA, USA, Jun. 2020, pp. 221–226.
+     torial Optimization. Algorithms and Techniques (APPROX/RANDOM).              [91] S. Wu, Z. Shen, and P. P. C. Lee, “Enabling I/O-efficient redundancy
+     Wadern, Germany: Schloss Dagstuhl-Leibniz-Zentrum füer Informatik,                transitioning in erasure-coded KV stores via elastic Reed–Solomon
+     2017.                                                                             codes,” in Proc. Int. Symp. Reliable Distrib. Syst. (SRDS), Shanghai,
+[74] A. Agarwal, A. Barg, S. Hu, A. Mazumdar, and I. Tamo, “Combinatorial              China, Sep. 2020, pp. 246–255.
+     alphabet-dependent bounds for locally recoverable codes,” IEEE Trans.        [92] F. MacWilliams and N. Sloane, The Theory Error-Correcting Codes,
+     Inf. Theory, vol. 64, no. 5, pp. 3481–3492, May 2018.                             2nd ed. Amsterdam, The Netherlands: North Holland, 1978.
+[75] A. Mazumdar, “Capacity of locally recoverable codes,” in Proc. IEEE          [93] H. Gluesing-Luerssen, J. Rosenthal, and R. Smarandache, “Strongly-
+     Inf. Theory Workshop (ITW), Nov. 2018, pp. 1–5.                                   MDS convolutional codes,” IEEE Trans. Inf. Theory, vol. 52, no. 2,
+[76] V. Guruswami, C. Xing, and C. Yuan, “How long can optimal locally                 pp. 584–598, Feb. 2006.
+     repairable codes be?” in Approximation, Randomization, and Combina-          [94] R. M. Roth and G. Seroussi, “On generator matrices of MDS codes
+     torial Optimization. Algorithms and Techniques (APPROX/RANDOM).                   (Corresp.),” IEEE Trans. Inf. Theory, vol. 31, no. 6, pp. 826–830,
+     Wadern, Germany: Schloss Dagstuhl-Leibniz-Zentrum füer Informatik,                Nov. 1985.
+     2018.
+[77] S. Gopi, V. Guruswami, and S. Yekhanin, “Maximally recoverable
+     LRCs: A field size lower bound and constructions for few heavy
+     parities,” in Proc. 13th Annu. ACM-SIAM Symp. Discrete Algorithms.
+     Philadelphia, PA, USA: SIAM, 2019, pp. 2154–2170.
+[78] G. Zhang, W. Zheng, and J. Shu, “ALV: A new data redistribution
+     approach to RAID-5 scaling,” IEEE Trans. Comput., vol. 59, no. 3,
+     pp. 345–357, Mar. 2010.                                                      Francisco Maturana (Student Member, IEEE) received the B.S. and M.S.
+[79] W. Zheng and G. Zhang, “FastScale: Accelerate RAID scaling by                degrees in computer science from the Pontificia Universidad Católica de Chile,
+     minimizing data migration,” in Proc. 9th USENIX Conf. File Storage           Santiago, Chile, in 2017. He is currently pursuing the Ph.D. degree with
+     Technol., G. R. Ganger and J. Wilkes, Eds. San Jose, CA, USA:                the Computer Science Department, Carnegie Mellon University, USA. His
+     USENIX Association, Feb. 2011, pp. 149–161. [Online]. Available:             research interests lie at the intersection of theoretical computer science and
+     http://www.usenix.org/events/fast11/tech/techAbstracts.html                  computer systems.
+[80] C. Wu and X. He, “GSR: A global stripe-based redistribution approach
+     to accelerate RAID-5 scaling,” in Proc. 41st Int. Conf. Parallel Process.,
+     Pittsburgh, PA, USA, Sep. 2012, pp. 460–469.
+[81] G. Zhang, W. Zheng, and K. Li, “Rethinking RAID-5 data layout for
+     better scalability,” IEEE Trans. Comput., vol. 63, no. 11, pp. 2816–2828,
+     Nov. 2014.
+[82] S. Wu, Y. Xu, Y. Li, and Z. Yang, “I/O-efficient scaling schemes for
+     distributed storage systems with CRS codes,” IEEE Trans. Parallel            K. V. Rashmi (Member, IEEE) received the Ph.D. degree from the
+     Distrib. Syst., vol. 27, no. 9, pp. 2639–2652, Sep. 2016.                    UC Berkeley in 2016. She was a Post-Doctoral Scholar at UC Berkeley
+[83] X. Zhang, Y. Hu, P. P. C. Lee, and P. Zhou, “Toward optimal storage          from 2016 to 2017. She is an Assistant Professor with the Computer Science
+     scaling via network coding: From theory to practice,” in Proc. IEEE          Department, Carnegie Mellon University. Her research interests broadly lie in
+     Conf. Comput. Commun. (INFOCOM), Honolulu, HI, USA, Apr. 2018,               information/coding theory and computer/networked systems. During her Ph.D.
+     pp. 1808–1816.                                                               studies, she was a recipient of the Facebook Fellowship from 2012 to 2013,
+[84] X. Y. Zhang and Y. C. Hu, “Efficient storage scaling for MBR and MSR         the Microsoft Research Ph.D. Fellowship from 2013 to 2015, and the Google
+     codes,” IEEE Access, vol. 8, pp. 78992–79002, 2020.                          Anita Borg Memorial Scholarship from 2015 to 2016. She was also a recipient
+[85] B. K. Rai, “On adaptive (functional MSR code based) distributed              of the VMWare Systems Research Award 2021, the NSF CAREER Award
+     storage systems,” in Proc. Int. Symp. Netw. Coding (NetCod), Jun. 2015,      2020–2025, the Tata Institute of Fundamental Research Memorial Lecture
+     pp. 46–50.                                                                   Award 2020, the Facebook Distributed Systems Research Award 2019, the
+[86] S. Wu, Z. Shen, and P. P. C. Lee, “On the optimal repair-scaling             Google Faculty Research Award 2018, and the Facebook Communications
+     trade-off in locally repairable codes,” in Proc. IEEE Conf. Comput.          and Networking Research Award 2017. Her Ph.D. thesis was awarded the
+     Commun. (INFOCOM), Jul. 2020, pp. 2155–2164.                                 UC Berkeley Eli Jury Dissertation Award 2016, and her work has received
+[87] K. V. Rashmi, N. B. Shah, and P. V. Kumar, “Enabling node repair in          the USENIX NSDI 2021 Community (Best Paper) Award, and the IEEE
+     any erasure code for distributed storage,” in Proc. IEEE Int. Symp. Inf.     Data Storage Best Paper and the Best Student Paper Awards for the years
+     Theory, Jul. 2011, pp. 1235–1239.                                            2011/2012.
+
+
+
+
+         Authorized licensed use limited to: Carnegie Mellon Libraries. Downloaded on July 21,2022 at 02:28:45 UTC from IEEE Xplore. Restrictions apply.
+

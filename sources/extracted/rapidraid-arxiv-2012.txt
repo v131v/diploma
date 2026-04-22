@@ -1,0 +1,677 @@
+                                               RapidRAID: Pipelined Erasure Codes for
+                                          Fast Data Archival in Distributed Storage Systems
+                                                                         Lluis Pamies-Juarez, Anwitaman Datta and Frederique Oggier
+                                                                                     Nanyang Technological University (Singapore)
+                                                                                   Email: {lpjuarez,anwitaman,frederique}@ntu.edu.sg
+
+
+                                          Abstract—To achieve reliability in distributed storage systems,          in these systems have an overall overhead of 1.3×–1.5× the
+
+
+
+
+arXiv:1207.6744v2 [cs.DC] 3 Aug 2012
+                                       data has usually been replicated across different nodes. However            size of the original data [5], [7], [9], which allows to reduce
+                                       the increasing volume of data to be stored has motivated the                up to 50% the typical overhead of storing three replicas.
+                                       introduction of erasure codes, a storage efficient alternative to
+                                       replication, particularly suited for archival in data centers, where           Although erasure codes have the potential to significantly re-
+                                       old datasets (rarely accessed) can be erasure encoded, while                duce storage costs in distributed storage systems, there are still
+                                       replicas are maintained only for the latest data. Many recent               two advantages of using replication to store newly introduced
+                                       works consider the design of new storage-centric erasure codes              data:
+                                       for improved repairability. In contrast, this paper addresses
+                                       the migration from replication to encoding: traditionally erasure             • Pipelined Insertion: Replication allows to easily pipeline
+                                       coding is an atomic operation in that a single node with the whole              the redundancy generation process: data being stored in a
+                                       object encodes and uploads all the encoded pieces. Although large               node can be simultaneously forwarded to a second node,
+                                       datasets can be concurrently archived by distributing individual
+                                       object encodings among different nodes, the network and com-                    and from this second node to a third, and so on [1], [3].
+                                       puting capacity of individual nodes constrain the archival process              Such pipelining process allows to distribute the redun-
+                                       due to such atomicity.                                                          dancy generation costs among different nodes, achieving
+                                          We propose a new pipelined coding strategy that distributes the              a high storage throughout as well as an immediate data
+                                       network and computing load of single-object encodings among                     reliability.
+                                       different nodes, which also speeds up multiple object archival. We
+                                                                                                                     • Data Locality: Freshly introduced data in the system is
+                                       further present RapidRAID codes, an explicit family of pipelined
+                                       erasure codes which provides fast archival without compromising                 very likely to be accessed and used, e.g., in a batch process
+                                       either data reliability or storage overheads. Finally, we provide               to carry out some analytics. Replicating the data in several
+                                       a real implementation of RapidRAID codes and benchmark its                      storage nodes allows the task scheduler to exploit data-
+                                       performance using both a cluster of 50 nodes and a set of Amazon                locality: jobs are scheduled on the same nodes where
+                                       EC2 instances. Experiments show that RapidRAID codes reduce
+                                       a single object’s coding time by up to 90%, while when multiple                 data is located [10], [11]. Such a scheduling strategy re-
+                                       objects are encoded concurrently, the reduction is up to 20%.                   duces network latencies and increases data and processing
+                                          Index Terms—archival, migration, erasure codes, distributed                  throughputs.
+                                       storage
+                                                                                                                      Due to these properties, distributed storage systems often
+                                                                                                                   store newly introduced data using replication, and rely on era-
+                                                                I. I NTRODUCTION
+                                                                                                                   sure codes to archive older and infrequently accessed data [6],
+                                          Networked distributed storage systems such as Google file-               [7], [12]. Such a pragmatic design allows systems to enjoy the
+                                       system (GFS) [1], Amazon S3 [2] or Hadoop file-system                       benefits of replication (fast data insertion, data locality, etc.)
+                                       (HDFS) [3] spread data among several storage nodes and allow                when the data is in frequent use, as well as that of erasure
+                                       to scale out from hundreds to thousands of commodity storage                codes (high fault-tolerance for lower storage cost) when the
+                                       servers able to accommodate the ever-growing volume of data                 data is not accessed regularly, but still needs to be preserved.
+                                       to be stored. To ensure that data survives failures of some of                 The need to access a specific stored data reduces significantly
+                                       the storage nodes, all data needs to be redundantly stored. The             within a short period of time [7], [12], which justifies replacing
+                                       simplest way to introduce redundancy is to store multiple copies            the replicas by an erasure code based archival. This migration
+                                       (or replicas) of each data across the system. But erasure codes,            usually consists of an atomic operation where a single storage
+                                       a more sophisticated type of redundancy, can provide equivalent             node obtains the entire data object (by downloading blocks
+                                       or even better fault-tolerance than replication for significantly           from different nodes if needed), encodes it, and finally uploads
+                                       lower storage overhead [4], and hence have increasingly been                various parity blocks to different storage nodes [7], after which
+                                       embraced in recent times in systems such as Microsoft Azure                 the number of replicas can be safely reduced to one. Although
+                                       [5], Hadoop FS [6], [7] and the new version of the Google File              the encoding of one data object using this naive approach is
+                                       System [8] among others. Typical choices of erasure codes used              inherently centralized, large datasets (containing several data
+                                                                                                                   objects) can sometimes be concurrently encoded by distributing
+                                         L. Pamies-Juarez and F. Oggier’s research is supported by the Singapore
+                                       National Research Foundation under Research Grant NRF-CRP2-2007-03. A.      individual encoding operations across different nodes. This does
+                                       Datta’s work is supported by A*Star TSRP grant number 1021580038.           not change the fact that the limited network and computing
+                                                                                                                                                 2
+
+
+
+capacity of individual nodes remain a bottleneck that slows                       II. BACKGROUND ON E RASURE C ODES
+down the whole archival process.
+                                                                        Distributed storage systems used in data centers have started
+   While different aspects of erasure coding based distributed       to adopt a hybrid strategy for redundancy, where replicas of
+storage systems have been studied recently, which include            the newly inserted data are created, while erasure codes are
+maximizing the fault-tolerance of erasure codes [13], [14],          preferred for archival of the same data once it does not need to
+reducing the costs of repairing failures [15]–[17], or dedupli-      be regularly accessed anymore, but still needs to be preserved.
+cating encoded data [18], this paper instead looks at a relatively   The number of replicas is then reduced. The use of erasure
+unexplored problem, that of the efficiency of the migration          coding for archival increases the fault tolerance of the system
+from replication to erasure codes, aiming at optimizing the data     while reducing storage overheads with respect to replication [5],
+archival in distributed storage systems.                             though replication remains so far the best form of redundancy
+  Our main contributions are three-fold.                             for new data since it is likely to be frequently manipulated.
+   (1) We propose a novel coding strategy that splits the single-       Formally, the encoding process takes k blocks of data and
+object encoding operation into different tasks that can be           computes m parity blocks (or redundancy blocks), which will
+concurrently executed in different nodes, thus distributing the      be stored in m other different storage nodes. In most cases,
+network and computing load of the archival process across mul-       since it is unlikely to find data objects that were exactly split
+tiple nodes, which in turn speeds up the archival process. Our       into k blocks during the insertion process, the k blocks used
+new encoding scheme is inspired by the pipelined insertions          in the encoding process might belong to different data objects.
+used in replication: First, the encoding process is distributed      For example, in some systems files from the same directory are
+among those nodes storing replicated data of the object to be        jointly encoded [7].
+encoded, which exploits data locality and saves network traffic.        An optimal erasure code in terms of the trade-off between
+We then arrange the encoding nodes in a pipeline where each          storage overhead and fault tolerance is called a maximum
+node sends some partially encoded data to the next node, which       distance separable (MDS) code, and has the property that the
+creates parity data simultaneously on different storage nodes,       original object can be reconstructed from any k out of the
+avoiding the extra time required to distribute the parity after      n = k + m stored blocks, tolerating the loss of any m = n − k
+the encoding process is terminated.                                  blocks. The notation “(n, k) code” is often used to emphasize
+                                                                     the code parameters. Examples of the most widely used MDS
+   (2) We further present RapidRAID codes, an explicit family
+                                                                     codes are the Reed-Solomon codes. Such codes will be referred
+of erasure codes that realizes the pipelined erasure coding idea
+                                                                     to as classical erasure codes, to distinguish them from newly
+and provides fast archival without compromising either on data
+                                                                     designed erasure codes.
+reliability or on storage overhead. Interestingly, RapidRAID
+                                                                        We will denote a data object to be stored by a vector
+codes only require the existence of two object replicas to
+                                                                     o = (o1 , . . . , ok ) of k × l bits, that is each oi , i = 1, . . . , k, is a
+execute a pipeline encoding, which makes them suitable for
+                                                                     string of l bits. Operations are typically performed using finite
+archiving data in reduced redundancy systems. Additionally,
+                                                                     field arithmetic, that is, the two bits {0, 1} are seen as forming
+RapidRAID codes offer flexible parameter choices to realize
+                                                                     the finite field F2 of two elements, while oi , i = 1, . . . , k,
+different storage overheads (up to 2× the size of the original
+                                                                     then belong to the binary extension field F2l containing 2l
+data) and different data reliability guarantees.
+                                                                     elements. Encoding of the object o is performed using an (n×k)
+   (3) We finally provide a real implementation of RapidRAID         generator matrix G such that G · oT = cT , to obtain an n-
+codes that we benchmark both in a small cluster of 50 HP             dimensional codeword c = (c1 , . . . , cn ), of size n × l bits.
+ThinClients as well as in a set of Amazon EC2 virtual instances.     When the generator matrix G has the form G = [Ik , G′ ]T where
+Our experimental results show that RapidRAID coding reduces          Ik is the identity matrix and G′ is a k × (n − k) matrix, the
+the coding time of single data objects by up to 90%, and by          codeword c becomes c = [o, r] where o is the original object,
+up to 20% for batch processing the coding of multiple objects.       and r contains the m × l bits of redundancy. The code is then
+The benefits of RapidRAID codes are also visible when part of        said to be systematic, in which case the k parts of the original
+the network is congested. The presence of congested nodes has        object remain unaltered after the coding process. The data can
+less detrimental effects on RapidRAID encoding times than on         then still be read without requiring a decoding process.
+traditional encoding times.                                             Due to the computational complexity of finite field arith-
+  The rest of the paper is organized as follows. In Section II       metic, erasure codes usually need to operate on small fields
+we provide the basic background on distributed storage systems       (with small l values) to guarantee a fast coding process. Usually
+and classical erasure codes. In Section III we estimate the          F28 or F216 (l = 8 or l = 16) are preferred due to their efficient
+coding times of classical erasure codes and show how pipelined       manipulation using 8-bit and 16-bit CPU words. However, the
+erasure coding speeds up the coding time by exploiting data          size of the field also constrains the size of the object (which is
+locality. In Sections IV and V we present the family of              of lk bits) to be either 8k or 16k bits long, for relatively small
+RapidRAID codes and we experimentally evaluate its perfor-           values of k. In distributed storage systems where the k blocks
+mance in Section VI. Finally, Sections VII and VIII respectively     are usually tens of megabytes long, the coding is handled per
+present the related work and our conclusions.                        part. The coding process iteratively takes k input words (l bit
+                                                                                                                                                           3
+
+
+                     n1        n2        n3        n4                                     n1
+                                                                                                c1             o1                            n8
+                     c1        c2        c3        c4                                                                    o4             c8
+                                                                                          n2
+                     o1        o2         o3       o4                                           c2             o2                            n7
+                                                                                                                         o3             c7
+                                                                                          n3
+                                                                                                c3             o3                            n6
+                                                                                                                         o2             c6
+                                                                                          n4
+                                                                                                c4             o4                            n5
+                                                                                                                         o1             c5
+                     c5        o6        o7        o8
+
+                    n5        n6        n7         n8
+Fig. 1. Network flow required to encode a data object using a classical        Fig. 2. Network flow required to encode a data object using a (8,4) pipelined
+systematic (8,4) erasure code using nodes n1. . . n8. The ⊗ symbol denotes a   erasure code using node n1. . . n8. The ⊗ symbol denotes a coding operation.
+coding operation.
+
+                                                                               k source nodes, and uploads the partially generated parity data
+words) from each of the k original blocks to form a small object               to the m − 1 destination nodes. The time required to encode
+of size lk, which can be easily encoded.                                       an object can then be approximated by:
+
+III. P IPELINING THE R EDUNDANCY G ENERATION P ROCESS                                     Tclassical = τblock · max{k, m − 1} + τclassical ,            (1)
+   One of the main drawbacks of classical erasure codes is that                where τblock is the time needed to download a single data block
+the encoding process is an atomic operation in that a single                   under normal network conditions, and τclassical represents the
+node has the responsibility to download k blocks (from any                     time required to generate parity data from the first k network
+of the existing replicas), encode them, and finally upload the                 buffers. Since the size of the blocks to be encoded are relatively
+resulting m parity blocks to m other nodes [7]. In this case the               large we will assume that the time required to transfer a
+encoding node becomes a network and computing bottleneck                       block between two nodes is several orders of magnitude longer
+that slows down the whole coding process.                                      than the time required to partially encode an amount of data
+   To understand better why such an atomicity results in long                  equivalent to the size of a network buffer: i.e., τblock ≫ τclassical .
+encoding times, we depict in Fig. 1 an example of an object en-                   One way to avoid the bottleneck of having a single coding
+coding using a classical systematic (8, 4) erasure code: an object             node is to pipeline the creation of erasure code redundancy
+o = (o1 , o2 , o3 , o4 ) is encoded into an 8-dimensional codeword             and distribute the redundancy generation costs among different
+c = (c1 , . . . , c8 ) = (o, c5 , . . . , c8 ). The node i (denoted by ni      storage nodes. The main idea behind our pipelined strategy is
+on the figure) stores a replica of the raw data block ci = oi ,                to take advantage of the fact that the data to be encoded is
+i = 1, . . . , 4. To migrate to an erasure encoded data, the node              already spread and replicated over different nodes. Then, each
+executing the encoding process (denoted by ⊗) downloads                        of the nodes with one of the replicas can combine the data
+the k = 4 original blocks from any of the existing replicas                    it stores with data from other nodes to generate part of the
+(here from node 1, . . . , 4), and computes the redundancy blocks              final codeword c. In Fig. 2 we depict an example of this idea
+c5 , . . . , c8 which are then uploaded to nodes 5 to 8. The number            using the same code parameters (8,4) used in Fig. 1, though
+of transmitted blocks is n = 8, and it could have been reduced                 here we do not insist on the code being systematic. Nodes 1
+to n − 1 = 7 if the coding process were run for example in                     to 4 store together a replica of the stored object o as before
+node 4, which already stored c4 locally. In this toy example,                  (that is node i stores oi , i = 1, . . . , 4) but this time nodes 5
+exploiting data locality could save a block transmission.                      to 8 store a second replica of the same object as well. The
+   To analytically obtain an estimate of the time required for                 coding process proceeds as follows. The first node sends a
+encoding one object using a classical erasure code, we consider                multiple of o1 to the second node. The node 2 computes a
+the best possible scenario and assume that the coding process                  linear combination of this multiple of o1 with o2 and forwards
+is done in a streamlined manner, meaning that the coding node                  the result to the node 3. The node 3 has now its own data
+downloads in parallel all the k original blocks and starts to                  o3 , and again computes a linear combination of o3 with what
+generate parity data immediately after receiving the first few                 it received. The process is iteratively repeated from node i to
+bytes from each of the k source nodes (e.g., once the first k                  node i+1, i = 1, . . . , 7. Simultaneously to this pipeline process,
+network buffers are filled). Concurrently with the encoding of                 each node also generates its own redundancy block ci , based on
+this data, the coding node continues to receive data from the                  what it owns and receives, which does not have to be the same
+                                                                                                                                             4
+
+
+
+linear combination as that sent to the next node. The set of          c = (c1 , . . . , c8 ), and two replicas of o are initially scattered as
+all the locally generated blocks constitutes the final codeword       follows (this is the same original placement as that of Fig. 2):
+c = (c1 , . . . , c8 ).
+                                                                          node 1: o1 ,     node 2: o2 ,    node 3: o3 ,     node 4: o4 ,
+   Assuming that only two replicas of o are used in the
+                                                                          node 5: o1 ,     node 6: o2 ,    node 7: o3 ,     node 8: o4 .
+process, the maximum length of the final codeword should be
+constrained to n = 2k, although we will see in next sections          Based on this replica placement, we split the RapidRAID
+that any n ≤ 2k is possible. Additionally, note that the coding       coding process in two phases:
+process only requires to transmit seven temporal blocks (in           Phase 1 (vertical coding): Following the pipeline depicted in
+general n − 1 blocks are transmitted) which entails the same          Fig. 2, node 1 forwards some multiple of o1 to node 2, which
+network traffic as a classical encoding process. However, the         computes a linear combination of the received data with o2 , and
+coding time for the pipelined strategy is significantly reduced.      forwards it again to node 3, and so on. More generally, node i
+In this case we can measure the coding time as the time required      encodes the data it gets from the previous node together with
+to transmit one block τblock , plus n − 1 times the delay taken       the data it already has and forwards it to the next node. We
+to receive and encode a network buffer, denoted by τpipe (we          denote the data forwarded from node i to its successor, node
+assume here the same streamlined coding strategy):                    j, by xi,j , which is defined as follows:
+
+                  Tpipe = τblock + (n − 1)τpipe .              (2)     x1,2 = o1 ψ1 ,
+                                                                       x2,3 = x1,2 + o2 ψ2 = o1 ψ1 + o2 ψ2 ,
+Similarly, due to the large size of the blocks being encoded
+                                                                       x3,4 = x2,3 + o3 ψ3 = o1 ψ1 + o2 ψ2 + o3 ψ3 ,
+(of the order of tens of megabytes) we can also assume that
+the time required to transfer a block between two nodes is             x4,5 = x3,4 + o4 ψ4
+several orders of magnitude longer than the time required to                = o1 ψ1 + o2 ψ2 + o3 ψ3 + o4 ψ4 ,
+partially encode an amount of data equivalent to the size of a         x5,6 = x4,5 + o1 ψ5
+network buffer: τblock ≫ τpipe . However, since τblock ≫ τpipe
+                                                                            = o1 (ψ1 + ψ5 ) + o2 ψ2 + o3 ψ3 + o4 ψ4 ,
+and τblock ≫ τclassical , it is easy to see when we compare (1)
+and (2) that the factor max{k, m − 1} in (1) makes Tclassical          x6,7 = x5,6 + o2 ψ6
+several times larger than Tpipe . In Section VI we will support             = o1 (ψ1 + ψ5 ) + o2 (ψ2 + ψ6 ) + o3 ψ3 + o4 ψ4 ,
+this claim with real experiments.                                      x7,8 = x6,7 + o3 ψ7
+   One possible criticism of the pipelined coding strategy is
+                                                                            = o1 (ψ1 + ψ5 ) + o2 (ψ2 + ψ6 ) + o3 (ψ3 + ψ7 ) + o4 ψ4 ,
+that unlike in classical erasure codes, the generated codeword
+does not contain a raw copy of the original data (i.e., it is not a   where ψj ∈ F2l , j = 1, . . . , 7, are predetermined values.
+systematic code). The immediate consequence is that accessing
+                                                                      Phase 2 (horizontal coding): Each of the n involved nodes also
+stored data will always require a decoding operation, which
+                                                                      generates an element of the final codeword ci by encoding the
+always comes with an associated CPU overhead. However, the
+                                                                      received data together with the locally stored data as follows:
+benefits of a fast and less CPU-demanding encoding process (as
+we will see in Section VI) outweighs the relative inefficiency        c1 = o1 ξ1 ,
+of data access, since the latter is infrequent. Furthermore,
+                                                                      c2 = x1,2 + o2 ξ2 = o1 ψ1 + o2 ξ2 ,
+empirical studies have shown how erasure encoded data can be
+accessed with relatively low latencies, even when data needs          c3 = x2,3 + o3 ξ3 = o1 ψ1 + o2 ψ2 + o3 ξ3 ,
+to be decoded [5], and this latency can be further ameliorated        c4 = x3,4 + o4 ξ4 = o1 ψ1 + o2 ψ2 + o3 ψ3 + o4 ξ4 ,
+by adopting pipelined decoding operations (faster than classical      c5 = x4,5 + o1 ξ5
+decoding operations), which are not reported here because of
+                                                                         = o1 (ψ1 + ξ5 ) + o2 ψ2 + o3 ψ3 + o4 ψ4 ,
+space restrictions.
+                                                                      c6 = x5,6 + o2 ξ6
+         IV. R APID RAID: M OTIVATING E XAMPLES                          = o1 (ψ1 + ψ5 ) + o2 (ψ2 + ξ6 ) + o3 ψ3 + o4 ψ4 ,
+  In this section we present RapidRAID codes, an explicit             c7 = x6,7 + o3 ξ7
+family of erasure codes that realize the idea of pipelined erasure       = o1 (ψ1 + ψ5 ) + o2 (ψ2 + ψ6 ) + o3 (ψ3 + ξ7 ) + o4 ψ4 ,
+codes presented in the previous section. We first illustrate          c8 = x7,8 + o4 ξ8
+the code construction through two simple examples, and in
+                                                                         = o1 (ψ1 + ψ5 ) + o2 (ψ2 + ψ6 ) + o3 (ψ3 + ψ7 ) + o4 (ψ4 + ξ8 ),
+Section V we formalize the definition of RapidRAID codes.
+                                                                      where ξj ∈ F2l , j = 1, . . . , 8, are also predetermined values.
+A. Example for n = 2k                                                    Although we defined the coding process using two logically
+  We continue with an (8, 4) erasure code, as used in the             different phases, we want to highlight that when the coding
+previous section. An object o = (o1 , o2 , o3 , o4 ), oi ∈ F2l ,      process is implemented as a streamlined process, both phases
+of k = 4 blocks is stored over n = 8 nodes using a codeword           can be executed simultaneously: as soon as node i receives the
+                                                                                                                                                 5
+
+
+
+first few bytes of xi−1,i it can start generating the first bytes            consider the case of a (6,4) code, which requires replicas of o
+of ci , and concurrently forward xi,i+1 to node i + 1.                       to be initially overlapped on the n = 6 nodes as follows:
+
+B. Object Reconstruction and Fault Tolerance                                          node 1: o1 ,   node 3: o3 , o1 ,   node 5: o3 ,
+                                                                                      node 2: o2 ,   node 4: o4 , o2 ,   node 6: o4 ,
+   Using the notation of Section II, we can express the
+RapidRAID coding process of the (8,4) example using the                      The rest of the coding process continues as previously ex-
+standard linear coding notation G · oT = cT as                               plained. The basic difference will be on the computation made
+                                                                         by nodes 3 and 4, which in this case corresponds to:
+   ξ1         0         0          0                  c1
+ ψ1
+             ξ2        0          0         c2 
+                                                                             x3,4 = x2,3 + o3 ψ3 + o1 ψ4 ,      c3 = x2,3 + o3 ξ3 + o1 ξ4 ,
+ ψ1
+             ψ 2       ξ3         0      
+                                              o1     c
+                                                      3
+                                                        
+                                                                                x4,5 = x3,4 + o4 ψ5 + o2 ψ6 ,      c4 = x3,4 + o4 ξ5 + o1 ξ6 .
+ ψ1          ψ 2       ψ 3        ξ4          o      c
+                                           ·  2 =  4 .
+                                                     
+                                                                             Note that some of the subindexes of coefficients ψ and ξ might
+ 
+ ψ1 + ξ5 ψ2            ψ 3        ψ 4         o3     c
+                                                      5
+                                                     
+                                                                             need to be altered accordingly.
+                                         
+ ψ1 + ψ5 ψ2 + ξ6 ψ3               ψ 4         o4     c
+                                                      6
+                                                       
+                                         
+ ψ1 + ψ5 ψ2 + ψ6 ψ3 + ξ7 ψ4                        c7 
+                                                                                       V. R APID RAID: G ENERAL D EFINITION
+   ψ1 + ψ5 ψ2 + ψ6 ψ3 + ψ7 ψ4 + ξ8                    c8
+                                                                               Inspired by the examples of previous section, we now present
+It is easy to see that we can use the Gauss elimination method               a general definition of RapidRAID codes for any pair (n, k) of
+to reconstruct the original object, o, from any subset of four               parameters, where n ≤ 2k. We start by stating the requirements
+linearly independent symbols of c. Maximizing the number of                  that RapidRAID imposes on how data must be stored:
+linearly independent 4-subsets in c can be done by exhaustive                  • As shown in the (6,4) example code, when k < 2k two of
+computational search of the values taken by ψi and ξi once the                    the stored replicas should be overlapped between n storage
+size 2l of the field is fixed. When all k-subsets in c are linearly               nodes: a replica of o should be placed in nodes 1 to k,
+independent, the code then becomes MDS, which achieves the                        and a second replica of o in nodes from n − k to n.
+highest possible fault tolerance given any k and n. Note that                  • The final n redundancy blocks forming c have to be
+the larger the field F2l , the more likely it is to remove the linear             generated (and finally stored) in nodes that were already
+dependencies within c [19].                                                       storing a replica of the original data.
+   However, even by selecting the optimal values of ψi and ξi ,
+                                                                               We then formally define the temporal redundant block that
+there could be some intrinsic dependencies introduced by the
+                                                                             each node i in the pipelined chain sends to its successor as:
+pipelined coding process itself that cannot be removed. In the
+example of the (8,4) code proposed, from all the 84 = 70
+                                                                                                          X
+                                                                                    xi,i+1 = xi−1,i +            oj ψi , 1 < i < n − 1,  (3)
+possible 4-subsets, there is one single linearly dependent 4-                                         oj ∈node i
+subset, namely {c1 , c2 , c5 , c6 }, which cannot be removed, no
+                                                                             with x0,1 = 0, while the final redundant block ci gener-
+matter the values taken by ξi and ψi in F2l , for any l. Recall
+                                                                             ated/stored in each node i is:
+that 2 ≡ 0 in F2l . Then the following linear combination of                                             X
+c1 , c2 , c5 and c6 always evaluates to zero:                                            ci = xi−1,i +      oj ξi , 1 < i < n,    (4)
+                                                                                                  oj ∈node i
+      c1 (ψ1 ξ6 ξ2−1 + ψ5 + ξ5 )ξ1−1 + c2 ξ6 ξ2−1 + c5 + c6
+ = o1 ξ1 (ψ1 ξ6 ξ2−2 + ψ5 + ξ5 )ξ1−1 + (o1 ψ1 + o2 ξ2 )ξ6 ξ2−1               where ψi , ξi ∈ F2l are static predetermined values specifically
+                                                                             chosen to guarantee maximum fault tolerance.
+     +(o1 ψ1 + o1 ξ5 + o2 ψ2 + o3 ψ3 + o4 ψ4 )
+     +(o1 ψ1 + o1 ψ5 + o2 ψ2 + o2 ξ6 + o3 ψ3 + o4 ψ4 )                       A. Fault Tolerance Analysis
+ =   o1 ξ1 ψ1 ξ6 ξ2−1 ξ1−1 + o1 ξ1 ψ5 ξ1−1 + o1 ξ1 ξ5 ξ1−1 + o1 ψ1 ξ6 ξ2−1      As we already mentioned, the fault tolerance of the code
+                                                                             depends on the number of linearly independent blocks within
+     +o2 ξ2 ξ6 ξ2−1 + o1 ψ1 + o1 ξ5 + o2 ψ2 + o3 ψ3 + o4 ψ4
+                                                                             the codeword c. Optimally, if the code is MDS, all the nk
+     +o1 ψ1 + o1 ψ5 + o2 ψ2 + o2 ξ6 + o3 ψ3 + o4 ψ4 = 0.                     k-subsets of c are linearly independent. In practice, achieving
+It shows that the code is not an MDS code: if all the redundant              the MDS property is not always possible due to different types
+blocks but {c1 , c2 , c5 , c6 } fail, it will be impossible to recover       of linear dependencies generated during the construction of the
+the original data o. In Section V we will analyze in detail which            RapidRAID code. We distinguish two different types of these
+are the (n, k) values that allow to obtain MDS codes, and for                linear dependencies:
+the rest of (n, k) values, we will quantify the impact that the                 1) Natural dependencies are introduced by the pipelined
+non-MDS property has on the overall data reliability.                               coding process itself and cannot be removed, no matter
+                                                                                    the values taken by ξi and ψi .
+C. Example for n < 2k                                                           2) Accidental dependencies appear due to a bad choice of
+   The previous (8,4) code example enjoys a symmetric con-                          the values of ξi and ψi .
+struction inherited from n = 2k, but we can extend the                          To evaluate the fault tolerance of an (n, k) RapidRAID
+RapidRAID coding scheme for n ≤ 2k. As an example we                         code, we need to count the different linear dependencies in its
+                                                                                                                                                                               6
+
+
+                                     100                                                                                            TABLE I
+
+
+
+
+       % of independent k-subsets
+                                                                                                        S TATIC RESILIENCY OF THREE DIFFERENT REDUNDANCY SCHEMES ( IN
+                                      90                                                  n=8           NUMBER OF 9’ S ) FOR DIFFERENT PROBABILITIES OF NODE FAILURE p.
+
+                                      80                                                  n=12
+                                                                                                                                  p=0.2      p=0.1      p=0.01       p=0.001
+                                      70                                                  n=16
+                                                                                                         3-replica system            2          3           6             9
+                                      60
+                                                                                                         (16,11) classical EC        1          2           8             14
+                                      50
+                                                                                                         (16,11) RapidDAID           0          2           6             11
+                                      40
+                                      30                                                                 To complete the fault tolerance analysis of (n, k) RapidRAID
+                                           2       4       6       8       10     12      14     16   codes, we now consider their static resilience, which is the
+                                                                       k                              probability of being able to reconstruct a given stored object
+                                          (a) Percentage of linearly independent k-subsets.
+                                                                                                      when a fraction p of random storage nodes fail. This static
+                                     104                                                              resilience for different node failure probabilities using the
+
+
+
+
+           no. dependent k-subsets
+                                                                                          n=8         “number of 9’s” metric1 is shown in Table I, where we compare
+                                     103
+                                                                                          n=12        three different codes: (i) a (16,11) RapidRAID code, which
+                                                                                                      is non-MDS, (ii) a (16,11) classical MDS code, and (iii) the
+                                                                                          n=16        standard replication scheme with three replicas. We see that
+                                     102
+                                                                                                      although the static resilience of the RapidRAID code is slightly
+                                                                                                      lower than the classical erasure code, for storage systems with
+                                     101
+                                                                                                      low node failure probabilities (p ≤ 0.01), RapidRAID codes
+                                                                                                      achieve at least the same resiliency as the de-facto standard
+                                     100                                                              3-way replication scheme. According to data center studies
+                                           2       4       6       8       10     12      14     16
+                                                                       k                              published in [20], [21], the annualized failure rate (AFR) of
+                                            (b) Number of linearly dependent k-subsets.               modern hard disk drives (HDD) is in the range of 2% to 5%,
+Fig. 3. Evaluation of the linear dependencies in (n, k) RapidRAID codewords.                          depending on the age of the disk. Since the time required to
+We consider three n values with all the possible k values such that n
+                                                                    2
+                                                                      ≤ k < n.                        repair a disk failure (which includes the time to detect the disk
+                                                                                                      failure plus the time to repair and restore the missing data) is
+codewords. We first analytically detect natural dependencies                                          in the range of minutes or a few hours [20], it is reasonable
+by enumerating all the possible k-subsets, and for each k-                                            to expect less than 1% of simultaneous disk failures, making
+subset, we determine by symbolic computation whether it                                               the RapidRAID codes family an attractive alternative to replace
+contains linear dependencies. Once we know that there is no                                           classical erasure codes in data centers. Besides, the actual trend
+linear dependency, we pick values of ψi and ξi so as to                                               in datacenters is to use solid state disks (SSD), which have even
+avoid accidental dependencies. This can be done at random                                             lower AFRs as compared to traditional HDD. Further note that
+for relatively large fields such as F216 , where almost any                                           the actual chance of data loss is much lower than the values
+random set of coefficients guarantees the absence of accidental                                       indicated by static resilience analysis if the system is repaired
+dependencies [19]. For small fields like F28 , finding a set of                                       and thus faults are not allowed to accumulate.
+coefficients without accidental dependencies might require long
+                                                                                                                                 VI. E VALUATION
+exhaustive searches.
+   Such an enumeration of all possible k-subsets is feasible                                             In this section we evaluate the coding performance of a
+only for small   values of n, due to the fast growth of the                                           RapidRAID code and compare it with that of classical erasure
+number nk of k-subsets to test. In Fig. 3, we computed the
+            
+                                                                                                      coding. The code that we choose for the evaluation is a (16,11)
+number of natural linear dependencies of (n, k) RapidRAID                                             code, with parameters similar to those used in real distributed
+codes with n ∈ {8, 12, 16}, and all the possible values of k,                                         storage systems [5], which offer a data reliability comparable
+n                                                                                                     to a (16,11) classical erasure code (see Table I).
+ 2 ≤ k < n. In Fig. 3a we show the percentage of linearly
+independent k-subsets and in Fig. 3b the absolute number
+                                                                                                      A. Implementation and Testbed
+of linearly dependent k-subsets. We observe that RapidRAID
+codes achieve the MDS property when k ≥ n − 3.                                                           In order to fairly compare coding times of RapidRAID
+   After analyzing all the RapidRAID codes for n ≤ 16, we                                             codes with those of classical erasure codes, we developed an
+propose the following conjecture:                                                                     experimental distributed storage system2 which consists of a
+   Conjecture 1: An (n, k) RapidRAID code as defined by (3)                                           fast Python server infrastructure providing basic store/retrieve
+and (4) is maximum distance separable (MDS) if k ≥ n − 3.                                             operations, as well as finite field arithmetic required to encode
+                                                                                                      and forward data in pipelined erasure codes. The finite field
+However, we would like to highlight that some of the non-
+                                                                                                      arithmetic is implemented using the Jerasure [22] library, which
+MDS codes (when k < n − 3) still achieve high percentages
+of linearly independent k-subsets. This is the case for example                                         1 For example, ‘three nines’ represents a probability of 0.999.
+
+of a (16,11) RapidRAID code, evaluated later in this paper.                                             2 Available online: https://github.com/llpamies/ClusterDFS
+                                                                                                                                      7
+
+
+                          TABLE II
+  OVERALL CODING TIME OF THREE (16,11) CODE IMPLEMENTATIONS .        process requiring little overall computing resources is preferred
+                                                                     due to the low interference it has on the normal datacenter
+      CPU                              CEC    RR8    RR16            operations.
+      Intel Atom (N280)                                                 To measure the overall computing requirements of the CEC
+                                      17.81   5.06   27.33
+      1.66GHz; 512KB cache                                           implementation we execute an encoding process where the
+      Intel Xeon (E5645)                                             k = 11 original blocks and the m = 5 parity are all stored
+                                       5.20   3.50    4.31
+      2.40GHz; 12,288KB cache                                        in the local file system, avoiding all the network I/O. In that
+      Intel Core2 Quad (Q9400)                                       case the encoding time corresponds basically to the time the
+                                       4.13   1.47    1.95
+      2.66GHz; 3,072KB cache                                         CPU is dedicated to execute the coding operations. Similarly,
+                                                                     to measure the overall computing requirements of the RR8 and
+contains a fast set of functions (optimized C code) designed to
+                                                                     RR16 implementations, we run an encoding process where the
+construct efficient erasure codes.
+                                                                     execution of the n = 16 nodes occur in a single node, avoiding
+   Over our distributed storage system we integrated two dif-
+                                                                     also all the network I/O.
+ferent erasure codes:
+                                                                        In Table II we depict the average encoding time of the
+   • A (16,11) classical Reed-Solomon erasure code using
+                                                                     three encoding implementations when all the computing is
+      Cauchy generator matrices, as it is already implemented in     executed in a single node and no network communication is
+      the Jerasure library. We adjust the erasure code parameters    involved. We show the results for three different CPUs. The
+      to guarantee maximum performance as it is suggested            first case (Intel Atom) corresponds to the execution time in
+      in [23], which makes the Cauchy Reed Solomon code              the Thinclient computers, the second case (Intel Xeon) is an
+      to clearly outperform other open source erasure coding         Amazon EC2 small instance, and the last one (Intel Core2)
+      libraries [23]. We will refer to this code implementation      a personal desktop computer. Except in the case of Atom,
+      as CEC (Classical Erasure Code).                               both RapidRAID implementations require less CPU time to
+   • A (16,11) RapidRAID code implemented using the finite
+                                                                     encode the same amount of data (i.e., 704MB) than the CEC
+      field arithmetic from Jerasure. This implementation can        implementation. In the case of the Atom CPU, due to the small
+      either work with 8 bit or 16 bit arithmetic, with operations   size of the cache memory, the Jerasure library cannot allocate
+      in F28 or F216 respectively. In each case the values of        the whole lookup table required to perform F216 arithmetic,
+      all φi and ξi coefficients are chosen to maximize the          which increases RR16 coding times as compared to RR8.
+      obtained fault tolerance. We will refer to the 8bits and
+                                                                        We observe that RapidRAID codes can be computed faster
+      16bits RapidRAID implementations as RR8 and RR16
+                                                                     than even one of the fastest implementation of classical erasure
+      respectively.
+                                                                     codes, and thus its impact on CPU usage is favorable.
+   In the case of RR8 the use of a small finite field makes
+it very difficult to find coefficient values guaranteeing the        C. General Coding Times
+absence of accidental linear dependencies. In this case, the 8bit
+(16,11) RapidRAID implementation achieves data reliability              In Fig. 4 we measure the encoding times of the three
+values slightly lower than the ones depicted in Table I. Despite     different implementations for a single object encoding, as well
+this lower reliability, we include the 8bit implementation in our    as multiple object encodings.
+evaluation to show the effects that the word size has in coding         In Fig. 4a a single data object is encoded in a totally idle
+times. Note that our RapidRAID implementation also includes          system. We see how the two RapidRAID implementations have
+a fast pipelined decoding mechanism that is not discussed here       of the order of 90% shorter coding times as compared to the
+because of space restrictions.                                       classical erasure code implementation. In this case, by distribut-
+   We evaluate the three coding settings, CEC, RR8 and RR16          ing the network and computing load of the encoding process
+in both a small cluster of 50 HP t5745 ThinClient computers,         across 16 different nodes, RapidRAID codes significantly speed
+and a set of 16 small instances in the Amazon EC2 cloud              up the single data object’s archival process.
+computing service. We will refer to the ThinClient and Amazon           However, this speedup is obtained at the expense of involving
+EC2 testbed as TPC and EC2 respectively. Finally, in all the         16 nodes in the encoding process. It is then interesting to
+experiments we assume that the size of all the k = 11 original       measure the encoding throughput of a classical erasure code
+blocks is of 64MB, which is the default block size in GFS and        involving the same number of nodes, i.e., when 16 encoding
+HDFS [1], [3]. It means that the size of the original object to be   process are executed in parallel. In Fig. 4b we depict the per-
+stored is of 704MB (11×64MB), and the final erasure encoded          object encoding times obtained by executing 16 concurrent
+object takes 1024MB (16×64MB), which represents a storage            classical encoding processes and 16 RapidRAID encoding
+overhead of approximately 1.45× the size of the original data.       processes on a group of 16 nodes. In the EC2 setting, the
+                                                                     two RapidRAID implementations achieve a reduction of the
+B. Computing Resource Usage                                          overall coding time by up to 20%. On the Thinclients, the
+  Before evaluating coding times we will measure the overall         16bit RapidRAID implementation requires around 50% longer
+computing requirements of the three evaluated codes. This            coding times than classical erasure codes due to problems with
+metric is of special interest in datacenters where an archiving      the small cache size.
+                                                                                                                                                                           8
+
+
+                            140                                                                          500
+                            120
+
+
+
+
+       coding time (sec.)
+                            100
+                                                                                                         400
+                             80
+
+
+
+
+                                                                                    coding time (sec.)
+                             60
+                             40                                                                          300
+                                                                                                                                                                    CEC
+                             20
+                                                                                                                                                                    RR8
+                              0                                                                          200
+                                  TPC   TPC    TPC   EC2   EC2    EC2
+                                  CEC   RR16   RR8   CEC   RR16   RR8
+      (a) Time required to encode a single object using a (16,11) code.
+                                                                                                         100
+                            300
+
+
+
+
+       coding time (sec.)
+                            250                                                                            0
+                                                                                                                 0            4         8         12                  16
+                            200                                                                                               number congested nodes
+                                                                                                               (a) Encoding a single object using a (16,11) code.
+                            150
+                                                                                                         500
+                            100
+
+                             50                                                                          400
+                                  TPC   TPC    TPC   EC2   EC2    EC2
+                                  CEC   RR16   RR8   CEC   RR16   RR8
+
+
+
+
+                                                                                    coding time (sec.)
+    (b) Time required to concurrently encode 16 objects using a (16,11)
+    code.                                                                                                300
+Fig. 4. Coding times of the three different code implementations. Each candle
+depicts the median value, the 25-75% percentiles and the max-min values.
+                                                                                                         200
+D. Coding Times in Congested Networks
+   In practice, storage nodes might be executing other tasks                                             100
+concurrently with data archival processes, which might cause                                                                                                        CEC
+some nodes to experience network congestions that in turn                                                                                                           RR8
+might affect the coding times. Although nodes in the EC2                                                   0
+setting are already virtual computers subjected to real network                                                  0            4         8         12                  16
+congestions, we needed to be able to arbitrary reduce the                                                                     number congested nodes
+network capacity of some nodes to evaluate the potential                                                  (b) Concurrently encode 16 objects using a (16,11) code.
+effects that severe network congestions can have on RapidRAID                   Fig. 5. Average time required to encode a 16 concurrent objects using a (16,11)
+coding times. To evaluate such effects of congestion, we use                    Cauchy Reed-Solomon code and a 8bit (16,11) RapidRaid code. Nodes have
+                                                                                500Mbps connections with a latency of 100ms±10ms. Error bars depict the
+the Linux netem driver to introduce arbitrary congestions in our                standard deviation value.
+cluster of ThinClients. Specifically, we use netem to reduce the
+network bandwidth of some nodes from 1GBps to 500MBps,
+                                                                                the presence of a single congested node has even more impact
+and add to these nodes a 100ms network latency (with a
+                                                                                on the coding times of classical erasure codes. In general these
+deviation of up to ±10ms).
+                                                                                results show how classical erasure codes have a worse resilience
+   In Fig. 5 we depict the effects that different network con-
+                                                                                to congested networks than RapidRAID codes.
+gestion levels have in coding times of the CEC and RR8
+implementations. Note that we only use the 8bits RapidRAID
+                                                                                                                         VII. R ELATED W ORK
+implementation due to the impossibility to run efficient F216
+arithmetic in the ThinClient cluster. In Fig. 5a we show the time                 Despite widespread use of erasure coding for archiving
+required to encode a single object. In the case of RapidRAID                    data in distributed storage systems, existing literature does
+codes, coding times have a quasi-linear behavior when the                       not explore the process of migration from replication based
+number of congested nodes increases. However, in the case                       redundancy to erasure code based redundancy. We thus discuss
+of classical erasure codes, we can see how a single congested                   some peripherally related works.
+node has major impacts to the coding times. Similarly, in                         The most relevant related work is that of Fan et al. [12],
+Fig. 5b we depict the per-object coding times of 16 concurrently                who propose to distribute the task of erasure coding using the
+encoded objects. Compared with the single object coding time,                   Hadoop infrastructure, as MapReduce tasks. Any individual
+                                                                                                                                                 9
+
+
+
+object is however encoded at a single node, and hence the                                         R EFERENCES
+parallelism achieved in their approach is only at the granularity    [1] S. Ghemawat, H. Gobioff, and S. Leung, “The google file system,” in
+of individual data objects. We note from our experiments                 Proceedings of the ACM Symposium on Operating Systems Principles
+that distributing the individual encoding tasks provide further          (SOSP), 2003.
+                                                                     [2] Amazon.com, “Amazon S3,” http://aws.amazon.com/s3.
+performance benefits.                                                [3] Apache.org, “HDFS,” http://hadoop.apache.org/hdfs/.
+   Decentralized erasure coding has also been explored in the        [4] R. Rodrigues and B. Liskov, “High availability in dhts: Erasure coding
+                                                                         vs. replication,” in Proceedings of the 4th International Workshop on
+context of sensor networks [24]. However, in such a setting,             Peer-To-Peer Systems (IPTPS), 2005.
+the (disjoint) data generated by k sensors is jointly stored over    [5] C. Huang, H. Simitci, Y. Xu, A. Ogus, B. Calder, P. Gopalan, J. Li, and
+n > k storage sensors based on erasure coding redundancy.                S. Yekhanin, “Erasure coding in windows azure storage,” in Proceedings
+                                                                         of the USENIX Annual Technical Conference (ATC), 2012.
+This is achieved using network coding techniques, and is             [6] A. Thusoo, Z. Shao, S. Anthony, D. Borthakur, N. Jain, J. Sen Sarma,
+relatively straight forward to achieve, since random linear              R. Murthy, and H. Liu, “Data warehousing and analytics infrastructure
+combinations of the already distributed data needs to be stored          at facebook,” in Proceedings of the 2010 ACM SIGMOD International
+                                                                         Conference on Management of data, ser. SIGMOD ’10, 2010.
+over the additional nodes. Such a technique is inapplicable for      [7] B. Fan, W. Tantisiriroj, L. Xiao, and G. Gibson, “Diskreduce: Raid
+the problem considered in this paper.                                    for data-intensive scalable computing,” in The 4th Annual Workshop on
+                                                                         Petascale Data Storage (PDSW), 2009.
+   Li et al. [15] also used a similar pipelining based encoding      [8] D. Ford, F. Labelle, F. I. Popovici, M. Stokely, V.-A. Truong, L. Barroso,
+strategy over a tree-structured topology to reduce the traffic           C. Grimes, and S. Quinlan, “Availability in globally distributed storage
+required to repair lost redundancy. Redundancy replenishment             systems,” in The 9th USENIX conference on Operating Systems Design
+                                                                         and Implementation (OSDI), 2010.
+is a very important and vigorously researched topic [15]–[17],       [9] Apache.org, “HDFSRAID,” http://wiki.apache.org/hadoop/HDFS-RAID.
+however, as noted previously, it is an unrelated problem.           [10] J. Dean and S. Ghemawat, “Mapreduce: simplified data processing on
+                                                                         large clusters,” Commun. ACM, vol. 51, no. 1, 2008.
+                                                                    [11] A. Thusoo, Z. Shao, S. Anthony, D. Borthakur, N. Jain, J. Sen Sarma,
+                                                                         R. Murthy, and H. Liu, “Data warehousing and analytics infrastructure
+                     VIII. C ONCLUSIONS                                  at facebook,” in Proceedings of the 2010 international conference on
+                                                                         Management of data (SIGMOD), 2010.
+                                                                    [12] L. X. Bin Fan, Wittawat Tantisiriroj and G. Gibson, “Diskreduce:
+   In this paper we introduced a novel pipelined erasure coding          Replication as a prelude to erasure coding in data-intensive scalable
+strategy to speedup the archival of data in distributed storage          computing,” Carnegie Mellon Univsersity, Parallel Data Laboratory, Tech.
+systems. We also presented RapidRAID, an explicit family                 Rep. Technical Report CMU-PDL-11-112, 2011.
+                                                                    [13] Y. Li, D. D. E. Long, and E. L. Miller, “Understanding data survivability
+of erasure codes that realizes the idea of pipelined erasure             in archival storage systems,” 2012.
+coding without compromising either data reliability or storage      [14] L. Pamies-Juarez, P. Garcı́a-López, M. Sánchez-Artigas, and B. Herrera,
+overheads. In particular, we showed that for equivalent storage          “Towards the design of optimal data redundancy schemes for heteroge-
+                                                                         neous cloud storage infrastructures,” Computer Networks, vol. 55, no. 5,
+overhead, RapidRAID codes can achieve a fault tolerance                  pp. 1100–1113, 2011.
+similar to that of existing erasure codes, and higher than          [15] J. Li, S. Yang, X. Wang, and B. Li, “Tree-structured data regeneration in
+replicated systems. Finally, we presented a real implementa-             distributed storage systems with regenerating codes,” in The 29th IEEE
+                                                                         Intl. Conference on Computer Communications (INFOCOM), 2010.
+tion of RapidRAID codes, and experiments with real system           [16] F. Oggier and A. Datta, “Self-repairing homomorphic codes for dis-
+benchmarks demonstrate the efficacy of our proposed solution.            tributed storage systems,” in The 30th IEEE Intl. Conference on Computer
+For coding a single object, our approach achieved up to                  Communications (INFOCOM), 2011.
+                                                                    [17] A.-M. Kermarrec, N. LeScouarnec, and G. Straub, “Repairing multiple
+90% reduction in time, while even when multiple objects are              failures with coordinated and adaptive regenerating codes,” in Intl. Symp.
+encoded, our approach is up to 20% faster than distribut-                on Network Coding (NetCod), 2011.
+ing classical erasure coding tasks for different objects. The       [18] X. Li, M. Lillibridge, and M. Uysal, “Reliability analysis of deduplicated
+                                                                         and erasure-coded storage,” in Proceedings of the Workshop on Hot Topics
+benefits of RapidRAID codes are visible even when part of                in Measurement Modeling of Computer Systems (HotMetrics), 2010.
+the network is congested, where RapidRAID codes enable              [19] S. Acedański, S. Deb, M. Médard, and R. Koetter, “How good is random
+shorter coding times and have a better scalability as compared           linear coding based distributed networked storage,” in Workshop on
+                                                                         Network Coding, Theory, and Applications (NetCod), 2005.
+to existing erasure codes when the network congestion in-           [20] B. Shroeder and G. A. Gibson, “Disk failures in the real world: What does
+creases. The current implementation source code is available at          an mttf of 1,000,000 hours mean to you?” in The 5th USENIX Conference
+https://github.com/llpamies/ClusterDFS.                                  on File and Storage Technologies (FAST), 2007.
+                                                                    [21] E. Pinheiro, W.-D. Weber, and L. A. Barroso, “Failure trends in a large
+   The design of pipelined erasure coding based RapidRAID                disk drive population,” in The 5th USENIX Conference on File and
+codes is an important step towards more efficient mechanisms             Storage Technologies (FAST), 2007.
+                                                                    [22] J. S. Plank, S. Simmerman, and C. D. Schuman, “Jerasure: A library in
+to archive “big-data” in distribute storage systems. As part of          c/c++ facilitating erasure coding for storage applications,” University of
+our future research, we aim to explore the performance of                Tennessee, Tech. Rep. Technical Report CS-08-627, 2008.
+RapidRAID codes under different choice of code parameters           [23] J. S. Plank, J. Luo, C. D. Schuman, L. Xu, and Z. Wilcox-O’Hearn, “A
+                                                                         performance evaluation and examination of open-source erasure coding
+k and n. It is specially challenging for large values of n where         libraries for storage,” in Proccedings of the 7th conference on File and
+numerical evaluation of the fault tolerance becomes intractable.         storage technologies (FAST), 2009.
+We also aim to explore how RapidRAID codes can be gener-            [24] A. Dimakis, V. Prabhakaran, and K. Ramchandran, “Decentralized erasure
+                                                                         codes for distributed networked storage,” IEEE/ACM Transactions on
+alized to exploit the existence of more than two replicas, and           Networking, vol. 14, 2006.
+particularly for the special case of three replicas, which is the
+de facto redundancy scheme used in most production systems.
+

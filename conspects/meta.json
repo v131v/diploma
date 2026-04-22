@@ -1,0 +1,92 @@
+[
+  {
+    "id": "conspect_morph_sosp_2024",
+    "source_id": "morph_sosp_2024",
+    "use_in_diploma": "Базовый источник для постановки задачи, архитектуры жизненного цикла данных и обоснования temperature-driven switching между replication и EC с минимальной transcode cost."
+  },
+  {
+    "id": "conspect_convertible_codes_it_2022",
+    "source_id": "convertible_codes_it_2022",
+    "use_in_diploma": "Теоретическая база для формализации стоимости перекодировки между EC-схемами и критерия выгодности перехода в температурном пайплайне."
+  },
+  {
+    "id": "conspect_azure_ec_atc_2012",
+    "source_id": "azure_ec_atc_2012",
+    "use_in_diploma": "Базовый production-source для обоснования trade-off между replication и EC/LRC по repair I/O, bandwidth и latency; полезен для baseline по горячим данным."
+  },
+  {
+    "id": "conspect_elect_fast_2024",
+    "source_id": "elect_fast_2024",
+    "use_in_diploma": "Практический baseline по hotness-aware переходу от replication к EC в LSM-based storage; полезен для related work и policy design."
+  },
+  {
+    "id": "conspect_lrc_convertible_arxiv_2023",
+    "source_id": "lrc_convertible_arxiv_2023",
+    "use_in_diploma": "Теоретическая база для обоснования переходов между кодами с сохранением locality и низкой conversion/access cost."
+  },
+  {
+    "id": "conspect_rapidraid_arxiv_2012",
+    "source_id": "rapidraid_arxiv_2012",
+    "use_in_diploma": "Baseline по миграции от replication к EC для архивных данных; полезен для разделов про migration cost, archival tier и стоимость перекодировки."
+  },
+  {
+    "id": "conspect_xoring_elephants_arxiv_2013",
+    "source_id": "xoring_elephants_arxiv_2013",
+    "use_in_diploma": "Классический baseline по repair-aware erasure coding; полезен для обоснования важности repair I/O, network traffic и degraded reads, а не только storage overhead."
+  },
+  {
+    "id": "conspect_ec_survey_tos_2024",
+    "source_id": "ec_survey_tos_2024",
+    "use_in_diploma": "Обзорная карта related work и терминов по erasure coding; полезен для постановки trade-off между storage efficiency, performance и fault tolerance."
+  },
+  {
+    "id": "conspect_ec_store_icdcs_2018",
+    "source_id": "ec_store_icdcs_2018",
+    "use_in_diploma": "Baseline по latency-aware EC; полезен для обоснования того, что при выборе схемы хранения нужно учитывать stragglers, placement и load-aware access."
+  },
+  {
+    "id": "conspect_identifying_hot_cold_icde_2013",
+    "source_id": "identifying_hot_cold_icde_2013",
+    "use_in_diploma": "Источник для формализации температуры данных через частоту обращений и smoothing; полезен для раздела про метрику температуры и правила перехода между replication и EC."
+  },
+  {
+    "id": "conspect_heart_fast_2019",
+    "source_id": "heart_fast_2019",
+    "use_in_diploma": "Источник для adaptive redundancy tuning по состоянию инфраструктуры; полезен как расширение модели сверх одной только температуры данных."
+  },
+  {
+    "id": "conspect_zebra_iwqos_2016",
+    "source_id": "zebra_iwqos_2016",
+    "use_in_diploma": "Baseline по demand-aware policy и многоуровневой классификации данных; полезен для обоснования выбора EC-параметров по спросу и стоимости миграции."
+  },
+  {
+    "id": "conspect_f4_osdi_2014",
+    "source_id": "f4_osdi_2014",
+    "use_in_diploma": "Production-baseline для мотивации warm tier между hot и archival storage; полезен для обоснования temperature-aware switching и proxy-метрик температуры."
+  },
+  {
+    "id": "conspect_wide_lrc_fast_2023",
+    "source_id": "wide_lrc_fast_2023",
+    "use_in_diploma": "Источник по practical design choices для wide LRC; полезен для выбора холодного слоя и обоснования метрик ADRC, ARC, MTTDL и placement robustness."
+  },
+  {
+    "id": "conspect_hsm_ieee_access_2024",
+    "source_id": "hsm_ieee_access_2024",
+    "use_in_diploma": "Прямой baseline для temperature-aware hybrid storage; полезен для обоснования порогов, переходов 3-replica -> 2-replica -> EC и учёта global disk space utilization."
+  },
+  {
+    "id": "conspect_er_store_scientific_programming_2021",
+    "source_id": "er_store_scientific_programming_2021",
+    "use_in_diploma": "Прямой baseline по hot/warm/cold policy с hybrid storage; полезен для related work, архитектуры и evaluation baseline."
+  },
+  {
+    "id": "conspect_hyres_arxiv_2025",
+    "source_id": "hyres_arxiv_2025",
+    "use_in_diploma": "Современный related work по гибридным схемам replication + EC; полезен для сравнения альтернатив по storage cost, file loss probability и repair traffic."
+  },
+  {
+    "id": "conspect_benchmarking_ec_object_storage_fgcs_2025",
+    "source_id": "benchmarking_ec_object_storage_fgcs_2025",
+    "use_in_diploma": "Источник для experimental section и выбора benchmark-метрик в object storage: upload/download/delete/waiting time, fault tolerance, fragment size и testbed design."
+  }
+]

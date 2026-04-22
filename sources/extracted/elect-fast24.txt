@@ -1,0 +1,1206 @@
+       ELECT: Enabling Erasure Coding Tiering
+            for LSM-tree-based Storage
+   Yanjing Ren and Yuanming Ren, The Chinese University of Hong Kong;
+ Xiaolu Li and Yuchong Hu, Huazhong University of Science and Technology;
+     Jingwei Li, University of Electronic Science and Technology of China;
+            Patrick P. C. Lee, The Chinese University of Hong Kong
+            https://www.usenix.org/conference/fast24/presentation/ren
+
+
+     This paper is included in the Proceedings of the
+22nd USENIX Conference on File and Storage Technologies.
+               February 27–29, 2024 • Santa Clara, CA, USA
+                               978-1-939133-38-0
+
+
+
+
+                                          Open access to the Proceedings
+                                         of the 22nd USENIX Conference on
+                                            File and Storage Technologies
+                                                   is sponsored by
+          ELECT: Enabling Erasure Coding Tiering for LSM-tree-based Storage
+       Yanjing Ren1 , Yuanming Ren1 , Xiaolu Li2 , Yuchong Hu2 , Jingwei Li3 *, and Patrick P. C. Lee1
+        1 The Chinese University of Hong Kong      2 Huazhong University of Science and Technology
+                        3 University of Electronic Science and Technology of China
+
+
+
+                               Abstract                                in which edge nodes, the lightweight instances (e.g., micro-
+                                                                       datacenters) provisioned with limited computation and stor-
+Given the skewed nature of practical key-value (KV) storage            age resources, are deployed in close proximity to IoT de-
+workloads, distributed KV stores can adopt a tiered approach           vices [52, 53]. From a storage perspective, we can deploy a
+to support fast data access in a hot tier and persistent storage in    distributed KV store as the high-performance hot tier in the
+a cold tier. To provide data availability guarantees for the hot       edge, while the cloud forms the persistent cold tier. Such an
+tier, existing distributed KV stores often rely on replication         edge-cloud storage architecture has been used in virtualized
+and incur prohibitively high redundancy overhead. Erasure              network functions [40], multi-tier computing [42], multime-
+coding provides a low-cost redundancy alternative, but in-             dia management [21], etc. In addition to edge-cloud storage,
+curs high access performance overhead. We present ELECT,               storage tiering is also applicable to other storage architec-
+a distributed KV store that enables erasure coding tiering             tures, such as content-delivery networks and cloud block stor-
+based on the log-structured merge tree (LSM-tree), by adopt-           age (e.g., the combination of Amazon’s Elastic Block Store
+ing a hybrid redundancy approach that carefully combines               (EBS) [1] and Simple Storage Service (S3) [2]).
+replication and erasure coding with respect to the LSM-tree                Providing data availability guarantees for hot-tier storage
+layout. ELECT incorporates hotness awareness and selec-                is necessary, especially when the hot tier is deployed in
+tively converts data from replication to erasure coding in the         distributed storage environments where failures are preva-
+hot tier and offloads data from the hot tier to the cold tier.         lent [24]. For example, in edge-cloud storage, edge nodes
+It also provides a tunable approach to balance the trade-off           have limited storage resources and are also prone to fail-
+between storage savings and access performance through a               ures [53]. While the cloud provides abundant persistent stor-
+single user-configurable parameter. We implemented ELECT               age resources, reconstructing any lost data for failed edge
+atop Cassandra, which is replication-based. Experiments on             nodes from the cloud is inefficient due to the high edge-
+Alibaba Cloud show that ELECT achieves significant storage             cloud latencies [12, 67]. Thus, to ensure data availability
+savings in the hot tier, while maintaining high performance            against edge node failures, the edge can introduce storage
+and data availability guarantees, compared with Cassandra.             redundancy, so that any lost data in the edge can be directly
+                                                                       reconstructed through the redundant data from other avail-
+1     Introduction                                                     able edge nodes, without the need for retrieving data from
+Storage tiering provides a storage paradigm for balancing the          the cloud for reconstruction. However, modern distributed
+trade-off between access performance and storage persistence           KV stores [18, 22, 34, 46] are commonly designed for cloud
+in large-scale storage. In particular, for distributed key-value       data centers with sufficient resources, and adopt replication
+(KV) storage, practical KV workloads are known to have                 to distribute exact redundant copies for individual KV pairs
+skewed access patterns [6, 9, 16, 62], in which a small fraction       across multiple nodes to provide fault tolerance against node
+of KV pairs are frequently accessed (i.e., hot) and the remain-        failures. Replication multiplies storage overhead, which is
+ing large fraction of KV pairs are rarely accessed (i.e., cold).       prohibitive for resource-constrained edge nodes, or generally,
+Thus, it is natural for distributed KV stores to adopt storage         the high-performance hot tier with limited storage resources.
+tiering, in which a hot tier provides fast data access for hot             Erasure coding provides a low-cost redundancy alternative
+KV pairs, while a cold tier provides persistent storage with           to achieve data availability with much lower storage overhead
+less-demanding performance requirements for cold KV pairs.             compared with replication (see §2.3 for details). It has been
+   A primary use case for storage tiering is edge-cloud stor-          extensively studied in the literature, especially for distributed
+age. Our motivation is that Internet-of-things (IoT) appli-            KV storage in data centers (§7). However, there exists a
+cations are forecast to generate over 79.4 ZB of data in the           fundamental storage-performance trade-off for replication and
+wild by 2025 [51]. Since the cloud access performance is               erasure coding: replication incurs high storage overhead, yet
+bottlenecked by the constrained Internet bandwidth, IoT appli-         it supports not only load balancing of reads across redundant
+cations are often coupled with the edge computing paradigm,            copies, but also simple reconstruction of any lost data from
+                                                                       another available redundant copy; in contrast, erasure coding
+    * Jingwei Li is the corresponding author.                          significantly reduces storage overhead, but it does not keep
+
+
+
+USENIX Association                                               22nd USENIX Conference on File and Storage Technologies           293
+redundant copies for load balancing and is known to incur                K0        N0     K1                              ImmuT        MemT    <K, V>
+                                                                                                                   Mem
+higher bandwidth and I/Os in reconstructing lost data when              N5                 N1                      Disk      Flush
+                                                                                                     N0 K0 K5 K4
+failures happen [19, 26]. It is thus critical to mitigate the                                                        L𝟎           ⋯                WAL
+                                                                   K5         Hash ring         K2
+storage overhead, while maintaining high access performance                                                          L𝟏                 ⋯
+                                                                                                     N1 K1 K0 K5
+as if replication were used, in the hot tier.                           N4                 N2                       ⋅⋅⋅               Compaction
+                                                                                                                     Lℓ                       ⋯
+   We present ELECT, a distributed KV store that enables                     K4    N3     K3         N2 K2 K1 K0     Data     Metadata
+erasure coding tiering. ELECT builds on the log-structured                          Data distribution                         LSM-Tree
+merge tree (LSM-tree) [45]. Given the skewed nature of
+                                                                   Figure 1: Triple replication in a distributed KV store, in which each
+practical KV storage workloads [6, 9, 16, 62], ELECT extends       node uses an LSM-tree for internal storage management.
+the LSM-tree with a hybrid redundancy approach by storing
+limited amounts of hot KV pairs with replication in the hot tier   2         Background
+for high access performance, while still achieving significant
+storage savings by storing large amounts of cold KV pairs          2.1            Distributed KV Stores
+with erasure coding in the hot tier. In addition, it can offload   Modern distributed KV stores partition KV pairs across mul-
+cold KV pairs from the hot tier to the cold tier to further        tiple nodes by either consistent-hashing-based [31] distribu-
+alleviate the storage overhead in the hot tier.                    tion [17, 18, 22, 34] or range-based distribution [5, 11, 46, 57].
+   Enabling hybrid redundancy in ELECT, however, is non-           Consistent hashing arranges nodes in a hash ring, in which
+trivial. ELECT should decide how (e.g., at what granularities),    each node is associated with a range of the hash ring and
+when (e.g., on or off the write path), and what (e.g., differ-     stores the KV pairs whose keys are hashed to the range. For
+entiating hot and cold KV pairs) to convert replicated KV          load balancing, each node can be further associated with mul-
+pairs into erasure-coded KV pairs. Most importantly, ELECT         tiple virtual nodes that are associated with different ranges of
+should provide a mechanism to balance the trade-off between        the hash ring. In contrast, range-based distribution divides
+storage savings and access performance; such a mechanism           the entire key space into non-overlapping ranges, in which
+should be adaptive to various user requirements. Note that         each node stores the KV pairs in one of the ranges. ELECT
+erasure coding has also been proposed for caching [49] and         builds on Cassandra [34], which uses consistent hashing, yet
+content delivery networks [61] in the context of storage tier-     its design is compatible with both distribution approaches.
+ing. The novelty of ELECT lies in the careful combination               Replication is commonly used in distributed KV stores for
+of replication and erasure coding for LSM-tree-based storage       fault tolerance [5,11,18,22,34,46,57]. Given a replication fac-
+with several new design techniques (see §7 for details).           tor R, replication distributes R copies of each KV pair across
+   Our contributions are summarized as follows.                    a set of nodes, which collectively form a replication group.
+                                                                   Suppose that there are M nodes (denoted by N0 , N1 , · · · , NR−1 )
+• We design ELECT to make a case for enabling erasure cod-         arranged in a clockwise direction of a hash ring. Each node
+  ing tiering for distributed KV storage. ELECT has several        Ni is associated with a non-overlapping key range Ki , where
+  design features: (i) a redundancy transitioning approach         0 ≤ i ≤ R − 1, that corresponds to the keys that precede Ni in
+  for the conversion from replication to erasure coding based      the hash ring. Suppose that a KV pair is mapped to Ni . The
+  on the LSM-tree; (ii) a hotness-aware approach for both          first copy of the KV pair (called the primary replica) is stored
+  redundancy transitioning and the data offloading from the        in Ni , and the R − 1 additional copies (called the secondary
+  hot tier to the cold tier; and (iii) a tunable approach, with    replicas) are stored in the following nodes along the clock-
+  only a single user-specified parameter based on a storage        wise direction of the hash ring (i.e., Ni+1 mod M , Ni+2 mod M ,
+  saving target for simple deployment, for configuring how         · · · , Ni+R−1 mod M ). Thus, each node Ni now manages the
+  much data to be erasure-coded and offloaded.                     primary replicas of its associated key range as well as the
+• We implemented ELECT atop Cassandra v4.1.0 [3]. Cas-             secondary replicas of the associated key ranges of the R − 1
+  sandra [34] is a distributed KV store that uses consistent       preceding nodes in the anti-clockwise direction of the hash
+  hashing [31] for data partitioning (§2.1) and the LSM-tree       ring. Figure 1 shows an example of triple replication (i.e.,
+  for internal storage management (§2.2). We choose Cassan-        R = 3) and M = 6 nodes. For example, N0 stores the KV pairs
+  dra due to its decentralized, high-performance, and fault-       for K0 , K5 , and K4 .
+  tolerant nature. Cassandra supports only replication, and
+  ELECT extends Cassandra with erasure coding tiering.             2.2            Log-Structured Merge Trees (LSM-Trees)
+• We conduct experiments in an edge-cloud setting on Al-
+                                                                   Each node in Cassandra [34] manages its internal storage
+  ibaba Cloud [38]. Compared with (replication-based) Cas-
+                                                                   based on an LSM-tree [45], as also used in state-of-the-art
+  sandra, ELECT achieves 56.1% edge storage savings, with
+                                                                   local [9] and other distributed [5, 11, 34, 46] KV stores. An
+  similar performance in normal read/write operations.
+                                                                   LSM-tree is a data structure designed for efficient writes (i.e.,
+  We now open-source our ELECT                  prototype    at    Put requests), reads (i.e., Get requests), and scans (i.e., Scan
+https://github.com/adslabcuhk/elect.                               requests). Figure 1 shows how an LSM-tree is deployed in
+
+
+
+294   22nd USENIX Conference on File and Storage Technologies                                                               USENIX Association
+a distributed KV store. An LSM-tree organizes KV pairs                     encoded/decoded, and the n chunks of each coding group are
+in immutable fixed-size files, called SSTables, across ℓ + 1               distributed across n nodes to tolerate any n − k node failures
+levels, denoted by L0 , L1 , · · · , Lℓ ; L0 is the lowest level and Lℓ    with n/k× storage overhead. Compared with replication, RS
+is the highest level. Each SSTable stores multiple KV pairs                codes incur much lower storage overhead with higher fault
+in a sorted manner in units of data blocks of size several KiB             tolerance; for example, Facebook [43] uses the (14, 10) RS
+each. To support fast reads, each SSTable maintains an index               code for four-node fault tolerance with 1.4× storage overhead
+block to track the key ranges and offsets of all data blocks               only, while traditional triple replication [25] only provides
+as well as a Bloom filter [7] to track its currently stored keys           two-node fault tolerance and incurs 3× storage overhead.
+with a small false positive rate. We refer to the data blocks                 Erasure coding is known to have reconstruction penalty.
+as the data component, and collectively refer to the index                 For example, for any lost chunk, an (n, k) RS code needs to
+block, Bloom filter, and SSTable metadata as the metadata                  retrieve k available chunks from other alive nodes in the same
+component, for an SSTable. Inside the LSM-tree, the number                 coding group so as to decode the lost chunk. Reconstruction
+of SSTables in each level increases from the lower to higher               is common in practice due to the prevalence of failures [24,
+levels, while the KV pairs of an SSTable do not overlap with               26, 43], and there are two major reconstruction operations:
+those of other SSTables in the same level except L0 (note that             degraded reads (i.e., reads issued to lost chunks) and full-node
+some advanced LSM-trees may have overlapping KV pairs                      recovery (i.e., all data stored in a node is lost).
+across SSTables in the same level [48]).                                      There are code constructions that reduce the reconstruction
+   Writes and reads of KV pairs are issued to an LSM-tree                  bandwidth of RS codes (e.g., regenerating codes [19] and
+as follows. Each write appends a newly written KV pair to                  locally repairable codes [26]). However, they still retrieve
+an on-disk write-ahead log (WAL) for crash consistency and                 more data for reconstruction than the amount of lost data,
+then inserts it into a mutable in-memory structure called a                and the trade-off between storage savings and reconstruction
+MemTable. When the MemTable is full, it is turned into an                  bandwidth in erasure coding is fundamental [19].
+Immutable MemTable, which is then flushed to the lowest
+level L0 as an SSTable. Each level has a capacity limit, in-               3   Design Considerations
+creasing from lower to higher levels. When a lower level                   Before we present the design of ELECT, we pose five design
+reaches its capacity limit, it triggers compaction to merge the            questions that need to be addressed.
+KV pairs in the lower level into its next higher level. Specifi-           Q1: At what granularity should KV pairs be encoded? In
+cally, a compaction operation selects an SSTable in the lower              the context of KV stores, there are two approaches to encode
+level, reads all SSTables in the higher level that have over-              KV pairs at different granularities: (i) self-encoding [8, 32,
+lapping key ranges with the selected SSTable, sorts all the                33, 44], which splits a KV pair into k fixed-size data chunks
+latest KV pairs (while all stale KV pairs are discarded), and              for encoding, and (ii) cross-encoding [14, 37, 65, 66], which
+re-generates and stores the non-overlapping SSTables in the                aggregates multiple KV pairs into individual data chunks and
+higher level. On the other hand, each read for a key searches              performs encoding on each group of k different data chunks.
+the MemTable and then the SSTables from L0 to Lℓ . It returns              Self-encoding improves the parallelism of data access, but
+the KV pair if the key is found, or null otherwise.                        incurs significant metadata overhead for indexing all chunks
+                                                                           of individual KV pairs [65], especially when KV services are
+2.3    Erasure Coding
+                                                                           dominated by small KV pairs [9]. In contrast, cross-encoding
+Erasure coding provides low-redundancy fault tolerance for                 mitigates such metadata overhead, but the degraded read to a
+distributed storage. In this work, we focus on Reed-Solomon                KV pair during a node failure needs to retrieve k surviving
+(RS) codes [50], configured by two parameters n and k (where               chunks of the same coding group for reconstruction, thereby
+k < n), as our erasure code construction. We choose RS codes               leading to amplified I/Os and bandwidth.
+for three reasons: (i) they support general coding parameters n               ELECT opts for cross-encoding to reduce the metadata
+and k (provided k < n); (ii) they have the minimum storage re-             overhead; if we only encode cold KV pairs that are rarely
+dundancy for tolerating against any n − k node failures (a.k.a.            accessed (see Q3 below), the degraded read overhead should
+the Maximum Distance Separable (MDS) property); and (iii)                  be limited. Also, since LSM-trees organize KV pairs in units
+they have been popularly deployed in production [24, 43].                  of SSTables, ELECT opts for cross-encoding across multiple
+   An (n, k) RS code encodes k original (uncoded) fixed-size               SSTables (i.e., each SSTable is treated as a chunk) to align
+data chunks into n − k (coded) parity chunks of the same size,             with the LSM-tree-based storage management.
+and the collection of n data and parity chunks forms a cod-                Q2: Should erasure coding be performed on or off the
+ing group; the (n, k) RS code considered here is systematic,               write path? Erasure coding for KV pairs can be performed
+meaning that the coding group keeps the k data chunks. It                  inline [8, 20, 44], in which KV pairs are encoded on the write
+ensures that any k out of the n chunks of a coding group can               path, or offline [23,36,58], in which KV pairs are first written
+reconstruct all k original data chunks. Large-scale storage sys-           and later encoded in the background. Offline encoding has
+tems comprise multiple coding groups that are independently                the flexibility of first storing hot KV pairs with replication
+
+
+
+USENIX Association                                                   22nd USENIX Conference on File and Storage Technologies          295
+                                                                                              100
+
+
+
+                                                                            Cum. access (%)
+               100     L1          L2           L3        L4                                                                  SSTables in L4 are accessed. This suggests that we can apply
+
+Fraction (%)
+                                                                                               75
+               75                        56.2                                                                                 erasure coding in a more fine-grained manner by selecting
+                                                              46.9                             50
+               50                 39.7                 33.7                                    25                             only the SSTables that are rarely accessed for erasure coding
+               25                                9.2                 10.2                       0
+                      0.4   3.8                                                                  0   25     50     75   100   (i.e., with negligible degraded read overhead).
+                0
+                      # SSTables                 # accesses                                            # SSTables (%)         Q4: How should the access overhead in the cold tier be
+                (a) Statistics across levels                                             (b) Access distributions in L4       mitigated? It is expected that the cold tier has worse access
+                     Figure 2: Storage and access patterns in Cassandra.                                                      performance than the hot tier. For example, in edge-cloud
+                                                                                                                              storage, while the cloud provides much more abundant stor-
+for high access performance (see Q3 below). Thus, ELECT                                                                       age resources than the edge, it is also limited by the high edge-
+opts for offline encoding, in which KV pairs are first written                                                                cloud latency over the Internet (e.g., 30 ms for client-to-cloud
+with replication, and later performs erasure coding (across                                                                   communication versus 5 ms for client-to-edge communica-
+SSTables) in the background.                                                                                                  tion [12, 67]). ELECT should selectively offload data that is
+Q3: How should skewed access patterns be addressed?                                                                           rarely accessed from the hot tier to the cold tier, so as to avoid
+Practical KV workloads have skewed access patterns [6, 9, 16,                                                                 frequently retrieving the data back from the cold tier.
+62], in which few KV pairs are frequently accessed (hot) and                                                                  Q5: How should ELECT address the trade-off between
+the majority of KV pairs are rarely accessed (cold). ELECT                                                                    storage savings and access performance? Both redundancy
+opts to apply erasure coding to cold SSTables to mitigate the                                                                 transitioning from replication to erasure coding and the data
+degraded read overhead in cross-encoding (see Q1), while                                                                      offloading from the hot tier to the cold tier in essence trade
+storing hot SSTables with replication for high-performance                                                                    access performance for storage savings. ELECT should pro-
+accesses with limited additional storage overhead. The idea                                                                   vide a tunable mechanism that allows users to balance the
+of applying replication for hot data and erasure coding for                                                                   trade-off depending on their requirements.
+cold data has been studied in prior studies [23,36,58], yet they
+target different deployment environments and how to adapt                                                                     4     ELECT Design
+this idea into LSM-tree-based KV stores remains unexplored.                                                                   ELECT extends Cassandra [34], which uses replication for
+   We motivate our design by examining the storage and                                                                        fault tolerance, with erasure coding tiering. It is deployed
+access patterns of SSTables in different LSM-tree levels by                                                                   across multiple nodes in the hot tier and is backed by the
+generating realistic KV workloads using the benchmarking                                                                      cold tier with persistent storage. It proposes several design
+tool YCSB [16], which has been extensively used for KV                                                                        elements to address the questions in §3.
+storage evaluation in the literature. Specifically, we load                                                                   • LSM-tree-based redundancy transitioning (§4.1). ELECT
+100 M 1-KiB KV pairs with a key size of 24 bytes and a                                                                          applies cross-encoding (see Q1) across SSTables in an of-
+value size of 1000 bytes into Cassandra (v4.1.0) via YCSB                                                                       fline manner (see Q2), by converting SSTables from replica-
+in our testbed (see §6.1 for testbed details). Also, using the                                                                  tion into erasure coding (called redundancy transitioning).
+nodetool command in Cassandra, we flush the MemTable                                                                            It decouples the replicas originating from different nodes
+of each LSM-tree to disk and force the compaction on all                                                                        into multiple LSM-trees, such that it applies cross-encoding
+SSTables to keep all nodes in a stable state. We find that the                                                                  to the primary replicas and removes the secondary replicas
+last level (i.e., the highest level) is L4 , while L0 is empty as the                                                           after encoding. One subtlety is that it should maintain the
+SSTables originally in L0 are merged to L1 after the forced                                                                     correctness of redundancy transitioning even under LSM-
+compaction. We then issue 10 M reads to the stored KV                                                                           tree compaction, which changes the content of SSTables.
+pairs, where the keys are accessed under the Zipf distribution                                                                • Hotness awareness (§4.2). ELECT applies cross-encoding
+with a Zipfian constant of 0.99 (default in YCSB). Note that                                                                    to only SSTables in the last LSM-tree level (see Q3). It
+we set the replication factor as one to mitigate the impact                                                                     also offloads SSTables that tend to be rarely accessed from
+of replication, and disable the key cache and row cache in                                                                      the hot tier to the cold tier to mitigate the access overhead
+Cassandra to have all KV pairs read from on-disk SSTables.                                                                      in the cold tier (see Q4).
+   Figure 2(a) shows the distributions of numbers of SSTables                                                                 • Balancing storage-performance trade-off (§4.3). ELECT
+and accesses to SSTables in each level. The intermediate                                                                        provides a user-configurable parameter, namely the stor-
+levels L2 and L3 have high read frequencies. However, L4                                                                        age saving target, to balance the trade-off between storage
+stores the most SSTables (56.2% of all SSTables), but only                                                                      savings and access performance (see Q5).
+accounts for 10.2% of accesses. This motivates us to perform
+erasure coding only for the SSTables in the last level (e.g., L4                                                              4.1    LSM-tree-based Redundancy Transitioning
+in this example) and replication for the SSTables in the lower                                                                ELECT decomposes redundancy transitioning into four
+levels, so that we still achieve significant storage savings and                                                              steps: LSM-tree management (§4.1.1), parity node selection
+limit the degraded read overhead caused by erasure coding.                                                                    (§4.1.2), cross-SSTable encoding (§4.1.3), and secondary
+   Figure 2(b) further shows the cumulative distribution of                                                                   replica removal (§4.1.4). Figure 3 shows the overall redun-
+access frequencies versus the SSTables in L4 . Only 18.2% of                                                                  dancy transitioning workflow in ELECT.
+
+
+
+296                  22nd USENIX Conference on File and Storage Technologies                                                                                             USENIX Association
+ Replication group                                                               4.1.2   Parity Node Selection
+  Key list                 N0                     N1                  N2         ELECT applies cross-SSTable encoding on k uncoded SSTa-
+       S       Primary            Secondary              Secondary               bles (called data SSTables) from k nodes (called data nodes)
+               LSM-trees           LSM-trees              LSM-trees              and generates n − k coded SSTables (called parity SSTables)
+                                       ECMeta                                    that are stored in n − k nodes (called parity nodes). Before
+ Leader parity node                                    Parity node
+                                                                                 encoding, ELECT first selects the set of parity nodes to which
+  N4       Encoding S                         P          P’           N5
+                                                                                 the parity SSTables are distributed. The selection process
+                                                                                 should satisfy the following requirements: (i) for fault toler-
+                   SSTables from N1, N2, N3
+                                                                                 ance, the parity nodes should be distinct from the data nodes;
+Figure 3: LSM-tree-based redundancy transitioning in ELECT for                   (ii) for load balancing, the parity SSTables are evenly dis-
+a coding group of (6,4) RS coding, in which N0 , N1 , N2 , N3 are data
+                                                                                 tributed across all nodes after parity node selection; and (iii)
+nodes, while N4 (leader parity node) and N5 are parity nodes.
+                                                                                 for scalability, the parity nodes can be deterministically se-
+4.1.1       LSM-tree Management                                                  lected by individual nodes without centralized coordination.
+                                                                                    To satisfy the above requirements, ELECT forms each
+Decoupled replication management. In Cassandra, all repli-                       coding group over n consecutive nodes in the hash ring,
+cas stored in a node are managed in a single LSM-tree. To                        say Ni mod M , N(i+1) mod M , · · · , N(i+n−1) mod M for 0 ≤ i < M,
+facilitate cross-SSTable encoding across nodes and subse-                        where M is the total number of nodes, the first k nodes are the
+quent removals of replicas, ELECT borrows the idea of de-                        data nodes, and the following n − k nodes are the parity nodes.
+coupled replication management [57, 68] (originally designed                     Also, each node locally maintains a monotonic sequence num-
+for reducing I/O amplification) by separating the replicas                       ber Q (initialized as zero). Specifically, for each SSTable in
+into multiple LSM-trees in each node. Recall that for a repli-                   the primary LSM-tree that is selected by Ni (0 ≤ i < M) for
+cation factor R, each node maintains the primary replicas                        erasure coding, Ni selects a leader parity node N p , which will
+originating from the node itself and the secondary replicas                      be responsible for computing and sending the parity SSTables
+originating from the R − 1 preceding nodes in the hash ring                      (§4.1.3) to n − k − 1 other parity nodes. It computes p as:
+(§2.1). ELECT now lets each node maintain R LSM-trees,
+                                                                                                p = (i + (Q mod k) + 1) mod M,                  (1)
+comprising one primary LSM-tree for the primary replicas
+and R − 1 secondary LSM-trees for the R − 1 respective sets                      and increments the sequence number Q by one for each
+of secondary replicas. For example, in Figure 1 with R = 3,                      SSTable being selected for erasure coding. Note that the
+N0 writes the primary replicas in key range K0 to the primary                    selection of SSTables is based on their priorities (§4.2).
+LSM-tree and the secondary replicas in key ranges K5 and K4                           We explain via an example the idea behind Equation (1).
+to two other secondary LSM-trees.                                                From Figure 1 (where M = 6), we use (6, 4) RS coding. Thus,
+LSM-tree level generation. The original LSM-tree creates a                       N0 (deterministically) selects a leader parity node from N1 ,
+new level Lℓ when the current last level Lℓ−1 is full. However,                  N2 , N3 , and N4 in a round-robin fashion for encoding its
+depending on the current storage usage, the last level Lℓ may                    SSTables as Q increases; similarly, N1 selects a leader parity
+only contain a small number of SSTables. This compromises                        node from N2 , N3 , N4 , and N5 , and so forth. Inversely, each
+the effectiveness of ELECT, which applies erasure coding                         node Ni (0 ≤ i < M) in the whole system will be selected
+only to the SSTables in the last level. To address this issue,                   as a leader parity node by k nodes N(i−1) mod M , N(i−2) mod M ,
+ELECT modifies the current LSM-tree design and creates the                       · · · , N(i−k) mod M , which now become the k data nodes of a
+new level Lℓ in the LSM-tree only when the size of the current                   coding group; for example, in Figure 3, N4 serves as a leader
+last level Lℓ−1 reaches the capacity limit of the next level Lℓ .                parity node for N0 , N1 , N2 , and N3 in a coding group under
+For example, the LSM-tree in Cassandra currently sets the                        (6, 4) RS coding. Since a large-scale storage system typically
+size limits of Lℓ−1 and Lℓ as T and 10T , respectively, where                    contains multiple coding groups, ELECT ensures that all
+T is some capacity limit and the default capacity difference                     coding groups are distributed across different sequences of
+across adjacent levels is 10×. ELECT now keeps adding                            n consecutive nodes. Finally, each leader parity node (say
+SSTables to Lℓ−1 even though the size exceeds T . It only                        N p ) will be the first parity node of a coding group, and the
+creates Lℓ when the size of Lℓ−1 exceeds 10T . It then still                     remaining n − k − 1 parity nodes of the coding group are
+keeps a size T of SSTables in Lℓ−1 and moves at least 9T of                      the n − k − 1 succeeding nodes of N p along the clockwise
+SSTables to Lℓ . In this case, ELECT ensures that the last level                 direction of the hash ring.
+Lℓ always contains a sufficiently large number of SSTables
+                                                                                 4.1.3   Cross-SSTable Encoding
+(almost 90% of all SSTables across all levels in our case)
+and maintains the effectiveness of redundancy transitioning.                     Encoding workflow. Each of the k data nodes of a coding
+Note that if the LSM-tree grows and adds a new level, the                        group sends an SSTable to the leader parity node, which is
+current erasure-coded SSTables in the previous last level will                   determined by the sequence number Q according to Equa-
+be moved to the new last level.                                                  tion (1) (§4.1.2). Upon receiving the k data SSTables, the
+
+
+
+USENIX Association                                                         22nd USENIX Conference on File and Storage Technologies             297
+leader parity node encodes them into n − k parity SSTables,                4.1.4    Secondary Replica Removal
+stores one of the parity SSTables locally, and sends the re-               ELECT removes the secondary replicas from the secondary
+maining parity SSTables to the other n − k − 1 parity nodes.               LSM-trees after cross-SSTable encoding to reclaim storage
+The parity nodes store the parity SSTables as separate files               space. Since the LSM-trees of different nodes perform com-
+outside of their LSM-trees. For example, from Figure 3, con-               paction asynchronously, they may have distinct SSTables. It
+sider a coding group for (6, 4) RS coding with k = 4 data                  is important to avoid incorrectly removing KV pairs from
+nodes N0 , N1 , N2 , and N3 , all of which share the same leader           the secondary replicas, especially for the KV pairs that are
+parity node N4 . N0 sends an SSTable (say S) to N4 . Then, N4              updated after cross-SSTable encoding.
+encodes S together with other SSTables (from N1 , N2 , and N3 ,                After cross-SSTable encoding, for each primary LSM-tree,
+respectively) to generate the parity SSTables (say P and P′ ).             ELECT generates a key list for each data SSTable, where the
+N4 stores P locally and sends P′ to another parity node N5 .               key list includes the keys in the SSTables and the correspond-
+    The leader parity node also generates a metadata structure,            ing written timestamps; note that the timestamps are already
+called ECMeta, for the coding group to support failure re-                 provided by Cassandra to identify the latest versions of KV
+construction (§5). The ECMeta contains n 4-tuples, each of                 pairs among replicas. It sends the key list to the other sec-
+which describes a data/parity SSTable in the coding group,                 ondary LSM-trees that contain the secondary replicas of the
+including: (i) the cryptographic hash (e.g., SHA-256) of the               data SSTable. For each secondary LSM-tree, ELECT finds
+content of the data component of the SSTable (32 bytes), (ii)              all SSTables in the last level whose KV pairs are covered
+the SSTable size (4 bytes), (iii) the identifier of the node that          by the key list. It removes only the KV pairs that are either
+stores the SSTable (4 bytes), and (iv) the position in the cod-            the current or older versions with respect to the timestamps
+ing group (indexed from 0 to n−1) (4 bytes). In particular, we             specified in the key list. Note that ELECT creates new SSTa-
+borrow the idea from deduplication [47] and use the SSTable                bles and tracks the key ranges of the removed KV pairs in
+hash as the unique identifier to search for the SSTable during             the metadata components of the new SSTables, so as to be
+reconstruction, assuming that the hash collisions for distinct             compatible with the LSM-tree management under replication.
+SSTables are practically unlikely. The leader parity node then             Finally, it reconstructs the SSTables for the remaining KV
+sends the ECMeta of each data SSTable to the corresponding                 pairs. If the current versions of all KV pairs indicated by the
+R nodes in the replication group. Upon receiving the ECMeta,               key list are removed, the key list is also removed.
+each of the R nodes includes the ECMeta in the metadata                        Figure 4(a) shows the replica removal workflow in the last
+component of the corresponding SSTable.                                    level of a secondary LSM-tree. Suppose that the secondary
+Compaction-triggered parity updates. When a primary                        LSM-tree has four KV pairs in the last level Lℓ , denoted
+LSM-tree undergoes compaction, its data SSTables (in the                   by KV0 , KV1 , KV2 , and KV3 , whose keys are k0 , k1 , k2 , and
+last level) may be updated. ELECT needs to update the parity               k3 , respectively, while the four KV pairs are stored in two
+SSTables of the same coding group to maintain consistency.                 SSTables (KV0 , KV1 ) and (KV2 , KV3 ). Now, suppose that
+    Consider a primary LSM-tree that undergoes compaction.                 the secondary LSM-tree receives a key list (k1 , k2 , k3 ), whose
+Let S0 , S1 , · · · , Su be the old data SSTables before compaction,       timestamps indicate that KV1 is the current version (i.e., same
+and S0′ , S1′ , · · · , Sv′ be the new data SSTables after compaction,     timestamp), KV2 is older, and KV3 is newer. Thus, ELECT
+where u and v are the numbers of old data SSTables and                     removes KV1 and KV2 . It also creates an SSTable that tracks
+new data SSTables, respectively. Without loss of general-                  the key ranges for the deleted KV1 and KV2 .
+ity, the two sequences of data SSTables (S0 , S1 , · · · , Su ) and            Note that the secondary LSM-tree may not remove the
+(S0′ , S1′ , · · · , Sv′ ) are ordered by (non-overlapping) key ranges.    current version of a KV pair (e.g., KV2 ) as indicated in the
+ELECT pairs each of the old and new data SSTables as                       key list, as the KV pair to be removed is not yet moved to the
+(S0 , S0′ ), (S1 , S1′ ), and so forth. If u < v (i.e., there exist more   last level due to asynchronous compaction of different nodes.
+new data SSTables), the extra new data SSTables are simply                 Figure 4(b) shows a case where the second last level Lℓ−1 has
+added as regular SSTables to the primary LSM-tree without                  a newer version KV1 and the current version KV2 with respect
+erasure coding; if u > v (i.e., there exist fewer new data SSTa-           to the timestamps in the key list. During compaction, ELECT
+bles due to deleted KV pairs), ELECT pairs each extra old                  removes KV2 and adds KV1 to the last level Lℓ .
+data SSTables with zero-filled dummy SSTables. The dummy
+SSTables can later be replaced by the new data SSTables that               4.2     Hotness Awareness
+correspond to the same leader parity node.                                 ELECT incorporates hotness awareness into redundancy tran-
+    For each pair of old and new SSTables, ELECT reads the                 sitioning and data offloading.
+ECMeta of the old data SSTable to identify the corresponding               Hotness-aware redundancy transitioning. ELECT moni-
+leader parity node. It sends the pair to the leader parity node,           tors the hotness of each SSTable based on two metrics: (i)
+which updates the parity SSTables of the same coding group                 the access frequency, which refers to the number of reads
+based on delta-based parity updates (similar to read-modify-               issued to the SSTable as measured by Cassandra, and (ii) the
+writes in RAID) [10] and sends out the updated ECMeta.                     lifetime, which refers to the elapsed time since the SSTable
+
+
+
+298    22nd USENIX Conference on File and Storage Technologies                                                       USENIX Association
+                          Key list : (k1, k2, k3)                            Cdm be the numbers of parity SSTables and data SSTables
+          SSTable
+                                                                             being offloaded to the cold tier, respectively.
+      𝑳ℓ : KV0 KV1      KV2 KV3        𝑳ℓ : KV0       12         KV3
+                                                                                We now quantify the actual storage size of a replication
+           current older newer                                               group (in terms of the number of SSTables), assuming that the
+                 (a) Removal in the last level                               storage load is balanced (i.e., all nodes have the same number
+                    SSTable                                                  of SSTables in their respective primary LSM-trees). ELECT
+                                       Key list : (k1, k2 ,k3)               replicates Call −Crt SSTables and encodes Crt SSTables, so
+          𝑳ℓ−1 : KV1 KV2
+                                                                             their storage usage is (Call −Crt ) · R +Crt · nk . It also offloads
+             newer        current Compact                                    C pm +Cdm SSTables to the cold tier. Thus, the actual storage
+            𝑳ℓ :      12                       𝑳ℓ : KV1 2                    size of a replication group is:
+               (b) Removal during compaction                                                (Call −Crt ) · R +Crt · nk −C pm −Cdm .          (2)
+        Figure 4: Secondary replica removal in ELECT.                           When all SSTables are replicated, the actual storage size of
+                                                                             a replication group is Call · R. To achieve the storage saving
+creation. Among the SSTables in the last level of the primary                target α, our goal is to configure Crt , C pm , and Cdm , so that
+LSM-tree in each node, an SSTable is said to have a higher
+                                                                                 1 − C 1 ·R [(Call −Crt ) · R +Crt · nk −C pm −Cdm ] ≥ α.    (3)
+priority to be selected for encoding (§4.1.3) if it has a lower                       all
+
+access frequency and (if a tie exists) a longer lifetime. ELECT                 In ELECT, each node computes Crt , C pm , and Cdm indepen-
+selects the SSTables with higher priorities for encoding based               dently (without centralized coordination) given Call , Clast , and
+on a storage saving target (§4.3).                                           α. Assuming balanced storage loads, the respective values of
+Cold-data offloading. ELECT dynamically offloads SSTa-                       Call and Clast across nodes have very small differences.
+bles from the hot tier to the cold tier based on the hotness of              Balancing trade-off. ELECT starts with redundancy transi-
+SSTables, so as to further mitigate the storage overhead in the              tioning to keep all SSTables (replicated or erasure-coded)
+hot tier. First, it offloads parity SSTables with long lifetimes             in the hot tier. If α is not met, it offloads parity SSTables
+as they only affect parity updates (§4.1.3) and failure recon-               to the cold tier, so that all SSTables remain accessible from
+struction. Second, after all parity SSTables are offloaded,                  the hot tier when no failure occurs; in case of a node failure,
+it selectively offloads the data SSTables with higher priori-                parity SSTables are needed for recovery. If α is still not met,
+ties. The exact numbers of data and parity SSTables being                    ELECT offloads data SSTables to the cold tier. Note that
+offloaded depend on a storage saving target (§4.3). Note that                ELECT only offloads erasure-coded SSTables to the cold tier,
+if an SSTable is selected to be offloaded, only the SSTable’s                so α may not be achievable if it is too large.
+data component is moved, while its metadata component re-                    • Case 1 (Redundancy transitioning): ELECT sets C pm =
+mains in the hot tier to serve read and compaction operations.                 Cdm = 0 and chooses the largest possible Crt to maximize
+Furthermore, when a read or compaction operation touches                       storage savings. Note that Crt ≤ Clast . From Equation (3),
+an SSTable in the cold tier, ELECT retrieves the SSTable’s                     Crt is given by:
+data component from the cold tier to the hot tier.                                                Crt = min{ R·Call ·α
+                                                                                                              R−n/k , Clast }.               (4)
+4.3   Balancing Storage-Performance Trade-Off                                • Case 2 (Offloading of parity SSTables): ELECT proceeds
+Redundancy transitioning and data offloading alleviate the                     to Case 2 if α is not met, i.e., Crt = Clast . It sets Cdm = 0
+storage overhead in the hot tier, yet they also incur perfor-                  and chooses the largest possible C pm . Note that the number
+mance overhead compared with replicating all data in the hot                   of parity SSTables is at most n−k
+                                                                                                               k ·Clast . From Equation (3),
+tier. To balance the trade-off between the storage savings                     C pm is given by:
+and access performance, ELECT introduces a configurable                           C pm = min{R ·Call · α − (R − nk ) ·Clast , n−k
+                                                                                                                               k ·Clast }. (5)
+storage saving target α with respect to when all SSTables are                • Case 3 (Offloading of data SSTables): ELECT proceeds
+replicated, so as to control the number of SSTables involved                   to Case 3 if α is still not met, i.e., C pm = n−k
+in redundancy transitioning and data offloading. Specifically,                                                                k · Clast . It
+                                                                               chooses the largest possible Cdm . Note that Cdm ≤ Clast .
+α is a fractional value between zero and one, such that a                      From Equation (3), Cdm is given by:
+larger α implies that more SSTables are erasure-coded and
+offloaded from the hot tier to the cold tier, and vice versa.                         Cdm = min{Call · R · α − (R − 1) ·Clast , Clast }.     (6)
+Quantifying storage overhead. We approximate the storage
+overhead in the hot tier based on the number of SSTables                     5    Implementation
+in a single primary LSM-tree in a node. Let Call be the                      We implement ELECT in Java based on Cassandra v4.1.0 [3],
+total number of SSTables in the primary LSM-tree, Clast be                   with around 27 K lines of code of modifications to Cassan-
+the number of SSTables in the last level of the LSM-tree,                    dra’s codebase (which consists of 1.25 M lines of code), by
+Crt be the number of data SSTables in the last level being                   adding redundancy transitioning, hotness monitoring, data
+converted from replication to erasure coding, and C pm and                   offloading, full-node recovery, and degraded reads/writes.
+
+
+
+USENIX Association                                                     22nd USENIX Conference on File and Storage Technologies              299
+We implement the erasure coding operations based on Intel’s           ELECT also does not currently support dynamic topology
+Intelligent Storage Acceleration Library [27] and link the         changes. We consider a possible approach for supporting
+operations with Cassandra through the Java Native Interface.       topology changes in ELECT as follows. For replicated KV
+Consistent reads/writes. Under replication, Cassandra sup-         pairs, ELECT can relocate replicas when the nodes join or
+ports consistent reads/writes based on the configurable            leave as in Cassandra. For erasure-coded KV pairs, ELECT
+read/write consistency levels, which specify the number of         can relocate some of the erasure-coded SSTables to keep
+nodes in a replication group that need to acknowledge a            them in consecutive nodes in the hash ring (§4.1.2). As in
+read/write request. ELECT maintains the same read/write            consistent hashing, ELECT should only relocate the KV pairs
+workflows for replicated KV pairs as in Cassandra. For writes,     stored in the adjacent nodes of each joining/leaving node in
+ELECT performs the same consistent writes as in Cassandra          the hash ring instead of all SSTables of the whole storage
+since it always writes KV pairs via replication. For reads, af-    system, so as to mitigate the relocation overhead.
+ter receiving enough acknowledgments according to the read
+consistency level, if a KV pair is replicated, ELECT follows       6     Evaluation
+the same consistent read path as in Cassandra; if a KV pair        We show via evaluation that ELECT reduces the storage
+is erasure-coded, ELECT always returns the KV pair from            overhead of Cassandra and maintains high performance.
+the primary LSM-tree or issues degraded reads (see below) if
+the KV pair is unavailable. ELECT currently does not verify        6.1    Methodology
+reads for erasure-coded KV pairs.                                  Testbed. We consider an edge-cloud setting, where the edge
+Full-node recovery. Suppose that a node crashes and all its        serves as the hot tier and the cloud serves as the cold tier.
+LSM-trees are lost. ELECT performs recovery in a new node          Specifically, we conduct evaluation on Alibaba Cloud [38].
+on a per-LSM-tree basis. To recover a primary LSM-tree,            We set up M = 10 edge nodes and multiple (up to 32) client
+ELECT retrieves the secondary LSM-tree from another alive          nodes in the same geographical region. Each node is deployed
+node to the new node. The SSTables from the lowest to the          on an ecs.i3g.2xlarge instance with eight 2.5 GHz vC-
+second last level in the LSM-tree are replicated and can be        PUs, 32 GiB RAM, 447 GiB SSD, and Ubuntu 22.04 LTS.
+directly recovered from their replicas. For the SSTables in        All nodes are connected with a 3 Gbps network, with a net-
+the last level being erasure-coded, ELECT retrieves k data         work latency of no more than 1 ms. We also deploy the cloud
+or parity SSTables of the same coding group based on the           on the Alibaba Object Storage Service in a different geograph-
+ECMeta from the other alive nodes or the cloud to decode the       ical region. Our measurement shows that the network latency
+lost SSTables. To recover a secondary LSM-tree, ELECT              between the two regions is at least 45 ms.
+retrieves a primary LSM-tree or a secondary LSM-tree from          Default settings. We compare ELECT with the vanilla Cas-
+the other nodes in the same replication group; if a primary        sandra. We configure Cassandra with triple replication
+LSM-tree is retrieved, ELECT removes the data components           (R = 3) and store all replicas in the edge nodes. We also con-
+of SSTables that are erasure-coded, as the secondary LSM-          figure ELECT with triple replication and the (n, k) = (6, 4)
+tree only keeps their metadata components (§4.1.4).                RS code, and enable all features under a storage saving tar-
+Degraded reads. Suppose that ELECT receives a degraded             get α = 0.6. For both systems, we fix the SSTable size as
+read to an unavailable KV pair. ELECT relays the read re-          4 MiB [28,64]. We disable SSTable compression for accurate
+quest to another alive node in the same replication group, with    storage size calculation. We set the read and write consistency
+a flag indicating the KV pair is unavailable. If the KV pair is    levels as one and three, respectively (i.e., each of the reads and
+stored with replication, the alive node directly returns the KV    writes needs to be acknowledged by one node and all three
+pair; otherwise, if the KV pair is stored with erasure coding,     replica nodes, respectively) for strong consistency. All other
+the alive node decodes the SSTable containing the KV pair          parameters remain the same as the defaults in Cassandra.
+by retrieving k data or parity SSTables of the same coding            We use the benchmarking tool YCSB [16] to generate dif-
+group from the other alive nodes according to the ECMeta.          ferent types of workloads. By default, in Exp#1, we load
+Degraded writes. Suppose that ELECT receives a degraded            100 M 1-KiB KV pairs with 24-byte keys and 1000-byte val-
+write to a failed node. It follows Cassandra to apply the hinted   ues into storage before each experiment and generate 10 M
+handoff mechanism [4], which allows the replay of a write to       requests; in the subsequent experiments that focus on ex-
+a failed node that returns online.                                 amining the performance of individual KV operations, we
+Limitations. ELECT does not support incremental recovery           load 10 M 1-KiB KV pairs and generate 1 M requests, while
+for individual SSTables as in Cassandra. Under replication,        the performance trends remain stable as in Exp#1 even we
+Cassandra builds a Merkle tree [41] in each node to detect in-     use smaller workloads. In all experiments, the requests by
+consistencies among replicas for any failed SSTable recovery.      default follow a Zipf distribution with a Zipfian constant of
+Since ELECT includes erasure-coded SSTables in LSM-trees,          0.99 (default in YCSB). Also, we run YCSB clients in two
+it needs a revised Merkle tree that addresses both replication     client nodes, each of which has eight YCSB client threads to
+and erasure coding.                                                simulate concurrent requests from multiple clients.
+
+
+
+300   22nd USENIX Conference on File and Storage Technologies                                                 USENIX Association
+                                                                                                                                                                                                                 6
+
+
+
+
+Storage size (GiB)                                                                                                          Normalized latency                                              Normalized latency
+                             305.3    Cloud                     3   Cassandra        ELECT                                                       2                     Cassandra    ELECT                                          Cassandra    ELECT
+
+
+
+                                              Normalized thpt
+                     300
+                                      Edge
+                                     185.9                      2                                                                                    0.51       0.36       10.31   0.38                          4
+                     200
+                                     134.1                          28.30   25.60      27.59   27.02   0.19   18.04                              1
+                     100                                        1                                                                                                                                                2   0.49   0.36       10.31   0.37
+
+                       0                                        0                                                                                0                                                               0
+                           Cassandra ELECT                              A       B          C       D      E       F                                  Read       Write      Scan    Update                            Read   Write      Scan    Update
+                     (a) Storage size                                               (b) Throughput                                                          (a) Normal mode                                            (b) Degraded mode
+Figure 5: Exp#1: YCSB core workloads. Throughput results are                                                                Figure 6: Exp#2: Benchmarking of KV operations. Results are nor-
+normalized by Cassandra’s throughput (above each bar) in KOPS.                                                              malized by Cassandra’s latencies (above each bar) in milliseconds.
+
+   Our experiments consider normal (without failures) and                                                                   degraded mode with edge node failures. For example, if a
+degraded (with failures) modes. For degraded mode, we crash                                                                 read encounters a non-failed node, it is a normal read; if it
+two edge nodes via the kill -9 command.                                                                                     encounters a failed node, it becomes a degraded read and
+   We plot the average results over five runs, with error bars                                                              ELECT recovers the SSTable that contains the requested key.
+showing the 95% confidence intervals under the Student’s                                                                       Figure 6 shows the results. Note that Cassandra keeps
+t-distribution (note that some error bars may be invisible due                                                              almost identical performance in both normal and degraded
+to small deviations).                                                                                                       modes as it keeps all replicated storage in the edge. In normal
+                                                                                                                            mode (Figure 6(a)), ELECT maintains similar performance as
+6.2                        Overall Analysis                                                                                 in Cassandra in reads, writes, and updates with up to 2.7% of
+Exp#1 (YCSB core workloads). We first compare the over-                                                                     higher average latencies; it reduces the average scan latency
+all storage overhead and performance of Cassandra and                                                                       of Cassandra by 21.5% (see Exp#1). In degraded mode (Fig-
+ELECT using the six YCSB core workloads [16], namely                                                                        ure 6(b)), ELECT still has similar performance of Cassandra
+A (50% reads, 50% writes), B (95% reads, 5% writes), C                                                                      in writes and updates with up to 3.3% higher average latencies
+(100% reads), D (95% reads, 5% writes), E (95% scans, 5%                                                                    and reduces the average scan latency of Cassandra by 21.1%.
+writes), and F (50% reads, 50% read-modify-writes). Each                                                                    However, ELECT incurs a latency increase of 5.32× in reads
+workload (except D) follows a Zipf distribution, while Work-                                                                over Cassandra, mainly due to the retrieval of SSTables from
+load D reads the latest written KV pairs. For ELECT, we                                                                     the cloud to the edge for recovery if the degraded reads are
+measure both edge-only and overall edge-cloud storage sizes.                                                                issued to the KV pairs in the last LSM-tree level.
+   Figure 5 shows the storage size and throughput results.                                                                     We further examine the read and scan results in degraded
+ELECT achieves 56.1% storage savings (in the edge only)                                                                     mode. For reads, we observe that both Cassandra and ELECT
+and 39.1% overall storage savings (in both the edge and cloud)                                                              have very similar 99th-percentile latencies at about 1.7 ms
+compared with Cassandra. The actual edge storage savings                                                                    (not shown in the figure), meaning that most reads can be
+of ELECT are slightly less than α = 0.6, as it also maintains                                                               served in the edge and have small latency differences. Some
+metadata components for deleted KV pairs in the secondary                                                                   degraded reads need to retrieve SSTables from the cloud, and
+LSM-trees after redundancy transitioning. The metadata com-                                                                 such requests increase the average read latency in degraded
+ponents of LSM-trees in ELECT account for 6.9% of its edge                                                                  mode. Unlike reads, ELECT still shows performance gains
+storage size (not shown in the figure); note that no metadata                                                               in scans (which include normal and degraded reads to a range
+components are offloaded to the cloud (§4.2).                                                                               of KV pairs) as in normal mode. The reason is that most
+   In terms of performance, both Cassandra and ELECT have                                                                   unavailable SSTables are recovered in the early stage of scans,
+similar throughput (with up to 3% differences) in all work-                                                                 so the overall adverse impact on scans is much mitigated as
+loads except E. For Workload E, which is scan-intensive,                                                                    opposed to reads.
+ELECT achieves a 2.84× throughput gain over Cassandra.
+The reason is that ELECT reduces individual LSM-tree sizes                                                                  6.3                      System-level Analysis
+and hence I/O amplification through decoupled replication                                                                   Exp#3 (Performance breakdown). We break down the per-
+management, so the number of SSTables being accessed is                                                                     formance of writes, reads in normal mode, and reads in de-
+also reduced [57,68]. Such reduced access overhead has more                                                                 graded mode. Each write comprises (i) writing to the WAL,
+prominent performance improvements to scans, which read a                                                                   (ii) writing to the MemTable, (iii) flushing the MemTable,
+range of KV pairs.                                                                                                          (iv) compaction, (v) redundancy transitioning, and (vi) data
+Exp#2 (Benchmarking of KV operations). We evaluate the                                                                      offloading. Each read in normal or degraded mode comprises
+average latencies of specific KV operations, including reads,                                                               (i) reading from the MemTable, (ii) reading from the block
+writes, scans, and updates. We load 10 M 1-KiB KV pairs                                                                     cache, (iii) reading from SSTables, and (iv) recovery (for
+and issue 1 M requests for each type of KV operations (§6.1).                                                               degraded reads). We measure the time of each step across
+We consider both normal and degraded modes. For degraded                                                                    all nodes and obtain the average results on processing 1 MiB
+mode, we measure the performance of all requests (includ-                                                                   of writes/reads based on the workloads as described in §6.1.
+ing normal and degraded requests) when the system is in                                                                     Since the steps are performed in parallel, the actual time spent
+
+
+
+USENIX Association                                                                                                    22nd USENIX Conference on File and Storage Technologies                                                                     301
+                                                                                                                                 400.85
+       Steps           Cassandra              ELECT                            600    Cassandra
+                                                                                      ELECT                                                Steps          Time
+                                                                                                               257.71   261.96
+                                                                    Time (s)
+                                                                               400
+                                                                                                      175.15
+                             Write                                                                                                         Copy        13.54± 0.22 s
+                                                                                             132.64
+      WAL           21.32 ± 0.76 ms       21.84 ± 0.28 ms                      200   87.56                                                Retrieve    373.98± 11.61 s
+    MemTable        37.98 ± 1.73 ms       40.84 ± 0.13 ms                       0                                                         Decode       13.34 ± 0.48 s
+                                                                                     10 GiB           20 GiB            30 GiB
+     Flushing       16.95 ± 0.29 ms       17.70 ± 0.18 ms
+   Compaction       205.87± 2.21 ms      169.03 ± 3.23 ms           Figure 7: Exp#4: Full-node re- Table 2: Exp#4: Recovery time
+   Transitioning           -              239.05 ± 2.69ṁs          covery time.                   breakdown for 30 GiB data.
+    Offloading             -             162.84 ± 12.05 ms
+                     Read in normal mode                               We further provide a breakdown of the full-node recov-
+       Cache        17.05 ± 0.27 ms      18.35 ± 0.34 ms            ery time of ELECT into three steps: (i) copying replicated
+      MemTable      20.78 ± 0.95 ms      23.20 ± 0.61 ms            SSTables from other edge nodes; (ii) retrieving data and par-
+      SSTables      182.69 ± 2.53 ms   177.55 ± 0.60 ms             ity SSTables for decoding; and (iii) decoding the lost SSTa-
+                    Read in degraded mode
+                                                                    bles. Table 2 shows the full-node recovery time breakdown
+       Cache        17.41 ± 0.33 ms      18.75 ± 0.18 ms
+                                                                    of ELECT for 30 GiB data. The recovery performance is
+      MemTable      21.54 ± 0.66 ms      23.38 ± 0.46 ms            network-bound, in which retrieving the data and parity SSTa-
+      SSTables      184.39 ± 1.67 ms    184.14 ± 2.35 ms            bles occupies 93.3% of the total recovery time.
+      Recovery             -           1957.64 ± 34.16 ms           Exp#5 (Resource usage). We compare the CPU usage, mem-
+                                                                    ory usage, disk I/O size, and network traffic of Cassandra and
+Table 1: Exp#3: Performance breakdown. We show the average
+                                                                    ELECT. We consider three settings: (i) loading KV pairs
+latency of each step for processing 1 MiB of writes/reads and the
+corresponding 95% confidence interval.
+                                                                    until the SSTables reach a stable state, (ii) running in normal
+                                                                    mode without failures, and (iii) running in degraded mode
+                                                                    with two node failures. After loading KV pairs, we issue 1 M
+on an operation is less than the sum of times of all steps.
+                                                                    requests, including reads, writes, updates, and scans, with
+   Table 1 shows the performance breakdown. Most common             one-fourth of all requests each. We measure the CPU usage,
+steps in Cassandra and ELECT have similar latencies, ex-            memory usage, disk I/O, and network usage in all alive edge
+cept for compaction in writes, ELECT has a smaller latency          nodes through the Linux system tools, namely top, free,
+by 17.9%. The reason is that ELECT decouples replication            iostat, and iftop, respectively. We collect the resource
+management into multiple LSM-trees and reduces the I/O              usage data every 1 s. We show the 95th-percentile CPU usage
+amplifications in compaction [57, 68]. The redundancy tran-         and memory usage as well as the overall disk I/O size and
+sitioning has the highest average latency among all steps,          network traffic size.
+while the offloading has a low average latency since only              Figure 8 shows the results. Figure 8(a) shows that ELECT
+a fraction of data is transmitted from the edge to the cloud.       has 23.4% and 23.3% less 95th-percentile CPU usage than
+However, both redundancy transitioning and data offloading          Cassandra in load and degraded operations, respectively.
+are performed in the background and incur limited overhead          ELECT mainly performs network transmissions in redun-
+to writes, so ELECT has similar write performance as Cas-           dancy transitioning and data offloading, both of which in-
+sandra (see Exp#1 and Exp#2).                                       volve less CPU usage (in each 1-second interval). However,
+   For reads in normal mode, both Cassandra and ELECT               ELECT has long durations in both redundancy transition-
+have similar performance in each step. For reads in degraded        ing and data offloading (Table 1), so its total CPU time is
+mode, ELECT is bottlenecked by the recovery step (with              still higher than Cassandra’s. Figure 8(b) shows that ELECT
+1957.64 ms per MiB).                                                slightly increases the 95th-percentile memory usage by 7.0%
+Exp#4 (Full-node recovery). We evaluate full-node recov-            during the load operation, since it needs extra memory space
+ery in Cassandra and ELECT. We crash one edge node, delete          for erasure coding. It also slightly reduces the memory usage
+all its data, start a new edge node, and use the nodetool com-      in normal and degraded modes by 4.9% and 5.1%, respec-
+mand to recover all lost data into the new edge node. We            tively, as it reduces the LSM-tree size through decoupled
+evaluate the recovery performance of different loaded data          replication management. Figure 8(c) shows that ELECT re-
+sizes, including 10 GiB, 20 GiB, and 30 GiB (i.e., 10 M, 20 M,      duces the disk I/O size of Cassandra by 23.6% in the load
+and 30 M 1-KiB KV pairs). For fair comparisons, we dis-             operation, as it reduces the LSM-tree size and hence I/O am-
+able the Merkle tree operation in Cassandra (which is not           plifications through decoupled replication management, and
+supported in ELECT (§5)). Figure 7 shows the full-node              also reduces the compaction overhead of the secondary LSM-
+recovery times. The recovery times of Cassandra and ELECT           trees by writing fewer KV pairs to the last LSM-tree level.
+increase almost linearly. ELECT incurs about 50% higher             Note that ELECT still has higher disk I/O size in degraded
+recovery time than Cassandra since it needs to retrieve data        mode than in normal mode due to the reconstruction over-
+and parity SSTables from other edge nodes or the cloud to           head in erasure coding. Figure 8(d) shows that ELECT has
+decode the lost SSTables in the primary LSM-tree.                   similar network traffic to Cassandra in normal mode, while
+
+
+
+302    22nd USENIX Conference on File and Storage Technologies                                                                                     USENIX Association
+                                          Cassandra                   ELECT                                                                           Cassandra        ELECT-Edge                                      ELECT-Overall
+
+
+
+
+                                                                                                                Storage size (GiB)                                                  Storage size (GiB)
+                 1.5                                                  1.5                                                            40                                                                  50
+
+
+
+Norma. CPU                                            Norm. Memory
+                       40.22    38.60   36.82                                                                                        30                                                                  40
+                                                                             80.84    95.84     87.80
+                 1.0                                                  1.0                                                                                                                                30
+                                                                                                                                     20
+                                                                                                                                                                                                         20
+                 0.5                                                  0.5                                                            10                                                                  10
+                                                                                                                                      0                                                                   0
+                 0.0                                                  0.0                                                                  8       16      32     64   128                                     32     128    512 2048       8192
+                         Load   Normal Degraded                                Load    Normal    Degrad                                             Key size (bytes)                                                  Value size (bytes)
+        (a) 95th-percentile CPU usage (b) 95th-percentile memory usage                                                     (a) Varying key size; fixed                                         (b) Varying value size; fixed
+                 1.5                                                  1.5                                                  value size 512 bytes                                                key size 32 bytes
+
+
+Norm. Disk I/O                                        Norm. Network
+                       427.60   4.59     3.81                               121.75    38.50     31.32                                3                                                       3
+                 1.0                                                  1.0
+
+
+                                                                                                                Latency (ms)                                                 Latency (ms)
+                                                                                                                                     2         Cassandra-Normal                                                 Cassandra-Normal
+                 0.5                                                  0.5                                                                      ELECT-Normal                                  2                  ELECT-Normal
+                                                                                                                                               Cassandra-Degraded                                               Cassandra-Degraded
+                                                                                                                                     1         ELECT-Degraded                                1                  ELECT-Degraded
+                 0.0                                                  0.0
+                         Load   Normal Degraded                                Load    Normal Degraded                               0                                                       0
+                                                                                                                                          8       16      32     64    128                                32        128     512    2048    8192
+                       (c) Overall disk I/O                            (d) Overall network traffic                                                 Key size (bytes)                                                  Value size (bytes)
+Figure 8: Exp#5: Resource usage. All results are normalized by                                                                           (c) Reads versus key size                                       (d) Reads versus value size
+Cassandra’s actual resource usage results (numbered atop the bars),                                                                            Figure 9: Exp#6: Impact of key and value sizes.
+including CPU usage (%), memory usage (GiB), disk I/O size (GiB),
+and network traffic (GiB).
+                                                                                                                impact of target storage saving α on ELECT, by varying α
+it incurs 22.1% and 6.3% higher network traffic than Cas-                                                       from 0.1 to 0.9. Our results demonstrate the trade-off between
+sandra in load and degraded operations, respectively. In the                                                    storage savings and access performance.
+load operation, ELECT distributes SSTables for redundancy                                                          Figure 10(a) shows the edge-only and overall storage sizes
+transitioning and offloads SSTables to the cloud; in degraded                                                   of ELECT. As α increases, the edge storage savings over
+mode, it retrieves SSTables to recover unavailable SSTables.                                                    Cassandra increase from 9.2% to 86.0%, and differ from α
+                                                                                                                by no more than 4%. ELECT offloads SSTables from the
+6.4                    Parameter Sensitivity Analysis                                                           edge to the cloud when α ≥ 0.5, yet the overall storage size
+Exp#6 (Impact of key and value sizes). We evaluate the                                                          (in both the edge and cloud) of ELECT remains unchanged
+impact of different key and value sizes on Cassandra and                                                        when α ≥ 0.5 and its savings over Cassandra stay at 40.8%.
+ELECT to show that ELECT still maintains storage savings                                                        The reason is that redundancy transitioning only applies to
+for different key/value sizes. Note that we fix the total size of                                               the SSTables in the last LSM-tree level and cannot further
+KV pairs loaded to storage as 10 GiB, so the total number of                                                    reduce the storage sizes of replicated SSTables in the lower
+KV pairs decreases as the key size or value size increases.                                                     LSM-tree levels.
+   Figures 9(a) and 9(b) show the actual storage sizes of Cas-                                                     Figure 10(b) shows the average read latencies in normal
+sandra and ELECT for various key sizes with a fixed value                                                       mode. The read latency of ELECT remains stable as α
+size 512 bytes and various value sizes with a fixed key size                                                    increases from 0.1 to 0.6, but increases significantly from
+32 bytes, respectively. The actual storage sizes of both sys-                                                   0.53 ms to 1.89 ms when α increases from 0.6 to 0.9. The rea-
+tems decrease as the key and value sizes increase. The edge                                                     son is that after offloading data SSTables to the cloud (Case 3
+and overall storage savings of ELECT over Cassandra in-                                                         in §4.3), reads to the primary LSM-tree retrieve data SSTa-
+crease from 55.5% to 56.0% and from 34.9% to 39.3%, re-                                                         bles back from the cloud and are slowed down by edge-cloud
+spectively, as the key size increases from 8 bytes to 128 bytes,                                                communication. We pose the parameter sensitivity analysis
+and from 48.2% to 58.5% and from 33.9% to 41.1%, respec-                                                        for 99th-percentile latencies as future work.
+tively, as the value size increases from 32 bytes to 8 KiB. The                                                    Figure 10(c) shows the average read latencies in degraded
+reason is that larger key and value sizes reduce the amount of                                                  mode. As α increases from 0.1 to 0.5, the average latency of
+metadata for SSTable maintenance. This reduces the storage                                                      ELECT increases from 0.59 ms to 1.09 ms, as more SSTables
+overhead after redundancy transitioning in ELECT.                                                               are involved in redundancy transitioning and degraded reads
+   Figures 9(c) and 9(d) show the average read latencies in nor-                                                trigger more decoding operations. As α further increases,
+mal and degraded modes for various key and value sizes. The                                                     ELECT starts to offload data SSTables to the cloud, and the
+read latencies of Cassandra and ELECT in normal mode and                                                        degraded reads are further slowed down due to the retrieval
+the read latency of Cassandra in degraded mode are similar                                                      of data SSTables from the cloud for decoding. When α = 0.9,
+as the KV pairs can be directly accessed. However, ELECT                                                        the average latency increases to 4.62 ms.
+has much higher average read latencies in degraded mode                                                         Exp#8 (Impact of coding parameters). We study the im-
+than Cassandra, especially for small key and value sizes (e.g.,                                                 pact of coding parameters on ELECT by varying k and fixing
+6.4× when the key and value sizes are both 32 bytes), since                                                     n = k + 2. We also consider different values of α. We focus
+smaller key and value sizes increase the number of KV pairs                                                     on the edge and overall storage sizes as well as the average
+stored in an SSTable and hence the query overhead.                                                              read latencies in normal and degraded modes.
+Exp#7 (Impact of storage saving target). We evaluate the                                                           Figure 11 shows the results. For a fixed α, even with
+
+
+
+USENIX Association                                                                                        22nd USENIX Conference on File and Storage Technologies                                                                          303
+                                         Cassandra                                           ELECT-Edge                              ELECT-Overall                                                                                          Cassandra                           ELECT
+
+
+
+
+                                                                                                                                                                              Throughput (KOPS)
+                                                                                     2                                                    5
+                                                                                                                                                                                                         28.46
+                                                                                                                                                                                                                                                                                                                2.74 2.84
+
+
+
+
+      Storage size(GiB)
+                                                                                                                                                                                                                   27.80
+                          30                                                                                                                                                                      40
+
+
+                                                                                                                                                                                                                                                           Latency (ms)
+                                                                                                                                                                                                                                                                               3
+
+
+                                                                      Latency (ms)                                         Latency (ms)
+                                                                                                                                                                                                                           23.27   22.00   21.85
+                                                                                                                                                                                                                                                                                                    2.25 2.35
+                                                                                                                                                                                                                                                   20.62
+                                                                                                                                          4
+                          20                                                                                                                                                                      30                                                                           2       1.79 1.86
+                                                                                                                                          3
+                                                                                     1                                                                                                            20
+                          10                                                                                                              2                                                                                                                                    1
+                                                                                                                                          1                                                       10
+                          0                                                          0                                                    0                                                        0                                                                           0
+                           0.1 0.3 0.5 0.7 0.9                                        0.1 0.3 0.5 0.7 0.9                                  0.1 0.3 0.5 0.7 0.9                                                   1        2          3                                                      1        2           3
+                                    α                                                          α                                                    α                                                            Read consistency level                                                     Read consistency level
+                    (a) Storage size
+                         (b) Reads in nor- (c) Reads in de-                                                                                                                                             (a) Read throughput                                                        (b) 99th-percentile latency
+                         mal mode             graded mode                                                                                                                                               Figure 12: Exp#9: Impact of read consistency level.
+Figure 10: Exp#7: Impact of storage saving target. Note that the
+                                                                                                                                                                                                                                           Cassandra                                        ELECT
+results for Cassandra remain unaffected by α but are included in the
+
+
+
+                                                                                                                                                                              Throughput (KOPS)                                                            Throughput (KOPS)
+                                                                                                                                                                                                  300                                                                          150
+plots for comparisons.
+                                                                                                                                                                                                  200                                                                          100
+                                                                   α=0.4                          α=0.6                                   α=0.8                                                   100                                                                          50
+
+
+
+
+Storage size(GiB)                            Storage size(GiB)
+                    20                                           20                                 1.5                                                       5
+
+
+                                                                                                  Latency (ms)                                 Latency (ms)
+                                                                                                                                                              4                                    0                                                                               0
+                                                                                                                 1.0                                                                                    8         16    32    64 128 256                                                8     16    32    64 128 256
+                                                                                                                                                              3
+                    10                                           10                                                                                                                                                # simulated clients                                                         # simulated clients
+                                                                                                                 0.5                                          2
+                                                                                                                                                              1                                    (a) Reads in normal mode                                                    (b) Writes in normal mode
+                          0                                       0                                              0.0                                          0
+                               4     6   8                            4                  6    8                        4   6               8                      4   6   8                                 Figure 13: Exp#10: Impact of number of clients.
+                                     k                                                   k                                 k                                          k
+                    (a) Edge stor- (b) Overall      (c) Reads in (d) Reads in de-
+                    age size        storage size    normal mode graded mode                                                                                                   tency level increases from one to three (i.e., each read needs
+                           Figure 11: Exp#8: Impact of coding parameters.                                                                                                     to wait for the responses from more replicas), the average
+                                                                                                                                                                              read throughput of both systems (Figure 12(a)) decreases
+different values of k, ELECT still maintains similar edge stor-                                                                                                               by 23.2% for Cassandra and 25.8% for ELECT, while the
+age sizes with no more than 1.7% differences (Figure 11(a)).                                                                                                                  99th-percentile read latencies for both systems (Figure 12(b))
+Although a larger k (with the fixed n − k) implies smaller                                                                                                                    increase by around 50%. The results suggest that ELECT
+redundancy, the storage saving target α also determines the                                                                                                                   maintains similar read performance as in Cassandra under
+actual edge storage size. Thus, the edge storage size remains                                                                                                                 consistent reads.
+almost unaffected by different values of k for a fixed α.                                                                                                                     Exp#10 (Impact of number of clients). We examine the
+   The overall storage size (Figure 11(b)) of ELECT drops                                                                                                                     read/write performance of ELECT in normal mode as the
+from 18.0 GiB to 15.7 GiB when k increases from 4 to 8,                                                                                                                       number of clients increases. We vary the number of client
+for both α = 0.6 and α = 0.8, as a larger k generates fewer                                                                                                                   nodes (deployed in different instances) from 1 to 32, while
+parity SSTables and reduces the overall storage size for a                                                                                                                    each client node runs eight client threads, so the maximum
+large α; note that the overall storage size remains unaffected                                                                                                                number of simulated clients reaches 256. Each simulated
+for different values of k for α = 0.4.                                                                                                                                        client issues 100 K KV requests.
+   For a fixed α, the reads latencies in normal and degraded                                                                                                                     Figure 13 shows the throughput versus the number of sim-
+modes are also similar for different values of k, albeit slight                                                                                                               ulated clients for both Cassandra and ELECT. Both systems
+latency decreases in degraded mode as k increases (Fig-                                                                                                                       show similar increasing throughput trends as the number of
+ures 11(c) and 11(d)). Intuitively, a larger k implies higher                                                                                                                 simulated clients increases. ELECT has slightly less through-
+reconstruction overhead, as k SSTables are retrieved for re-                                                                                                                  put than Cassandra, by 4% in normal reads and 5.7% in writes
+construction in RS codes (§2.3). On the other hand, a larger                                                                                                                  when the number of simulated clients is 256, due to the re-
+k also implies that fewer parity SSTables are generated and                                                                                                                   dundancy transitioning overhead.
+offloaded to the cloud, and hence a degraded read retrieves
+fewer parity SSTables from the cloud. This leads to slightly                                                                                                                  6.5                       Discussion
+improved read performance in degraded mode for a large k.                                                                                                                     We discuss the performance of ELECT in other aspects that
+   This experiment aims to show the applicability of ELECT                                                                                                                    are currently not explicitly evaluated.
+for different values of k. A more detailed analysis on the                                                                                                                    Varying skewness in workloads. We currently focus on
+trade-off between α and k is our future work.                                                                                                                                 skewed workloads as observed in practice [6, 9, 16, 62]. With
+Exp#9 (Impact of read consistency level). We show how                                                                                                                         less skewed workloads, reads access larger portions of the key
+ELECT preserves consistent reads in Cassandra (§5). We                                                                                                                        space. Thus, more reads are issued to the last LSM-tree level,
+vary the read consistency level from one to three, while the                                                                                                                  and ELECT may see performance drops in degraded mode
+write consistency level remains three (under triple replication).                                                                                                             as it applies erasure coding to the last LSM-tree level. Note
+We focus on the throughput and 99th-percentile latency of                                                                                                                     that ELECT does not directly determine the hotness of KV
+normal reads; for the latter, we show the impact of waiting                                                                                                                   pairs by monitoring their access patterns, while the read and
+for responses from multiple replicas.                                                                                                                                         write patterns may have different distributions [6, 62]. Thus,
+   Figure 12 shows the results versus the read consistency                                                                                                                    the actual performance of ELECT may be greatly affected by
+level for both Cassandra and ELECT. As the read consis-                                                                                                                       the real-world access patterns.
+
+
+
+304                                22nd USENIX Conference on File and Storage Technologies                                                                                                                                                                                                   USENIX Association
+Varying LSM-tree sizes. ELECT supports different LSM-               are applied for in-memory KV stores and their performance
+tree sizes as it still encodes SSTables in the last LSM-tree        is guaranteed with memory access. Erasure coding is also
+level. It is expected to achieve higher storage savings for         recently explored for disaggregated memory [35, 69].
+larger LSM-trees since the number of SSTables increases                In the context of storage tiering, EC-Cache [49] and C2DN
+exponentially across LSM-tree levels and the last LSM-tree          [61] also apply erasure coding to caching and content delivery
+level contains more SSTables.                                       networks, respectively. EC-Cache performs self-encoding on
+Impact on reliability. The increase in the recovery time            large objects and keeps erasure-coded chunks across cache
+of ELECT (Exp#4) degrades reliability (e.g., in terms of            servers, while C2DN replicates small objects and applies
+mean-time-to-data-loss (MTTDL)). On the other hand, since           erasure coding to large objects. We emphasize that ELECT
+ELECT offloads some erasure-coded KV pairs to the cold              differs from EC-Cache and C2DN in both problem formula-
+tier, which is in general more reliable than the hot tier (e.g.,    tion and design techniques. Regarding problem formulation,
+when edge nodes serve as the hot tier versus the cloud serves       EC-Cache and C2DN aim for load balancing using erasure
+as the cold tier in edge-cloud storage), the reliability can be     coding for high performance, while ELECT considers redun-
+improved. The actual impact on reliability due to redundancy        dancy transitioning (from replication to erasure coding) for
+transitioning remains an open issue.                                storage savings. Regarding design techniques, EC-Cache and
+Impact of LSM-tree compression. Our evaluation disables             C2DN are centralized (EC-Cache manages cache servers with
+compression to fairly measure ELECT’s storage savings.              a centralized coordinator, while C2DN uses a cluster-local
+ELECT still works with compression enabled and is expected          load balancer), while ELECT performs decentralized parity
+to achieve storage savings. Since Cassandra performs com-           node selection (§4.1.2). ELECT also addresses selective data
+pression on SSTables, ELECT can collect k compressed data           offloading (§4.2) and configurable storage savings (§4.3),
+SSTables and pad them with zeroes to match the maximum              both of which are not addressed by EC-Cache and C2DN.
+size of the k compressed data SSTables, so as to generate par-      Redundancy transitioning. Earlier studies consider the tran-
+ity SSTables via erasure coding. Note that such padded zeros        sitioning between replication and erasure coding on fixed-size
+are only for erasure coding compatibility. They need not be         blocks in RAID [58] and distributed file systems [23, 36],
+stored in data SSTables and will not add storage overheads.         while ELECT considers variable-size KV pairs. Furthermore,
+Comparisons with CassandrEAS [8]. CassandrEAS also                  ELECT builds on Cassandra, a decentralized KV store, while
+extends Cassandra with erasure coding, but does not con-            the above studies [23, 36, 58] are centralized. Some studies
+sider redundancy transitioning. CassandrEAS reportedly has          consider the transitioning between erasure codes with dif-
+much higher read and write latencies than Cassandra [8]. Our        ferent coding parameters to trade between performance and
+evaluation also finds that CassandrEAS (based on its open-          redundancy overhead [55, 59, 60, 63] or between reliability
+source version) incurs high storage overhead for small values       and redundancy overhead [29, 30]. Convertible codes [39]
+due to extra metadata for erasure coding (e.g., 1.6× storage        are new erasure codes that minimize the transitioning I/O.
+overhead for 24-byte keys and 64-byte values compared with          ELECT applies redundancy transitioning from replication to
+3-way replication in Cassandra).                                    erasure coding to balance the storage-performance trade-off.
+
+7   Related Work                                                    8   Conclusions
+Replication in distributed KV stores. Replication is com-          We design ELECT, a distributed KV store that enables era-
+monly used in modern distributed KV stores [5, 18, 34, 46].        sure coding tiering, to make a case for storage-efficient, high-
+Several studies propose new replica management mecha-              performance, and fault-tolerant KV storage. ELECT adopts
+nisms to support high-throughput and strongly consistent           a hybrid redundancy approach by replicating hot KV pairs
+writes [56], reduce data loss rates [15], improve query per-       and erasure-coding cold KV pairs. It also selectively offloads
+formance [22, 54], and reduce I/O amplification in LSM-tree        them from the hot tier to the cold tier. It is tunable with a
+compaction [57, 68]. In particular, ELECT has the similar          single storage saving target parameter to balance the trade-off
+ideas of DEPART [68] and Tebis [57] to separate the LSM-           between storage savings and access performance. Experi-
+tree management for replicas, but focuses on synchronizing         ments on Alibaba Cloud demonstrate the storage savings and
+the views of replicas for efficient redundancy transitioning.      performance efficiency of ELECT compared with Cassandra.
+Both DEPART and Tebis do not consider erasure coding.              Acknowledgements. We thank our shepherd, Gala Yadgar,
+Erasure coding in distributed KV stores. Erasure coding            and the anonymous reviewers for their comments. This work
+has been extensively used in distributed KV stores. Some           was supported in part by National Key R&D Program of
+studies apply replication for keys and metadata as well as         China (2022YFB4501200), Key Research and Development
+erasure coding for values for persistent [8, 32, 33, 44] and       Program of Hubei Province (2021BAA189), National Natu-
+in-memory [13, 37] KV stores. Some approaches [14, 65]             ral Science Foundation of China (61972073, 62302175, and
+apply erasure coding across whole objects (including keys,         62332004), and Research Grants Council of Hong Kong (GRF
+values, and metadata) for further storage savings, but they        14214622 and AoE/P-404/18).
+
+
+
+USENIX Association                                            22nd USENIX Conference on File and Storage Technologies         305
+References                                                            sets: Reducing the frequency of data loss in cloud stor-
+ [1] Amazon. Amazon Elastic Block Store. https://aws.                 age. In Proc. of USENIX ATC, 2013.
+     amazon.com/ebs/.                                            [16] Brian F. Cooper, Adam Silberstein, Erwin Tam, Raghu
+ [2] Amazon. Amazon Simple Storage Service. https:                    Ramakrishnan, and Russell Sears. Benchmarking cloud
+     //aws.amazon.com/s3/.                                            serving systems with YCSB. In Proc. of ACM SOCC,
+                                                                      2010.
+ [3] Apache. Cassandra 4.1.0. https://github.com/
+     apache/cassandra/releases/tag/cassandra-                    [17] Couchbase.  Couchbase automated data partition-
+     4.1.0.                                                           ing.  https://www.couchbase.com/blog/what-
+                                                                      exactly-membase/.
+ [4] Apache.      Cassandra documentation - hints.
+     https://cassandra.apache.org/doc/4.1/                       [18] Giuseppe DeCandia, Deniz Hastorun, Madan Jampani,
+     cassandra/operating/hints.html.                                  Gunavardhan Kakulapati, Avinash Lakshman, Alex
+                                                                      Pilchin, Swaminathan Sivasubramanian, Peter Vosshall,
+ [5] Apache. HBase. https://hbase.apache.org/.                        and Werner Vogels. Dynamo: Amazon’s highly avail-
+ [6] Berk Atikoglu, Yuehai Xu, Eitan Frachtenberg, Song               able key-value store. In Proc. of ACM SOSP, 2007.
+     Jiang, and Mike Paleczny. Workload analysis of a large-     [19] Alexandros G. Dimakis, P. Brighten Godfrey, Yunnan
+     scale key-value store. In Proc. of ACM SIGMETRICS,               Wu, Martin J. Wainwright, and Kannan Ramchandran.
+     2012.                                                            Network coding for distributed storage systems. IEEE
+ [7] Burton Howard Bloom. Space/time trade-offs in hash               Trans. on Information Theory, 56(9):4539--4551, 2010.
+     coding with allowable errors. Communications of the         [20] Partha Dutta, Rachid Guerraoui, and Ron R. Levy. Op-
+     ACM, 12(7):422--426, 1970.                                       timistic erasure-coded distributed storage. In Proc. of
+ [8] Viveck R. Cadambe, Kishori M. Konwar, Muriel                     DISC, 2008.
+     Medard, Haochen Pan, Lewis Tseng, and Yingjian Wu.          [21] EdgeKV.      Augment image and video manager
+     CassandrEAS: Highly available and storage-efficient              with edge compute. https://techdocs.akamai.
+     distributed key-value store with erasure coding. In Proc.        com/edgekv/docs/augment-image-and-video-
+     of NCA, 2020.                                                    manager-with-edge-compute.
+ [9] Zhichao Cao and Siying Dong. Characterizing, model-         [22] Robert Escriva, Bernard Wong, and Emin Gün Sirer.
+     ing, and benchmarking RocksDB key-value workloads                HyperDex: A distributed, searchable key-value store.
+     at Facebook. In Proc. of USENIX FAST, 2020.                      In Proc. of ACM SIGCOMM, 2012.
+[10] Jeremy C. W. Chan, Qian Ding, Patrick P. C. Lee, and        [23] Bin Fan, Wittawat Tantisiriroj, Lin Xiao, and Garth A.
+     Helen H. W. Chan. Parity logging with reserved space:            Gibson. Diskreduce: Replication as a prelude to erasure
+     Towards efficient updates and recovery in erasure-coded          coding in data-intensive scalable computing. Technical
+     clustered storage. In Proc. of USENIX FAST, 2014.                Report, CMU-PDL-11-112, Carnegie Mellon University
+[11] Fay Chang, Jeffrey Dean, Sanjay Ghemawat, Wil-                   Parallel Data Laboratory, 2011.
+     son C. Hsieh, Deborah A. Wallach, Mike Burrows,             [24] Daniel Ford, François Labelle, Florentina Popovici,
+     Tushar Chandra, Andrew Fikes, and Robert E. Gruber.              Murray Stokely, Van-Anh Truong, Luiz Barroso, Carrie
+     Bigtable: A distributed storage system for structured            Grimes, and Sean Quinlan. Availability in globally
+     data. In Proc. of USENIX OSDI, 2006.                             distributed storage systems. In Proc. of USENIX OSDI,
+[12] Batyr Charyyev, Engin Arslan, and Mehmet Hadi Gunes.             2010.
+     Latency comparison of cloud datacenters and edge            [25] Sanjay Ghemawat, Howard Gobioff, and Shun-Tak Le-
+     servers. In Proc. of IEEE GLOBECOM, 2020.                        ung. The Google file system. In Proc. of ACM SOSP,
+[13] Haibo Chen, Heng Zhang, Mingkai Dong, Zhaoguo                    2003.
+     Wang, Yubin Xia, Haibing Guan, and Binyu Zang. Ef-          [26] Cheng Huang, Huseyin Simitci, Yikang Xu, Aaron
+     ficient and available in-memory KV-store with hybrid             Ogus, Brad Calder, Parikshit Gopalan, Jin Li, and
+     erasure coding and replication. ACM Trans. on Storage,           Sergey Yekhanin. Erasure coding in windows azure
+     13(3):25, 2017.                                                  storage. In Proc. of USENIX ATC, 2012.
+[14] Liangfeng Cheng, Yuchong Hu, and Patrick P. C. Lee.         [27] Intel. Intelligent storage acceleration library. https:
+     Coupling decentralized key-value stores with erasure             //github.com/intel/isa-l.
+     coding. In Proc. of ACM SOCC, 2019.                         [28] Jeeyoon Jung and Dongkun Shin. Lifetime-leveling
+[15] Asaf Cidon, Stephen Rumble, Ryan Stutsman, Sachin                LSM-tree compaction for ZNS SSD. In Proc. of ACM
+     Katti, John Ousterhout, and Mendel Rosenblum. Copy-              HotStorage, 2022.
+
+
+
+306   22nd USENIX Conference on File and Storage Technologies                                           USENIX Association
+[29] Saurabh Kadekodi, Francisco Maturana, Sanjith Athlur,        [41] Ralph C. Merkle. A digital signature based on a con-
+     Arif Merchant, K. V. Rashmi, and Gregory R. Ganger.               ventional encryption function. In Proc. of CRYPTO,
+     Tiger: Disk-adaptive redundancy without placement                 1987.
+     restrictions. In Proc. of USENIX OSDI, 2022.                 [42] Seyed Hossein Mortazavi, Mohammad Salehe, Car-
+[30] Saurabh Kadekodi, Francisco Maturana, Suhas Jayaram               olina Simoes Gomes, Caleb Phillips, and Eyal De Lara.
+     Subramanya, Juncheng Yang, K. V. Rashmi, and Gre-                 CloudPath: A multi-tier cloud computing framework.
+     gory R. Ganger. PACEMAKER: Avoiding HeART at-                     In Proc. of ACM/IEEE SEC, 2017.
+     tacks in storage clusters with disk-adaptive redundancy.     [43] Subramanian Muralidhar, Wyatt Lloyd, Sabyasachi
+     In Proc. of USENIX OSDI, 2020.                                    Roy, Cory Hill, Ernest Lin, Weiwen Liu, Satadru Pan,
+[31] David Karger, Eric Lehman, Tom Leighton, Rina Pani-               Shiva Shankar, Viswanath Sivakumar, Linpeng Tang,
+     grahy, Matthew Levine, and Daniel Lewin. Consistent               and Sanjeev Kumar. f4: Facebook’s warm BLOB stor-
+     hashing and random trees: Distributed caching proto-              age system. In Proc. of USENIX OSDI, 2014.
+     cols for relieving hot spots on the world wide web. In       [44] Nicolas Nicolaou, Viveck Cadambe, N. Prakash, Andria
+     Proc. of ACM STOC, 1997.                                          Trigeorgi, Kishori Konwar, Muriel Medard, and Nancy
+[32] Kishori M. Konwar, N. Prakash, Erez Kantor, Nancy                 Lynch. ARES: Adaptive, reconfigurable, erasure coded,
+     Lynch, Muriel Médard, and Alexander A. Schwarz-                  atomic storage. In Proc. of IEEE ICDCS, 2019.
+     mann. Storage-optimized data-atomic algorithms for           [45] Patrick O’Neil, Edward Cheng, Dieter Gawlick, and
+     handling erasures and errors in distributed storage sys-          Elizabeth O’Neil. The log-structured merge-tree (LSM-
+     tems. In Proc. of IEEE IPDPS, 2016.                               tree). Acta Informatica, 33:351--385, 1996.
+[33] Chunbo Lai, Song Jiang, Liqiong Yang, Shiding Lin,           [46] PingCAP. TiKV. https://tikv.org.
+     Guangyu Sun, Zhenyu Hou, Can Cui, and Jason Cong.
+                                                                  [47] Sean Quinlan and Sean Dorward. Venti: a new ap-
+     Atlas: Baidu’s key-value storage system for cloud data.
+                                                                       proach to archival storage. In Proc. USENIX FAST,
+     In Proc. of IEEE MSST, 2015.
+                                                                       2002.
+[34] Avinash Lakshman and Prashant Malik. Cassandra: a
+                                                                  [48] Pandian Raju, Rohan Kadekodi, Vijay Chidambaram,
+     decentralized structured storage system. ACM SIGOPS
+                                                                       and Ittai Abraham. PebblesDB: Building key-value
+     operating systems review, 44(2):35--40, 2010.
+                                                                       stores using fragmented log-structured merge trees. In
+[35] Youngmoon Lee, Hasan Al Maruf, Mosharaf Chowd-                    Proc. of ACM SOSP, 2017.
+     hury, Asaf Cidon, and Kang G. Shin. Hydra: Resilient         [49] K. V. Rashmi, Mosharaf Chowdhury, Jack Kosaian, Ion
+     and highly available remote memory. In Proc. of                   Stoica, and Kannan Ramchandran. EC-Cache: Load-
+     USENIX FAST, 2022.                                                balanced, low-latency cluster caching with online era-
+[36] Runhui Li, Yuchong Hu, and Patrick P. C. Lee. En-                 sure coding. In Proc. of USENIX OSDI, 2016.
+     abling efficient and reliable transition from replication    [50] Irving S. Reed and Gustave Solomon. Polynomial
+     to erasure coding for clustered file systems. IEEE Trans.         codes over certain finite fields. Journal of the society
+     on parallel and distributed systems, 28(9):2500--2513,            for industrial and applied mathematics, 8(2):300--304,
+     2017.                                                             1960.
+[37] Witold Litwin, Rim Moussa, and Thomas Schwarz.               [51] David Reinsel.   How you contribute to today’s
+     LH*RS---a highly-available scalable distributed data              growing datasphere and its enterprise impact.
+     structure. ACM Trans. on Database System, 30(3):769-              https://blogs.idc.com/2019/11/04/how-you-
+     -811, 2005.                                                       contribute-to-todays-growing-datasphere-
+[38] Alibaba Cloud Computing Co. Ltd. Alibaba cloud.                   and-its-enterprise-impact/, Nov 2019.
+     https://www.alibabacloud.com/.                               [52] Mahadev Satyanarayanan. The emergence of edge
+[39] Francisco Maturana and K. V. Rashmi. Convertible                  computing. IEEE Computer, 50(1):30--39, 2017.
+     codes: Enabling efficient conversion of coded data in        [53] Weisong Shi, Jie Cao, Quan Zhang, Youhuizi Li, and
+     distributed storage. IEEE Trans. on Information Theory,           Lanyu Xu. Edge computing: Vision and challenges.
+     68(7):4392 -- 4407, 2022.                                         IEEE Internet of Things Journal, 3(5):637 -- 646, 2016.
+[40] Ruben Mayer, Harshit Gupta, Enrique Saurez, and              [54] Amy Tai, Michael Wei, Michael J. Freedman, Ittai
+     Umakishore Ramachandran. FogStore: Toward a dis-                  Abraham, and Dahlia Malkhi. Replex: A scalable,
+     tributed data store for fog computing. In Proc. of IEEE           highly available multi-index data store. In Proc. of
+     FWC, 2017.                                                        USENIX ATC, 2016.
+
+
+
+USENIX Association                                          22nd USENIX Conference on File and Storage Technologies       307
+[55] Konstantin Taranov, Gustavo Alonso, and Torsten Hoe-         [68] Qiang Zhang, Yongkun Li, Patrick P. C. Lee, Yinlong
+     fler. Fast and strongly-consistent per-item resilience in         Xu, and Si Wu. DEPART: Replica decoupling for
+     key-value stores. In Proc. of ACM EuroSys, 2018.                  distributed key-value storage. In Proc. of USENIX
+                                                                       FAST, 2022.
+[56] Robbert Van Renesse and Fred B. Schneider. Chain
+     replication for supporting high throughput and availabil-    [69] Yang Zhou, Hassan M. G. Wassel, Sihang Liu, Jiaqi
+     ity. In Proc. of USENIX OSDI, 2004.                               Gao, James Mickens, Minlan Yu, Chris Kennelly, Paul
+                                                                       Turner, David E. Culler, Henry M. Levy, and Amin
+[57] Michalis Vardoulakis, Giorgos Saloustros, Pilar
+                                                                       Vahdat. Carbink: Fault-tolerant far memory. In Proc.
+     González-Férez, and Angelos Bilas. Tebis: index ship-
+                                                                       of USENIX OSDI, 2022.
+     ping for efficient replication in lsm key-value stores. In
+     Proc. of EuroSys, 2022.
+[58] John Wilkes, Richard Golding, Carl Staelin, and Tim
+     Sullivan. The HP AutoRAID hierarchical storage sys-
+     tem. ACM Trans. on Computer Systems, 14(1):108--
+     136, 1996.
+[59] Si Wu, Zhirong Shen, and Patrick P. C. Lee. Enabling
+     I/O-efficient redundancy transitioning in erasure-coded
+     KV stores via elastic Reed-Solomon codes. In Proc. of
+     IEEE SRDS, 2020.
+[60] Mingyuan Xia, Mohit Saxena, Mario Blaum, and
+     David A. Pease. A tale of two erasure codes in HDFS.
+     In Proc. of USENIX FAST, 2015.
+[61] Juncheng Yang, Anirudh Sabnis, Daniel S. Berger, K. V.
+     Rashmi, and Ramesh K. Sitaraman. C2DN: How to
+     harness erasure codes at the edge for efficient content
+     delivery. In Proc. of USENIX NSDI, 2022.
+[62] Juncheng Yang, Yao Yue, and K. V. Rashmi. A large
+     scale analysis of hundreds of in-memory cache clusters
+     at Twitter. In Proc. of USENIX OSDI, 2020.
+[63] Qiaori Yao, Yuchong Hu, Liangfeng Cheng, Patrick
+     P. C. Lee, Dan Feng, Weichun Wang, and Wei Chen.
+     StripeMerge: Efficient wide-stripe generation for large-
+     scale erasure-coded storage. In Proc. of IEEE ICDCS,
+     2021.
+[64] Ting Yao, Jiguang Wan, Ping Huang, Yiwen Zhang,
+     Zhiwen Liu, Changsheng Xie, and Xubin He. GearDB:
+     A GC-free Key-Value store on HM-SMR drives with
+     gear compaction. In Proc. of USENIX FAST, 2019.
+[65] Matt M. T. Yiu, Helen H. W. Chan, and Patrick P. C.
+     Lee. Erasure coding for small objects in in-memory KV
+     storage. In Proc. of ACM SYSTOR, 2017.
+[66] Heng Zhang, Mingkai Dong, and Haibo Chen. Efficient
+     and available in-memory KV-store with hybrid erasure
+     coding and replication. In Proc. of USENIX FAST,
+     2016.
+[67] Heng Zhang, Shaoyuan Huang, Mengwei Xu, Deke
+     Guo, Xiaofei Wang, Victor C. M. Leung, and Wenyu
+     Wang. How far have edge clouds gone? a spatial-
+     temporal analysis of edge network latency in the wild.
+     In Proc. of IEEE/ACM IWQoS, 2023.
+
+
+
+308   22nd USENIX Conference on File and Storage Technologies                                          USENIX Association
+A     Artifact Appendix                                               • The ELECT prototype and YCSB benchmark
+                                                                        tool: openjdk-11-jdk, openjdk-11-jre, ant,
+Abstract
+                                                                        ant-optional, maven.
+ELECT is a distributed KV store that enables erasure coding           • Erasure coding: clang, llvm, libisal-dev.
+tiering based on the LSM-tree. It adopts a hybrid redundancy          • Evaluation scripts:     ansible, bc, python3,
+approach that carefully combines replication and erasure cod-           python3-pip, cassandra-driver, numpy, scipy.
+ing with respect to the LSM-tree layout. Its prototype builds
+on Cassandra.                                                      Testbed Setup
+
+Scope                                                              Please follow the steps below:
+                                                                      • Download the artifact from the URL: https://
+Our artifact can be used to validate the concepts and designs
+                                                                        github.com/adslabcuhk/elect/releases.
+of ELECT presented in the paper. It is a research-driven
+                                                                      • Extract     the      files     using       tar -zxvf
+prototype and has several limitations, such as the inability to
+                                                                        elect-1.0.tar.gz and navigate into the pack-
+support dynamic topology changes and incremental recovery,
+                                                                        age directory with cd.
+that restrict its direct applicability in production.
+                                                                      • Modify the scripts/settings.sh file according to
+Contents                                                                the AE INSTRUCTION.md.
+                                                                      • Set up the machines with the provided scripts via bash
+The artifact consists of two sub-directories:
+                                                                        scripts/setup.sh full (the setup takes about 40
+    • src/, which includes both the implementation of the               minutes, depending on the hardware configurations).
+      ELECT prototype and a simple object storage backend,
+                                                                      For the detailed setup, configuration instructions, and trou-
+      such that ELECT can be connected with the object stor-
+                                                                   bleshooting, please refer to the README.md in the artifact
+      age backend in a local cluster; and
+                                                                   repository. The README.md file provides comprehensive in-
+    • scripts/, which includes both the evaluation scripts
+                                                                   structions on the manual setup process and the solutions to
+      and the YCSB benchmarking tool, such that the key and
+                                                                   some common issues.
+      value sizes are configurable.
+   The artifact also contains a README file that specifies         Evaluation
+the prerequisites for the testbed and dependencies, steps for
+                                                                   Artifact Claims
+building and configuring the ELECT prototype and YCSB
+benchmark tool, and detailed instructions for artifact evalua-     The performance results may vary from those in our paper
+tion.                                                              due to different factors, such as cluster sizes, machine specifi-
+                                                                   cations, operating systems, and software packages. However,
+Hosting                                                            we expect that ELECT still demonstrates comparable perfor-
+The artifact is accessible from GitHub at https://github.          mance to Cassandra in regular operations, while significantly
+com/adslabcuhk/elect. The version we provided for the              reducing hot-tier storage overhead.
+artifact evaluation is marked with the v1.0 tag.
+                                                                   Experiments
+Requirements                                                       To reproduce the results presented in the paper, please refer
+Hardware dependencies                                              to the AE INSTRUCTION.md file and follow the instructions
+                                                                   provided in the Evaluation section.
+To successfully run the end-to-end experiments with our pro-
+totype and evaluation scripts, a minimum of eight machines         Exp#1 (YCSB core workloads). Expected outcome: Exp#1
+are recommended. These machines need to be connected via           produces the results as shown in Figure 5, which illustrates
+a network, such that they are reachable from each other. For       that ELECT achieves similar performance as Cassandra in
+each machine, we recommend quad-cores, 16 GiB of mem-              YCSB core workloads while significantly reducing the hot-
+ory and above, and an SSD. We need at least six machines           tier storage overhead. In addition, ELECT outperforms Cas-
+that form the distributed KV store ELECT and use the de-           sandra in workload E, which consists of 95% scan operations,
+fault erasure coding parameters (n, k)=(6, 4). In addition, we     due to replication decoupling. Approximate runtime: 20 com-
+have one machine that acts as a server node for storing cold       pute hours.
+data in the cold tier, and one machine for running the YCSB        Exp#2 (Benchmarking of KV operations). Expected out-
+benchmark tool.                                                    come: Exp#2 produces the results as shown in Figure 6, which
+                                                                   illustrates that ELECT achieves similar performance as Cas-
+Software dependencies                                              sandra in common KV operations. Similar to Exp#1, ELECT
+Our artifact is developed and tested on Ubuntu 22.04 LTS           still outperforms Cassandra in the scan operations due to repli-
+with the following software dependencies:                          cation decoupling. Approximate runtime: 5 compute hours.
+
+
+
+USENIX Association                                           22nd USENIX Conference on File and Storage Technologies           309
+Exp#3 (Performance breakdown). Expected outcome:
+Exp#3 produces the results as shown in Table 1, which illus-
+trates that ELECT has similar latencies in most common steps
+as in Cassandra. Approximate runtime: 5 compute hours.
+Exp#4 (Full-node recovery). Expected outcome: Exp#4 pro-
+duces the results as shown in Figure 7 and Table 2, which
+illustrates that ELECT incurs medium recovery overhead due
+to the need for retrieving data and parity SSTables from other
+nodes or the cold tier. Approximate runtime: 14 compute
+hours.
+Exp#5 (Resource usage). Expected outcome: Exp#5 pro-
+duces the results as shown in Figure 8, which illustrates that
+ELECT only increases the memory and network usage when
+loading data due to redundancy transitioning and cold-data
+offloading. In addition, for CPU usage, the 95%-percentile
+CPU utilization will be less than Cassandra since the redun-
+dancy transitioning and cold-data offloading consist of a large
+amount of network transmission with long duration. Approxi-
+mate runtime: 5 compute hours.
+Exp#6 (Impact of key and value sizes). Expected outcome:
+Exp#6 produces the results as shown in Figure 9, which illus-
+trates that ELECT still maintains storage savings for different
+key/value sizes. Approximate runtime: 40 compute hours.
+Exp#7 (Impact of storage saving target). Expected out-
+come: Exp#7 produces the results as shown in Figure 10,
+which illustrates that ELECT can balance the storage over-
+head and performance according to the storage saving target.
+Approximate runtime: 45 compute hours.
+Exp#8 (Impact of coding parameters). Expected outcome:
+Exp#8 produces the results as shown in Figure 11, which
+illustrates that ELECT can adapt to different erasure coding
+parameters. Approximate runtime: 12 compute hours.
+Exp#9 (Impact of read consistency level). Expected out-
+come: Exp#9 produces the results as shown in Figure 12,
+which illustrates that ELECT supports consistent reads. Ap-
+proximate runtime: 5 compute hours.
+Exp#10 (Impact of number of clients). Expected outcome:
+Exp#10 produces the results as shown in Figure 13, which
+illustrates that ELECT supports multi-client KV operations.
+Approximate runtime: 5 compute hours.
+
+
+
+
+310   22nd USENIX Conference on File and Storage Technologies     USENIX Association
+

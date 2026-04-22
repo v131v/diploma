@@ -1,0 +1,482 @@
+[
+  {
+    "id": "morph_sosp_2024",
+    "url": "https://www.cs.cmu.edu/~rvinayak/papers/Morph-sosp-2024.pdf",
+    "title": "Morph: Efficient File-Lifetime Redundancy Management for Cluster File Systems",
+    "description": "Ключевой источник по гибридной избыточности и transcode-efficient переходам между схемами хранения в течение жизненного цикла файла. Нужен как главный системный baseline для диплома.",
+    "year": 2024,
+    "type": "conference paper",
+    "relevance": 1.0,
+    "authors": [
+      "Timothy Kim",
+      "Sanjith Athlur",
+      "Saurabh Kadekodi",
+      "Francisco Maturana",
+      "Dax Delvira",
+      "Arif Merchant",
+      "Gregory R. Ganger",
+      "K. V. Rashmi"
+    ],
+    "file_path": "sources/files/morph-sosp-2024.pdf",
+    "extracted_text_path": "sources/extracted/morph-sosp-2024.txt"
+  },
+  {
+    "id": "convertible_codes_it_2022",
+    "url": "https://www.cs.cmu.edu/~rvinayak/papers/Convertible_Codes_ITT_2022.pdf",
+    "title": "Convertible Codes: Enabling Efficient Conversion of Coded Data in Distributed Storage",
+    "description": "Теоретическая база для дешёвой перекодировки между кодами хранения. Нужен для формализации переходов между EC-схемами и оценки стоимости конверсии.",
+    "year": 2022,
+    "type": "journal article",
+    "relevance": 0.99,
+    "authors": [
+      "Francisco Maturana",
+      "K. V. Rashmi"
+    ],
+    "file_path": "sources/files/convertible-codes-itit-2022.pdf",
+    "extracted_text_path": "sources/extracted/convertible-codes-itit-2022.txt"
+  },
+  {
+    "id": "azure_ec_atc_2012",
+    "url": "https://www.usenix.org/system/files/conference/atc12/atc12-final181_0.pdf",
+    "title": "Erasure Coding in Windows Azure Storage",
+    "description": "Классический системный paper про практическое применение LRC в облачном хранилище. Нужен для обоснования локального ремонта и trade-off между storage overhead и repair cost.",
+    "year": 2012,
+    "type": "conference paper",
+    "relevance": 0.94,
+    "authors": [
+      "Cheng Huang",
+      "Huseyin Simitci",
+      "Yikang Xu",
+      "Aaron Ogus",
+      "Brad Calder",
+      "Parikshit Gopalan",
+      "Jin Li",
+      "Sergey Yekhanin"
+    ],
+    "file_path": "sources/files/azure-ec-atc12.pdf",
+    "extracted_text_path": "sources/extracted/azure-ec-atc12.txt"
+  },
+  {
+    "id": "elect_fast_2024",
+    "url": "https://www.usenix.org/system/files/fast24-ren.pdf",
+    "title": "ELECT: Enabling Erasure Coding Tiering for LSM-tree-based Storage",
+    "description": "Современный paper про tiering и смену режима хранения с учётом access patterns. Полезен как смежная системная работа по temperature-aware и workload-aware storage management.",
+    "year": 2024,
+    "type": "conference paper",
+    "relevance": 0.86,
+    "authors": [
+      "Yanjing Ren",
+      "Yuanming Ren",
+      "Xiaolu Li",
+      "Yuchong Hu",
+      "Jingwei Li",
+      "Patrick P. C. Lee"
+    ],
+    "file_path": "sources/files/elect-fast24.pdf",
+    "extracted_text_path": "sources/extracted/elect-fast24.txt"
+  },
+  {
+    "id": "lrc_convertible_arxiv_2023",
+    "url": "https://arxiv.org/pdf/2308.06802",
+    "title": "Locally Repairable Convertible Codes with Optimal Access Costs",
+    "description": "Работа на стыке LRC и convertible codes. Нужна для аргументации пайплайна переходов между кодами, где одновременно важны локальный ремонт и стоимость конверсии.",
+    "year": 2023,
+    "type": "preprint",
+    "relevance": 0.93,
+    "authors": [
+      "Xiangliang Kong"
+    ],
+    "file_path": "sources/files/lrc-convertible-arxiv-2023.pdf",
+    "extracted_text_path": "sources/extracted/lrc-convertible-arxiv-2023.txt"
+  },
+  {
+    "id": "rapidraid_arxiv_2012",
+    "url": "https://arxiv.org/pdf/1207.6744",
+    "title": "RapidRAID: Pipelined Erasure Codes for Fast Data Archival in Distributed Storage Systems",
+    "description": "Источник про быстрый переход от репликации к EC для архивных данных. Полезен для раздела о migration cost и охлаждении данных по жизненному циклу.",
+    "year": 2012,
+    "type": "preprint",
+    "relevance": 0.82,
+    "authors": [
+      "Lluis Pamies-Juarez",
+      "Anwitaman Datta",
+      "Frederique Oggier"
+    ],
+    "file_path": "sources/files/rapidraid-arxiv-2012.pdf",
+    "extracted_text_path": "sources/extracted/rapidraid-arxiv-2012.txt"
+  },
+  {
+    "id": "xoring_elephants_arxiv_2013",
+    "url": "https://arxiv.org/pdf/1301.3791",
+    "title": "XORing Elephants: Novel Erasure Codes for Big Data",
+    "description": "Фундаментальная работа по repair-efficient erasure codes для больших распределённых систем. Нужна как историческая и практическая база по оптимизации восстановления.",
+    "year": 2013,
+    "type": "preprint",
+    "relevance": 0.8,
+    "authors": [
+      "Maheswaran Sathiamoorthy",
+      "Megasthenis Asteris",
+      "Dimitris Papailiopoulos",
+      "Alexandros G. Dimakis",
+      "Ramkumar Vadali",
+      "Scott Chen",
+      "Dhruba Borthakur"
+    ],
+    "file_path": "sources/files/xoring-elephants-arxiv-2013.pdf",
+    "extracted_text_path": "sources/extracted/xoring-elephants-arxiv-2013.txt"
+  },
+  {
+    "id": "ec_survey_tos_2024",
+    "url": "https://keyuncheng.github.io/files/publications/tos24ecsurvey.pdf",
+    "title": "A Survey of the Past, Present, and Future of Erasure Coding for Storage Systems",
+    "description": "Свежий системный обзор по erasure coding в storage systems. Нужен для related work, типологии кодов и выбора корректных метрик для сравнения.",
+    "year": 2024,
+    "type": "survey",
+    "relevance": 0.91,
+    "authors": [
+      "Zhirong Shen",
+      "Yuhui Cai",
+      "Keyun Cheng",
+      "Patrick P. C. Lee",
+      "Xiaolu Li",
+      "Yuchong Hu",
+      "Jiwu Shu"
+    ],
+    "file_path": "sources/files/ec-survey-tos-2024.pdf",
+    "extracted_text_path": "sources/extracted/ec-survey-tos-2024.txt"
+  },
+  {
+    "id": "ec_store_icdcs_2018",
+    "url": "https://cs.uwaterloo.ca/~mtabebe/publications/abebeECStore2018ICDCS.pdf",
+    "title": "EC-Store: Bridging the Gap Between Storage and Latency in Distributed Erasure Coded Systems",
+    "description": "Источник о том, как уменьшать latency в erasure-coded storage без возврата к полной репликации. Полезен для раздела про производительность горячих данных и latency-aware design.",
+    "year": 2018,
+    "type": "conference paper",
+    "relevance": 0.87,
+    "authors": [
+      "Michael Abebe",
+      "Khuzaima Daudjee",
+      "Brad Glasbergen",
+      "Yuanfeng Tian"
+    ],
+    "file_path": "sources/files/ec-store-icdcs-2018.pdf",
+    "extracted_text_path": "sources/extracted/ec-store-icdcs-2018.txt"
+  },
+  {
+    "id": "identifying_hot_cold_icde_2013",
+    "url": "https://www.microsoft.com/en-us/research/wp-content/uploads/2013/04/ColdDataClassification-icde2013-cr.pdf",
+    "title": "Identifying Hot and Cold Data in Main-Memory Databases",
+    "description": "Работа про формализацию hot/cold classification. Нужна как дополнительная база для метрики температуры данных и выбора порогов между классами.",
+    "year": 2013,
+    "type": "conference paper",
+    "relevance": 0.76,
+    "authors": [
+      "Justin J. Levandoski",
+      "Per-Ake Larson",
+      "Radu Stoica"
+    ],
+    "file_path": "sources/files/identifying-hot-cold-icde-2013.pdf",
+    "extracted_text_path": "sources/extracted/identifying-hot-cold-icde-2013.txt"
+  },
+  {
+    "id": "heart_fast_2019",
+    "url": "https://www.usenix.org/system/files/fast19-kadekodi.pdf",
+    "title": "Cluster Storage Systems Gotta Have HeART: Improving Storage Efficiency by Exploiting Disk-Reliability Heterogeneity",
+    "description": "Источник про dynamic redundancy tuning с учётом меняющейся надёжности дисков. Полезен для блока о выборе схем хранения в зависимости от состояния системы, а не только температуры.",
+    "year": 2019,
+    "type": "conference paper",
+    "relevance": 0.84,
+    "authors": [
+      "Saurabh Kadekodi",
+      "K. V. Rashmi",
+      "Gregory R. Ganger"
+    ],
+    "file_path": "sources/files/heart-fast19.pdf",
+    "extracted_text_path": "sources/extracted/heart-fast19.txt"
+  },
+  {
+    "id": "zebra_iwqos_2016",
+    "url": "https://iqua.ece.toronto.edu/papers/junli-iwqos16.pdf",
+    "title": "Zebra: Demand-aware Erasure Coding for Distributed Storage Systems",
+    "description": "Работа про выбор EC-схем под изменяющийся спрос на данные. Нужна для обоснования многоуровневой, а не бинарной классификации и demand-aware policy.",
+    "year": 2016,
+    "type": "conference paper",
+    "relevance": 0.9,
+    "authors": [
+      "Jun Li",
+      "Baochun Li"
+    ],
+    "file_path": "sources/files/zebra-iwqos16.pdf",
+    "extracted_text_path": "sources/extracted/zebra-iwqos16.txt"
+  },
+  {
+    "id": "f4_osdi_2014",
+    "url": "https://www.usenix.org/system/files/conference/osdi14/osdi14-paper-muralidhar.pdf",
+    "title": "f4: Facebook's Warm BLOB Storage System",
+    "description": "Сильный системный источник про warm storage в большом production-кластере. Нужен для реального контекста жизненного цикла данных между hot и archival режимами.",
+    "year": 2014,
+    "type": "conference paper",
+    "relevance": 0.83,
+    "authors": [
+      "Subramanian Muralidhar",
+      "Wyatt Lloyd",
+      "Sabyasachi Roy",
+      "Cory Hill",
+      "Ernest Lin",
+      "Weiwen Liu",
+      "Satadru Pan",
+      "Shiva Shankar",
+      "Viswanath Sivakumar",
+      "Linpeng Tang",
+      "Sanjeev Kumar"
+    ],
+    "file_path": "sources/files/f4-osdi14.pdf",
+    "extracted_text_path": "sources/extracted/f4-osdi14.txt"
+  },
+  {
+    "id": "wide_lrc_fast_2023",
+    "url": "https://www.usenix.org/system/files/fast23-kadekodi.pdf",
+    "title": "Practical Design Considerations for Wide Locally Recoverable Codes (LRCs)",
+    "description": "Практический paper по выбору параметров wide LRC в больших хранилищах. Нужен, если в финальном пайплайне остаются широкие LRC-схемы для холодных данных.",
+    "year": 2023,
+    "type": "conference paper",
+    "relevance": 0.88,
+    "authors": [
+      "Saurabh Kadekodi",
+      "Shashwat Silas",
+      "David Clausen",
+      "Arif Merchant"
+    ],
+    "file_path": "sources/files/wide-lrc-fast23.pdf",
+    "extracted_text_path": "sources/extracted/wide-lrc-fast23.txt"
+  },
+  {
+    "id": "hsm_ieee_access_2024",
+    "url": "https://doi.org/10.1109/ACCESS.2024.3382987",
+    "title": "HSM: A Hybrid Storage Method Based on the Heat of Data and Global Disk Space Utilization",
+    "description": "Прямой источник по temperature-aware hybrid storage, который используется в НИР как один из базовых подходов. Нужен для формализации температуры данных, правил классификации и влияния заполненности дисков.",
+    "year": 2024,
+    "type": "journal article",
+    "relevance": 0.99,
+    "authors": [
+      "Ying Song",
+      "Wenxuan Zhao",
+      "Yingai Tian",
+      "Bo Wang"
+    ],
+    "file_path": "sources/files/HSM_A_Hybrid_Storage_Method_Based_on_the_Heat_of_Data_and_Global_Disk_Space_Utilization.pdf",
+    "extracted_text_path": "sources/extracted/HSM_A_Hybrid_Storage_Method_Based_on_the_Heat_of_Data_and_Global_Disk_Space_Utilization.txt"
+  },
+  {
+    "id": "er_store_scientific_programming_2021",
+    "url": "https://doi.org/10.1155/2021/9910942",
+    "title": "ER-Store: A Hybrid Storage Mechanism with Erasure Coding and Replication in Distributed Database Systems",
+    "description": "Смежный источник по гибридному хранению с совмещением erasure coding и репликации в распределённых БД. Полезен как baseline и related work для архитектурных компромиссов между storage efficiency и update cost.",
+    "year": 2021,
+    "type": "journal article",
+    "relevance": 0.95,
+    "authors": [
+      "Zijian Li",
+      "Chuqiao Xiao"
+    ],
+    "file_path": "sources/files/Scientific Programming - 2021 - Li - ER‐Store  A Hybrid Storage Mechanism with Erasure Coding and Replication in.pdf",
+    "extracted_text_path": "sources/extracted/Scientific_Programming_-_2021_-_Li_-_ER‐Store__A_Hybrid_Storage_Mechanism_with_Erasure_Coding_and_Replication_in.txt"
+  },
+  {
+    "id": "hyres_arxiv_2025",
+    "url": "https://arxiv.org/html/2511.00896v1",
+    "download_source_url": "https://arxiv.org/pdf/2511.00896.pdf",
+    "title": "HyRES: A Hybrid Replication and Erasure Coding Approach to Data Storage",
+    "description": "Современная работа по гибридным схемам хранения, объединяющим репликацию и erasure coding. Полезна как related work по архитектурному дизайну гибридной избыточности и сравнению storage cost, file loss probability и repair traffic.",
+    "year": 2025,
+    "type": "preprint",
+    "relevance": 0.9,
+    "authors": [
+      "Daniel E. Lucani",
+      "Marcell Feher"
+    ],
+    "file_path": "sources/files/hyres-arxiv-2511.00896v1.pdf",
+    "extracted_text_path": "sources/extracted/hyres-arxiv-2511.00896v1.txt"
+  },
+  {
+    "id": "benchmarking_ec_object_storage_fgcs_2025",
+    "url": "https://www.sciencedirect.com/science/article/abs/pii/S0167739X24004862",
+    "download_source_url": "https://ssrn.com/abstract=4713329",
+    "title": "Towards Benchmarking Erasure Coding Schemes in Object Storage System: A Systematic Review",
+    "description": "Систематический обзор и benchmarking paper по erasure coding в object storage. Нужен прежде всего для experimental section: выбор метрик, testbed design, I/O latency, fault tolerance и практических benchmark сценариев.",
+    "year": 2025,
+    "type": "systematic review",
+    "relevance": 0.84,
+    "authors": [
+      "Rezuana Imtiaz Upoma",
+      "Md. Sadiqul Islam Sakif",
+      "Jannatun Noor"
+    ],
+    "file_path": "sources/files/ssrn-4713329.pdf",
+    "extracted_text_path": "sources/extracted/ssrn-4713329.txt",
+    "access_note": "Local file is an Elsevier preprint PDF submitted to Elsevier and credits three authors. The ScienceDirect publication page for the final article lists an additional author, A.B.M. Alim Al Islam."
+  },
+  {
+    "id": "tpds17_ear_2017",
+    "url": "https://www.cse.cuhk.edu.hk/~pclee/www/pubs/tpds17ear.pdf",
+    "title": "Enabling Efficient and Reliable Transition from Replication to Erasure Coding for Clustered File Systems",
+    "description": "Самый прямой недостающий источник по переходу replication -> EC в clustered file systems. Полезен как baseline по encoding-aware replica placement и снижению cross-rack overhead при последующем кодировании.",
+    "year": 2017,
+    "type": "journal article",
+    "relevance": 0.95,
+    "authors": [
+      "Runhui Li",
+      "Yuchong Hu",
+      "Patrick P. C. Lee"
+    ],
+    "file_path": "sources/files/tpds17-ear.pdf",
+    "extracted_text_path": "sources/extracted/tpds17-ear.txt"
+  },
+  {
+    "id": "pacemaker_osdi_2020",
+    "url": "https://arxiv.org/abs/2103.08191",
+    "download_source_url": "https://arxiv.org/pdf/2103.08191.pdf",
+    "title": "PACEMAKER: Avoiding HeART attacks in storage clusters with disk-adaptive redundancy",
+    "description": "Сильный системный paper про transition overload при смене redundancy schemes. Нужен для обоснования того, что policy выбора схемы хранения должна учитывать не только выгодность, но и безопасную orchestration переходов.",
+    "year": 2020,
+    "type": "conference paper",
+    "relevance": 0.93,
+    "authors": [
+      "Saurabh Kadekodi",
+      "Francisco Maturana",
+      "Suhas Jayaram Subramanya",
+      "Juncheng Yang",
+      "K. V. Rashmi",
+      "Gregory R. Ganger"
+    ],
+    "file_path": "sources/files/pacemaker-osdi20.pdf",
+    "extracted_text_path": "sources/extracted/pacemaker-osdi20.txt"
+  },
+  {
+    "id": "cocytus_fast_2016",
+    "url": "https://www.usenix.org/conference/fast16/technical-sessions/presentation/zhang-heng",
+    "download_source_url": "https://www.usenix.org/system/files/conference/fast16/fast16-papers-zhang-heng.pdf",
+    "title": "Efficient and Available In-memory KV-Store with Hybrid Erasure Coding and Replication",
+    "description": "Сильный primary source по hybrid replication + EC вне файловых систем. Полезен как дополнительный baseline к ER-Store и как источник ограничений гибридных схем при metadata-heavy и update-heavy workloads.",
+    "year": 2016,
+    "type": "conference paper",
+    "relevance": 0.84,
+    "authors": [
+      "Heng Zhang",
+      "Mingkai Dong",
+      "Haibo Chen"
+    ],
+    "file_path": "sources/files/cocytus-fast16.pdf",
+    "extracted_text_path": "sources/extracted/cocytus-fast16.txt"
+  },
+  {
+    "id": "tiger_osdi_2022",
+    "url": "https://www.usenix.org/conference/osdi22/presentation/kadekodi",
+    "download_source_url": "https://www.usenix.org/system/files/osdi22-kadekodi.pdf",
+    "title": "Tiger: Disk-Adaptive Redundancy Without Placement Restrictions",
+    "description": "Современное продолжение линии disk-adaptive redundancy. Полезно как усиление блока system-state-aware redundancy и как сравнение с работами, где переходы между схемами осложняются placement restrictions.",
+    "year": 2022,
+    "type": "conference paper",
+    "relevance": 0.74,
+    "authors": [
+      "Saurabh Kadekodi",
+      "Francisco Maturana",
+      "Sanjith Athlur",
+      "Arif Merchant",
+      "K. V. Rashmi",
+      "Gregory R. Ganger"
+    ],
+    "file_path": "sources/files/tiger-osdi22.pdf",
+    "extracted_text_path": "sources/extracted/tiger-osdi22.txt"
+  },
+  {
+    "id": "cbase_ec_electronics_2021",
+    "url": "https://www.mdpi.com/2079-9292/10/2/126",
+    "title": "CBase-EC: Achieving Optimal Throughput-Storage Efficiency Trade-Off Using Erasure Codes",
+    "description": "Точечный источник по temperature-aware storage policy в распределённой БД. Полезен для hot/cold recognition, двусторонней dynamic conversion между replica- и EC/LRC-based хранением и оценки компромисса между throughput и storage efficiency.",
+    "year": 2021,
+    "type": "journal article",
+    "relevance": 0.78,
+    "authors": [
+      "Chuqiao Xiao",
+      "Yefeng Xia",
+      "Qian Zhang",
+      "Xueqing Gong",
+      "Liyan Zhu"
+    ],
+    "file_path": "sources/files/electronics-10-00126.pdf",
+    "extracted_text_path": "sources/extracted/electronics-10-00126.txt"
+  },
+  {
+    "id": "greenhdfs_hotpower_2010",
+    "url": "https://www.usenix.org/events/hotpower/tech/full_papers/Kaushik.pdf",
+    "title": "GreenHDFS: Towards An Energy-Conserving, Storage-Efficient, Hybrid Hadoop Compute Cluster",
+    "description": "Классический practical paper по self-adaptive hot/cold data placement. Полезен для обоснования temperature-driven migration policy и того, как классификация данных может управлять реальными переходами между hot и cold зонами хранения.",
+    "year": 2010,
+    "type": "workshop paper",
+    "relevance": 0.81,
+    "authors": [
+      "Milind Bhandarkar",
+      "Rini T. Kaushik"
+    ],
+    "file_path": "sources/files/greenhdfs-hotpower10.pdf",
+    "extracted_text_path": "sources/extracted/greenhdfs-hotpower10.txt"
+  },
+  {
+    "id": "janus_atc_2013",
+    "url": "https://www.usenix.org/conference/atc13/technical-sessions/presentation/albrecht",
+    "download_source_url": "https://www.usenix.org/system/files/conference/atc13/atc13-albrecht.pdf",
+    "title": "Janus: Optimal Flash Provisioning for Cloud Storage Workloads",
+    "description": "Сильный production source по workload-aware tiering в облачной файловой системе. Полезен для раздела о policy-level решениях: как измерять cacheability, распределять быстрый tier между workload’ами и учитывать стоимость миграции между tier’ами.",
+    "year": 2013,
+    "type": "conference paper",
+    "relevance": 0.79,
+    "authors": [
+      "Christoph Albrecht",
+      "Arif Merchant",
+      "Murray Stokely",
+      "Muhammad Waliji",
+      "François Labelle",
+      "Nate Coehlo",
+      "Xudong Shi",
+      "C. Eric Schrock"
+    ],
+    "file_path": "sources/files/janus-atc13.pdf",
+    "extracted_text_path": "sources/extracted/janus-atc13.txt"
+  },
+  {
+    "id": "hard_jbigdata_2019",
+    "url": "https://journalofbigdata.springeropen.com/articles/10.1186/s40537-019-0256-6",
+    "download_source_url": "https://dunnion.ucd.ie/~hciritoglu/publications/3_Journal_of_Big_Data_19_Ciritoglu_Et_Al_AuthorsVersion.pdf",
+    "title": "HaRD: A Heterogeneity-Aware Replica Deletion for HDFS",
+    "description": "Практический источник по безопасному снижению replication factor в HDFS. Полезен для блока practical transitions: показывает, что уменьшение числа реплик без учёта heterogeneity и data distribution создаёт hot spots, лишний network traffic и просадку locality.",
+    "year": 2019,
+    "type": "journal article",
+    "relevance": 0.82,
+    "authors": [
+      "Hilmi Egemen Ciritoglu",
+      "John Murphy",
+      "Christina Thorpe"
+    ],
+    "file_path": "sources/files/hard-jbigdata19.pdf",
+    "extracted_text_path": "sources/extracted/hard-jbigdata19.txt"
+  },
+  {
+    "id": "plank_fast_2009",
+    "url": "https://www.usenix.org/legacy/event/fast09/tech/full_papers/plank/plank.pdf",
+    "title": "A Performance Evaluation and Examination of Open-Source Erasure Coding Libraries For Storage",
+    "description": "Точечный benchmark paper для методологии evaluation. Полезен не как paper про hot/cold policy, а как опора для раздела сравнения: какие метрики смотреть при оценке кодирования/декодирования и почему выбор параметров и memory behavior влияет на практический результат.",
+    "year": 2009,
+    "type": "conference paper",
+    "relevance": 0.73,
+    "authors": [
+      "James S. Plank",
+      "Jianqiang Luo",
+      "Catherine D. Schuman",
+      "Lihao Xu",
+      "Zooko Wilcox-O'Hearn"
+    ],
+    "file_path": "sources/files/plank-fast09.pdf",
+    "extracted_text_path": "sources/extracted/plank-fast09.txt"
+  }
+]
