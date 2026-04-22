@@ -5,6 +5,7 @@
 - [README](./readme.md)
 - [Формализованный бриф](./formal-brief.md)
 - [Корпус бакалаврских ВКР](./examples/meta.json)
+- [Top 15 близких бакалаврских ВКР](./examples/top15_bachelor_related_to_formal_brief.json)
 - [@conspect-writer](./.codex/agents/conspect-writer.toml)
 - [@conspect-reviewer](./.codex/agents/conspect-reviewer.toml)
 
@@ -18,7 +19,7 @@
 - набор метрик и аргументов для experimental section.
 
 План ниже обновлён под текущий корпус из `27` источников в [sources/meta.json](./sources/meta.json).
-Вспомогательный корпус смежных бакалаврских ВКР собран отдельно в [examples/meta.json](./examples/meta.json) и может использоваться для поиска соседних тем, формулировок и практических направлений.
+Вспомогательный корпус смежных бакалаврских ВКР собран отдельно в [examples/meta.json](./examples/meta.json), а отдельная curated-выборка хранится в [examples/top15_bachelor_related_to_formal_brief.json](./examples/top15_bachelor_related_to_formal_brief.json). Эти файлы можно использовать для поиска соседних тем, формулировок и практических направлений. Локальные PDF и TXT ВКР лежат в `examples/pdf/` и `examples/txt/`.
 
 Он разбит на:
 

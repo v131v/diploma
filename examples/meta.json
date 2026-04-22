@@ -30,7 +30,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В. Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=3822",
       "work_url": "https://hdl.handle.net/11701/4039",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/4039",
+      "download_url": "https://dspace.spbu.ru/bitstreams/1c282ef9-fb8f-4eca-b6ff-5eb2987bac8a/download",
+      "download_path": "bitstreams/1c282ef9-fb8f-4eca-b6ff-5eb2987bac8a/download",
+      "pdf_path": "examples/pdf/3822_bazarnov_gleb_sergeevich_razrabotka_sistemy_poiska_po_baze_dokumentov.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/3822_bazarnov_gleb_sergeevich_razrabotka_sistemy_poiska_po_baze_dokumentov.txt",
+      "text_status": "empty"
     },
     {
       "id": 3852,
@@ -42,7 +50,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В. Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=3852",
       "work_url": "https://hdl.handle.net/11701/4500",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/4500",
+      "download_url": "https://dspace.spbu.ru/bitstreams/63d84e9d-0125-44ce-b588-27721db8723d/download",
+      "download_path": "bitstreams/63d84e9d-0125-44ce-b588-27721db8723d/download",
+      "pdf_path": "examples/pdf/3852_vasilev_igor_sergeevich_analiz_sotsialnyh_setei_s_pomoschyu_tehnologii_bolshih_dannyh.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/3852_vasilev_igor_sergeevich_analiz_sotsialnyh_setei_s_pomoschyu_tehnologii_bolshih_dannyh.txt",
+      "text_status": "extracted"
     },
     {
       "id": 8773,
@@ -54,7 +70,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=8773",
       "work_url": "https://hdl.handle.net/11701/10721",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/10721",
+      "download_url": "https://dspace.spbu.ru/bitstreams/e001acdc-b45c-45fe-810a-0e2af0abb766/download",
+      "download_path": "bitstreams/e001acdc-b45c-45fe-810a-0e2af0abb766/download",
+      "pdf_path": "examples/pdf/8773_bendrikovskii_anatolii_yaroslavovich_vydelenie_obekta_iz_videopotoka_s_pomoschyu_glubinnogo_obucheniya.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/8773_bendrikovskii_anatolii_yaroslavovich_vydelenie_obekta_iz_videopotoka_s_pomoschyu_glubinnogo_obucheniya.txt",
+      "text_status": "extracted"
     },
     {
       "id": 14343,
@@ -66,7 +90,15 @@
       "supervisor": "PhD В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=14343",
       "work_url": "https://hdl.handle.net/11701/13626",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/13626",
+      "download_url": "https://dspace.spbu.ru/bitstreams/2c0b9132-91a2-425b-b4ed-b226fb6658fe/download",
+      "download_path": "bitstreams/2c0b9132-91a2-425b-b4ed-b226fb6658fe/download",
+      "pdf_path": "examples/pdf/14343_burak_matvei_aleksandrovich_modelirovanie_protsessov_v_avtomaticheskom_sklade.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/14343_burak_matvei_aleksandrovich_modelirovanie_protsessov_v_avtomaticheskom_sklade.txt",
+      "text_status": "extracted"
     },
     {
       "id": 20689,
@@ -78,7 +110,17 @@
       "supervisor": "доктор философии (компьютерные науки) Корхов В.В.",
       "view_url": "https://diploma.spbu.ru/gp/view?id=20689",
       "work_url": "https://hdl.handle.net/11701/25858",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/25858",
+      "download_url": "https://dspace.spbu.ru/bitstreams/a23cc883-ebe5-4a28-a981-013a75c08e6b/download",
+      "download_path": "bitstreams/a23cc883-ebe5-4a28-a981-013a75c08e6b/download",
+      "pdf_path": "examples/pdf/20689_berlina_anastasiya_vladimirovna_primenenie_tehnologii_raspredelennyh_reestrov_dlya_otslezhivaniya_istorii_proish.pdf",
+      "download_status": "downloaded",
+      "download_error": "",
+      "txt_path": "examples/txt/20689_berlina_anastasiya_vladimirovna_primenenie_tehnologii_raspredelennyh_reestrov_dlya_otslezhivaniya_istorii_proish.txt",
+      "text_status": "extracted",
+      "download_source_name": "download",
+      "download_source_description": "first_html_bitstream_match"
     },
     {
       "id": 20727,
@@ -90,7 +132,15 @@
       "supervisor": "доктор философии (компьютерные науки) Корхов В.В.",
       "view_url": "https://diploma.spbu.ru/gp/view?id=20727",
       "work_url": "https://hdl.handle.net/11701/25886",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/25886",
+      "download_url": "https://dspace.spbu.ru/bitstreams/f2f1588a-b931-4b7f-b478-58fb1dc59104/download",
+      "download_path": "bitstreams/f2f1588a-b931-4b7f-b478-58fb1dc59104/download",
+      "pdf_path": "examples/pdf/20727_golikov_matvei_alekseevich_primenenie_algoritmov_mashinnogo_obucheniya_v_promyshlennom_dizaine.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/20727_golikov_matvei_alekseevich_primenenie_algoritmov_mashinnogo_obucheniya_v_promyshlennom_dizaine.txt",
+      "text_status": "extracted"
     },
     {
       "id": 26039,
@@ -102,7 +152,17 @@
       "supervisor": "В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=26039",
       "work_url": "https://hdl.handle.net/11701/26455",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26455",
+      "download_url": "https://dspace.spbu.ru/bitstreams/e1f1e4c2-bdef-415a-913f-57cec3d5c8a4/download",
+      "download_path": "bitstreams/e1f1e4c2-bdef-415a-913f-57cec3d5c8a4/download",
+      "pdf_path": "examples/pdf/26039_abdullin_damir_nazirovich_razrabotka_vysokonagruzhennogo_servisa_dlya_obrabotki_sobytii_i_generatsii_reakt.pdf",
+      "download_status": "downloaded",
+      "download_error": "",
+      "txt_path": "examples/txt/26039_abdullin_damir_nazirovich_razrabotka_vysokonagruzhennogo_servisa_dlya_obrabotki_sobytii_i_generatsii_reakt.txt",
+      "text_status": "extracted",
+      "download_source_name": "download",
+      "download_source_description": "manual_first_bitstream_confirmed"
     },
     {
       "id": 26088,
@@ -114,7 +174,17 @@
       "supervisor": "В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=26088",
       "work_url": "https://hdl.handle.net/11701/26457",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26457",
+      "download_url": "https://dspace.spbu.ru/bitstreams/40a68b8e-15db-40dd-8587-0f9a7ada25f6/download",
+      "download_path": "bitstreams/40a68b8e-15db-40dd-8587-0f9a7ada25f6/download",
+      "pdf_path": "examples/pdf/26088_grehnev_egor_olegovich_avtomatizatsiya_formirovaniya_tranzaktsii_i_tehnologii_hraneniya_privatnyh_klyuc.pdf",
+      "download_status": "downloaded",
+      "download_error": "",
+      "txt_path": "examples/txt/26088_grehnev_egor_olegovich_avtomatizatsiya_formirovaniya_tranzaktsii_i_tehnologii_hraneniya_privatnyh_klyuc.txt",
+      "text_status": "extracted",
+      "download_source_name": "download",
+      "download_source_description": "manual_first_bitstream_confirmed"
     },
     {
       "id": 26111,
@@ -126,7 +196,15 @@
       "supervisor": "В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=26111",
       "work_url": "https://hdl.handle.net/11701/26466",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26466",
+      "download_url": "https://dspace.spbu.ru/bitstreams/7d0edab8-ce62-4306-96e2-bc69b54d0f80/download",
+      "download_path": "bitstreams/7d0edab8-ce62-4306-96e2-bc69b54d0f80/download",
+      "pdf_path": "examples/pdf/26111_zhadan_kirill_sergeevich_prognozirovanie_sboev_iot_ustroistv_dlya_gibkogo_planirovaniya_ih_tehnicheskogo_.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/26111_zhadan_kirill_sergeevich_prognozirovanie_sboev_iot_ustroistv_dlya_gibkogo_planirovaniya_ih_tehnicheskogo_.txt",
+      "text_status": "extracted"
     },
     {
       "id": 26126,
@@ -138,7 +216,17 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=26126",
       "work_url": "https://hdl.handle.net/11701/26498",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26498",
+      "download_url": "https://dspace.spbu.ru/bitstreams/7b51abe6-e508-4b8b-aebd-322690ba43ed/download",
+      "download_path": "bitstreams/7b51abe6-e508-4b8b-aebd-322690ba43ed/download",
+      "pdf_path": "examples/pdf/26126_karpii_pavel_evgenevich_razrabotka_blokchein_seti_dlya_testirovaniya_ekonomicheskoi_modeli.pdf",
+      "download_status": "downloaded",
+      "download_error": "",
+      "txt_path": "examples/txt/26126_karpii_pavel_evgenevich_razrabotka_blokchein_seti_dlya_testirovaniya_ekonomicheskoi_modeli.txt",
+      "text_status": "extracted",
+      "download_source_name": "download",
+      "download_source_description": "first_html_bitstream_match"
     },
     {
       "id": 30953,
@@ -150,7 +238,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=30953",
       "work_url": "https://hdl.handle.net/11701/32338",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/32338",
+      "download_url": "https://dspace.spbu.ru/bitstreams/414ee5ec-b94e-43be-b57d-68c2ca41d255/download",
+      "download_path": "bitstreams/414ee5ec-b94e-43be-b57d-68c2ca41d255/download",
+      "pdf_path": "examples/pdf/30953_golovina_svetlana_vladimirovna_primenenie_metodov_mashinnogo_obucheniya_v_zadache_opredeleniya_urovnya_riskov_v.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/30953_golovina_svetlana_vladimirovna_primenenie_metodov_mashinnogo_obucheniya_v_zadache_opredeleniya_urovnya_riskov_v.txt",
+      "text_status": "extracted"
     },
     {
       "id": 30967,
@@ -162,7 +258,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=30967",
       "work_url": "https://hdl.handle.net/11701/32321",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/32321",
+      "download_url": "https://dspace.spbu.ru/bitstreams/2be1c5b4-9c09-43a0-94bf-0fdb290369e2/download",
+      "download_path": "bitstreams/2be1c5b4-9c09-43a0-94bf-0fdb290369e2/download",
+      "pdf_path": "examples/pdf/30967_elkina_anna_aleksandrovna_opredelenie_razmerov_tela_cheloveka_po_izobrazheniyam_s_ispolzovaniem_neironnyh_.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/30967_elkina_anna_aleksandrovna_opredelenie_razmerov_tela_cheloveka_po_izobrazheniyam_s_ispolzovaniem_neironnyh_.txt",
+      "text_status": "extracted"
     },
     {
       "id": 35860,
@@ -174,7 +278,17 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=35860",
       "work_url": "https://hdl.handle.net/11701/40095",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-11-23-096Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/40095",
+      "download_url": "https://dspace.spbu.ru/bitstreams/2739dee9-a3e5-4f8a-8ab5-664fad2de48a/download",
+      "download_path": "bitstreams/2739dee9-a3e5-4f8a-8ab5-664fad2de48a/download",
+      "pdf_path": "examples/pdf/35860_zhavoronkov_vladislav_olegovich_analiz_protokola_quic_dlya_ispolzovaniya_v_sovremennyh_veb_prilozheniyah.pdf",
+      "download_status": "downloaded",
+      "download_error": "",
+      "txt_path": "examples/txt/35860_zhavoronkov_vladislav_olegovich_analiz_protokola_quic_dlya_ispolzovaniya_v_sovremennyh_veb_prilozheniyah.txt",
+      "text_status": "extracted",
+      "download_source_name": "download",
+      "download_source_description": "manual_first_bitstream_confirmed"
     },
     {
       "id": 4013,
@@ -186,7 +300,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В. Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=4013",
       "work_url": "https://hdl.handle.net/11701/4044",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/4044",
+      "download_url": "https://dspace.spbu.ru/bitstreams/2063509c-192b-4b06-8ed7-1bf48826caf5/download",
+      "download_path": "bitstreams/2063509c-192b-4b06-8ed7-1bf48826caf5/download",
+      "pdf_path": "examples/pdf/4013_ryzhkova_elizaveta_evgenevna_razrabotka_avtomatizirovannoi_shkolnoi_sistemy_otsenki_rezultatov_kachestva_obra.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/4013_ryzhkova_elizaveta_evgenevna_razrabotka_avtomatizirovannoi_shkolnoi_sistemy_otsenki_rezultatov_kachestva_obra.txt",
+      "text_status": "extracted"
     },
     {
       "id": 4080,
@@ -198,7 +320,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В. Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=4080",
       "work_url": "https://hdl.handle.net/11701/3995",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/3995",
+      "download_url": "https://dspace.spbu.ru/bitstreams/83f35e85-3f1f-435c-ace7-b658f0c13a2b/download",
+      "download_path": "bitstreams/83f35e85-3f1f-435c-ace7-b658f0c13a2b/download",
+      "pdf_path": "examples/pdf/4080_shvedov_oleg_yurevich_analiz_effektivnosti_raboty_obschestvennogo_transporta_s_primeneniem_tehnologii_.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/4080_shvedov_oleg_yurevich_analiz_effektivnosti_raboty_obschestvennogo_transporta_s_primeneniem_tehnologii_.txt",
+      "text_status": "empty"
     },
     {
       "id": 8940,
@@ -210,7 +340,17 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=8940",
       "work_url": "https://hdl.handle.net/11701/10541",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/10541",
+      "download_url": "https://dspace.spbu.ru/bitstreams/cf23f704-572d-4f4e-983b-3dfedc6e033c/download",
+      "download_path": "bitstreams/cf23f704-572d-4f4e-983b-3dfedc6e033c/download",
+      "pdf_path": "examples/pdf/8940_pankratov_stanislav_sergeevich_detsentralizovannaya_sistema_autentifikatsii.pdf",
+      "download_status": "downloaded",
+      "download_error": "",
+      "txt_path": "examples/txt/8940_pankratov_stanislav_sergeevich_detsentralizovannaya_sistema_autentifikatsii.txt",
+      "text_status": "extracted",
+      "download_source_name": "download",
+      "download_source_description": "first_html_bitstream_match"
     },
     {
       "id": 8943,
@@ -222,7 +362,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=8943",
       "work_url": "https://hdl.handle.net/11701/11130",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/11130",
+      "download_url": "https://dspace.spbu.ru/bitstreams/995c7b5a-c9fe-4c82-912d-1ddfceab60c1/download",
+      "download_path": "bitstreams/995c7b5a-c9fe-4c82-912d-1ddfceab60c1/download",
+      "pdf_path": "examples/pdf/8943_paskevich_artem_andreevich_opredelenie_koordinat_i_navigatsiya_vnutri_pomeschenii.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/8943_paskevich_artem_andreevich_opredelenie_koordinat_i_navigatsiya_vnutri_pomeschenii.txt",
+      "text_status": "extracted"
     },
     {
       "id": 8990,
@@ -234,7 +382,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=8990",
       "work_url": "https://hdl.handle.net/11701/11082",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/11082",
+      "download_url": "https://dspace.spbu.ru/bitstreams/bbfff7a2-203b-4244-aab6-d4b7d19572e8/download",
+      "download_path": "bitstreams/bbfff7a2-203b-4244-aab6-d4b7d19572e8/download",
+      "pdf_path": "examples/pdf/8990_simankov_sergei_sergeevich_razrabotka_programmnogo_obespecheniya_dlya_avtomaticheskoi_igry_v_poker_s_ispolz.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/8990_simankov_sergei_sergeevich_razrabotka_programmnogo_obespecheniya_dlya_avtomaticheskoi_igry_v_poker_s_ispolz.txt",
+      "text_status": "extracted"
     },
     {
       "id": 9027,
@@ -246,7 +402,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=9027",
       "work_url": "https://hdl.handle.net/11701/11086",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/11086",
+      "download_url": "https://dspace.spbu.ru/bitstreams/a9ffd40d-f71c-462f-8952-70d00d42a079/download",
+      "download_path": "bitstreams/a9ffd40d-f71c-462f-8952-70d00d42a079/download",
+      "pdf_path": "examples/pdf/9027_tsaplina_darya_dmitrievna_prognozirovanie_byudzheta_meditsinskih_uchrezhdenii_s_primeneniem_sovremennyh_me.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/9027_tsaplina_darya_dmitrievna_prognozirovanie_byudzheta_meditsinskih_uchrezhdenii_s_primeneniem_sovremennyh_me.txt",
+      "text_status": "empty"
     },
     {
       "id": 9031,
@@ -258,7 +422,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=9031",
       "work_url": "https://hdl.handle.net/11701/10874",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/10874",
+      "download_url": "https://dspace.spbu.ru/bitstreams/35356437-dd7f-49fc-808f-17a4952b268e/download",
+      "download_path": "bitstreams/35356437-dd7f-49fc-808f-17a4952b268e/download",
+      "pdf_path": "examples/pdf/9031_tsypushkin_arsenii_vitalevich_primenenie_metodov_mashinnogo_obucheniya_dlya_poluavtomaticheskoi_obrabotki_novo.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/9031_tsypushkin_arsenii_vitalevich_primenenie_metodov_mashinnogo_obucheniya_dlya_poluavtomaticheskoi_obrabotki_novo.txt",
+      "text_status": "empty"
     },
     {
       "id": 20803,
@@ -270,7 +442,17 @@
       "supervisor": "доктор философии (компьютерные науки) Корхов В.В.",
       "view_url": "https://diploma.spbu.ru/gp/view?id=20803",
       "work_url": "https://hdl.handle.net/11701/25965",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/25965",
+      "download_url": "https://dspace.spbu.ru/bitstreams/6e63adac-4101-4eeb-8226-31e256f9c125/download",
+      "download_path": "bitstreams/6e63adac-4101-4eeb-8226-31e256f9c125/download",
+      "pdf_path": "examples/pdf/20803_maksudyan_lyudmila_aregovna_realizatsiya_sistemy_tovaroobmena_na_baze_tehnologii_raspredelennyh_reestrov.pdf",
+      "download_status": "downloaded",
+      "download_error": "",
+      "txt_path": "examples/txt/20803_maksudyan_lyudmila_aregovna_realizatsiya_sistemy_tovaroobmena_na_baze_tehnologii_raspredelennyh_reestrov.txt",
+      "text_status": "extracted",
+      "download_source_name": "download",
+      "download_source_description": "first_html_bitstream_match"
     },
     {
       "id": 26175,
@@ -282,7 +464,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=26175",
       "work_url": "https://hdl.handle.net/11701/26494",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26494",
+      "download_url": "https://dspace.spbu.ru/bitstreams/1a4b5ada-44a4-49b5-bc13-efbcb27c5596/download",
+      "download_path": "bitstreams/1a4b5ada-44a4-49b5-bc13-efbcb27c5596/download",
+      "pdf_path": "examples/pdf/26175_markin_stanislav_vitalevich_razrabotka_programmnogo_modulya_dlya_otsenki_riskovannosti_finansovyh_tranzaktsi.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/26175_markin_stanislav_vitalevich_razrabotka_programmnogo_modulya_dlya_otsenki_riskovannosti_finansovyh_tranzaktsi.txt",
+      "text_status": "extracted"
     },
     {
       "id": 31081,
@@ -294,7 +484,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=31081",
       "work_url": "https://hdl.handle.net/11701/32500",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/32500",
+      "download_url": "https://dspace.spbu.ru/bitstreams/bbb0e399-d0e3-4d75-9711-9e46cb712e6a/download",
+      "download_path": "bitstreams/bbb0e399-d0e3-4d75-9711-9e46cb712e6a/download",
+      "pdf_path": "examples/pdf/31081_ruschenko_vlada_vladislavovna_razrabotka_algoritma_uporyadochivaniya_nalozhennyh_konturov.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/31081_ruschenko_vlada_vladislavovna_razrabotka_algoritma_uporyadochivaniya_nalozhennyh_konturov.txt",
+      "text_status": "extracted"
     },
     {
       "id": 31129,
@@ -306,7 +504,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=31129",
       "work_url": "https://hdl.handle.net/11701/32370",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/32370",
+      "download_url": "https://dspace.spbu.ru/bitstreams/ba2ba29e-bf2a-4f5e-815e-7504761894ec/download",
+      "download_path": "bitstreams/ba2ba29e-bf2a-4f5e-815e-7504761894ec/download",
+      "pdf_path": "examples/pdf/31129_tsepeleva_rita_vyacheslavovna_implementatsiya_protokola_po_kross_blokchein_vzaimodeistviyu.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/31129_tsepeleva_rita_vyacheslavovna_implementatsiya_protokola_po_kross_blokchein_vzaimodeistviyu.txt",
+      "text_status": "extracted"
     },
     {
       "id": 35931,
@@ -318,7 +524,15 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=35931",
       "work_url": "https://hdl.handle.net/11701/40303",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/40303",
+      "download_url": "https://dspace.spbu.ru/bitstreams/b98fff07-4fe6-46ea-8d79-ddc6cafda5bc/download",
+      "download_path": "bitstreams/b98fff07-4fe6-46ea-8d79-ddc6cafda5bc/download",
+      "pdf_path": "examples/pdf/35931_neumoina_elizaveta_petrovna_razrabotka_servernoi_chasti_po_dlya_zadach_naima_i_obucheniya_sotrudnikov_s_ispo.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/35931_neumoina_elizaveta_petrovna_razrabotka_servernoi_chasti_po_dlya_zadach_naima_i_obucheniya_sotrudnikov_s_ispo.txt",
+      "text_status": "extracted"
     },
     {
       "id": 47521,
@@ -330,7 +544,17 @@
       "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
       "view_url": "https://diploma.spbu.ru/gp/view?id=47521",
       "work_url": "https://hdl.handle.net/11701/46058",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-13-17-114Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/46058",
+      "download_url": "https://dspace.spbu.ru/bitstreams/8bb8fc85-6e1b-44d3-9725-4d9c54b95d2d/download",
+      "download_path": "bitstreams/8bb8fc85-6e1b-44d3-9725-4d9c54b95d2d/download",
+      "pdf_path": "examples/pdf/47521_kravtsov_timur_tihonovich_issledovanie_samonastraivayuschihsya_raspredelennyh_sistem_upravleniya_bazami_da.pdf",
+      "download_status": "downloaded",
+      "download_error": "",
+      "txt_path": "examples/txt/47521_kravtsov_timur_tihonovich_issledovanie_samonastraivayuschihsya_raspredelennyh_sistem_upravleniya_bazami_da.txt",
+      "text_status": "extracted",
+      "download_source_name": "download",
+      "download_source_description": "manual_first_bitstream_confirmed"
     },
     {
       "id": 3943,
@@ -342,7 +566,13 @@
       "supervisor": "доктор технических наук, доцент А.Б. Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=3943",
       "work_url": "https://hdl.handle.net/11701/4109",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/4109",
+      "download_url": "",
+      "download_path": "",
+      "download_status": "missing",
+      "text_status": "missing",
+      "download_error": "fetch failed"
     },
     {
       "id": 4026,
@@ -354,7 +584,17 @@
       "supervisor": "доктор технических наук, доцент А.Б. Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=4026",
       "work_url": "https://hdl.handle.net/11701/4412",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/4412",
+      "download_url": "https://dspace.spbu.ru/bitstreams/a5e2bd10-cbc9-4c39-a4ea-49066e6baedd/download",
+      "download_path": "bitstreams/a5e2bd10-cbc9-4c39-a4ea-49066e6baedd/download",
+      "pdf_path": "examples/pdf/4026_sveshnikova_svetlana_yurevna_razrabotka_instrumentariya_dlya_raboty_s_dannymi_reanaliza_gidrometeorologichesk.pdf",
+      "download_status": "downloaded",
+      "download_error": "",
+      "txt_path": "examples/txt/4026_sveshnikova_svetlana_yurevna_razrabotka_instrumentariya_dlya_raboty_s_dannymi_reanaliza_gidrometeorologichesk.txt",
+      "text_status": "extracted",
+      "download_source_name": "download",
+      "download_source_description": "first_html_bitstream_match"
     },
     {
       "id": 4046,
@@ -366,7 +606,15 @@
       "supervisor": "доктор технических наук, доцент А.Б. Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=4046",
       "work_url": "https://hdl.handle.net/11701/4583",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/4583",
+      "download_url": "https://dspace.spbu.ru/bitstreams/cb1b5012-d1ae-495c-aa43-dbe0b25d7c4a/download",
+      "download_path": "bitstreams/cb1b5012-d1ae-495c-aa43-dbe0b25d7c4a/download",
+      "pdf_path": "examples/pdf/4046_suhochev_aleksandr_vladimirovich_opredelenie_harakteristik_avtora_soobschenii_setevyh_dialogov.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/4046_suhochev_aleksandr_vladimirovich_opredelenie_harakteristik_avtora_soobschenii_setevyh_dialogov.txt",
+      "text_status": "extracted"
     },
     {
       "id": 8847,
@@ -378,7 +626,17 @@
       "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=8847",
       "work_url": "https://hdl.handle.net/11701/11233",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/11233",
+      "download_url": "https://dspace.spbu.ru/bitstreams/0a00d34c-fe6c-48d8-aa08-6e06c0dec1e6/download",
+      "download_path": "bitstreams/0a00d34c-fe6c-48d8-aa08-6e06c0dec1e6/download",
+      "pdf_path": "examples/pdf/8847_zinatov_rustam_raisovich_sravnitelnyi_analiz_dvizhkov_dlya_raboty_s_bigdata.pdf",
+      "download_status": "downloaded",
+      "download_error": "",
+      "txt_path": "examples/txt/8847_zinatov_rustam_raisovich_sravnitelnyi_analiz_dvizhkov_dlya_raboty_s_bigdata.txt",
+      "text_status": "extracted",
+      "download_source_name": "download",
+      "download_source_description": "first_html_bitstream_match"
     },
     {
       "id": 8978,
@@ -390,7 +648,15 @@
       "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=8978",
       "work_url": "https://hdl.handle.net/11701/11132",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/11132",
+      "download_url": "https://dspace.spbu.ru/bitstreams/40ba39e8-9581-4815-9913-64d442882f05/download",
+      "download_path": "bitstreams/40ba39e8-9581-4815-9913-64d442882f05/download",
+      "pdf_path": "examples/pdf/8978_satina_alena_yurevna_razrabotka_instrumentariya_dlya_vizualizatsii_silno_nelineinyh_protsessov_na_osn.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/8978_satina_alena_yurevna_razrabotka_instrumentariya_dlya_vizualizatsii_silno_nelineinyh_protsessov_na_osn.txt",
+      "text_status": "extracted"
     },
     {
       "id": 9019,
@@ -402,7 +668,15 @@
       "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=9019",
       "work_url": "https://hdl.handle.net/11701/11444",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/11444",
+      "download_url": "https://dspace.spbu.ru/bitstreams/f7f9139d-1eb9-44ad-95ef-fd9ca8c8ecc1/download",
+      "download_path": "bitstreams/f7f9139d-1eb9-44ad-95ef-fd9ca8c8ecc1/download",
+      "pdf_path": "examples/pdf/9019_fatkina_anna_igorevna_ispolzovanie_soprotsessornyh_tehnologii_v_ramkah_proekta_mpdroot.pdf",
+      "download_status": "downloaded",
+      "download_error": "Command failed: curl -L --fail --silent --show-error --max-time 30 https://api.dspace.spbu.ru/server/api/core/bundles/99680c33-621c-43c9-8b85-246c6206152b/bitstreams?size=200\ncurl: (28) Connection timed out after 30004 milliseconds\n",
+      "txt_path": "examples/txt/9019_fatkina_anna_igorevna_ispolzovanie_soprotsessornyh_tehnologii_v_ramkah_proekta_mpdroot.txt",
+      "text_status": "extracted"
     },
     {
       "id": 14528,
@@ -414,7 +688,15 @@
       "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=14528",
       "work_url": "https://hdl.handle.net/11701/13653",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/13653",
+      "download_url": "https://dspace.spbu.ru/bitstreams/124beeb5-f3bd-4172-b961-3ab364259e32/download",
+      "download_path": "bitstreams/124beeb5-f3bd-4172-b961-3ab364259e32/download",
+      "pdf_path": "examples/pdf/14528_sen_anastasiya_igorevna_razrabotka_instrumentariya_predvaritelnoi_obrabotki_dannyh_dlya_skrininga_tehnol.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/14528_sen_anastasiya_igorevna_razrabotka_instrumentariya_predvaritelnoi_obrabotki_dannyh_dlya_skrininga_tehnol.txt",
+      "text_status": "empty"
     },
     {
       "id": 14560,
@@ -426,7 +708,15 @@
       "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=14560",
       "work_url": "https://hdl.handle.net/11701/13420",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/13420",
+      "download_url": "https://dspace.spbu.ru/bitstreams/432c2bd0-9509-4406-8775-9400f56c6127/download",
+      "download_path": "bitstreams/432c2bd0-9509-4406-8775-9400f56c6127/download",
+      "pdf_path": "examples/pdf/14560_fedoseev_georgii_aleksandrovich_razrabotka_sistemy_raspoznavaniya_rechi_dlya_indeksirovaniya_i_poiska_v_bolshoi_.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/14560_fedoseev_georgii_aleksandrovich_razrabotka_sistemy_raspoznavaniya_rechi_dlya_indeksirovaniya_i_poiska_v_bolshoi_.txt",
+      "text_status": "extracted"
     },
     {
       "id": 20832,
@@ -438,7 +728,15 @@
       "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=20832",
       "work_url": "https://hdl.handle.net/11701/25991",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/25991",
+      "download_url": "https://dspace.spbu.ru/bitstreams/3ad535e4-a48e-4dd9-b958-6c2b88d778dc/download",
+      "download_path": "bitstreams/3ad535e4-a48e-4dd9-b958-6c2b88d778dc/download",
+      "pdf_path": "examples/pdf/20832_petryakov_ivan_vladimirovich_modelirovanie_kachki_sudna_v_realnom_vremeni_s_ispolzovaniem_vychislenii_obscheg.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/20832_petryakov_ivan_vladimirovich_modelirovanie_kachki_sudna_v_realnom_vremeni_s_ispolzovaniem_vychislenii_obscheg.txt",
+      "text_status": "extracted"
     },
     {
       "id": 26080,
@@ -450,7 +748,15 @@
       "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=26080",
       "work_url": "https://hdl.handle.net/11701/26470",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26470",
+      "download_url": "https://dspace.spbu.ru/bitstreams/a599cd12-9f51-49fe-a555-cb7729dfe340/download",
+      "download_path": "bitstreams/a599cd12-9f51-49fe-a555-cb7729dfe340/download",
+      "pdf_path": "examples/pdf/26080_glazyrin_anton_georgievich_optimizatsiya_realizatsii_metoda_modelirovaniya_dyma_shredingera_za_schet_primen.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/26080_glazyrin_anton_georgievich_optimizatsiya_realizatsii_metoda_modelirovaniya_dyma_shredingera_za_schet_primen.txt",
+      "text_status": "extracted"
     },
     {
       "id": 26097,
@@ -462,7 +768,15 @@
       "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=26097",
       "work_url": "https://hdl.handle.net/11701/26270",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26270",
+      "download_url": "https://dspace.spbu.ru/bitstreams/a773e95d-f660-4afe-bfa8-0c8904692099/download",
+      "download_path": "bitstreams/a773e95d-f660-4afe-bfa8-0c8904692099/download",
+      "pdf_path": "examples/pdf/26097_gusev_danila_andreevich_sozdanie_effektivnyh_algoritmov_morskoi_gidrodinamiki_s_ispolzovaniem_opengl.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/26097_gusev_danila_andreevich_sozdanie_effektivnyh_algoritmov_morskoi_gidrodinamiki_s_ispolzovaniem_opengl.txt",
+      "text_status": "extracted"
     },
     {
       "id": 31047,
@@ -474,7 +788,15 @@
       "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=31047",
       "work_url": "https://hdl.handle.net/11701/32394",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/32394",
+      "download_url": "https://dspace.spbu.ru/bitstreams/9c4f63f2-3556-429d-8a51-788a1ee7d9c2/download",
+      "download_path": "bitstreams/9c4f63f2-3556-429d-8a51-788a1ee7d9c2/download",
+      "pdf_path": "examples/pdf/31047_pavlova_ekaterina_denisovna_reshenie_zadachi_monitoringa_sostoyaniya_glubokovodnyh_zhivotnyh_i_rastenii_s_is.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/31047_pavlova_ekaterina_denisovna_reshenie_zadachi_monitoringa_sostoyaniya_glubokovodnyh_zhivotnyh_i_rastenii_s_is.txt",
+      "text_status": "extracted"
     },
     {
       "id": 35807,
@@ -486,7 +808,15 @@
       "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=35807",
       "work_url": "https://hdl.handle.net/11701/39732",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/39732",
+      "download_url": "https://dspace.spbu.ru/bitstreams/6fcaa1a8-8157-4953-a83f-1ef736806e46/download",
+      "download_path": "bitstreams/6fcaa1a8-8157-4953-a83f-1ef736806e46/download",
+      "pdf_path": "examples/pdf/35807_badmaev_ananda_ayurovich_razrabotka_i_realizatsiya_modulya_yadra_linux_dlya_effektivnogo_vydeleniya_pamya.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/35807_badmaev_ananda_ayurovich_razrabotka_i_realizatsiya_modulya_yadra_linux_dlya_effektivnogo_vydeleniya_pamya.txt",
+      "text_status": "extracted"
     },
     {
       "id": 47546,
@@ -498,7 +828,15 @@
       "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=47546",
       "work_url": "https://hdl.handle.net/11701/45947",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-15-24-385Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/45947",
+      "download_url": "https://dspace.spbu.ru/bitstreams/2cc8860d-279e-4d49-ba7d-af16520a39dc/download",
+      "download_path": "bitstreams/2cc8860d-279e-4d49-ba7d-af16520a39dc/download",
+      "pdf_path": "examples/pdf/47546_matyuhin_aleksandr_yurevich_ispolzovanie_sovremennyh_web_tehnologii_dlya_virtualizatsii_platformy_vychisleni.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/47546_matyuhin_aleksandr_yurevich_ispolzovanie_sovremennyh_web_tehnologii_dlya_virtualizatsii_platformy_vychisleni.txt",
+      "text_status": "extracted"
     },
     {
       "id": 9021,
@@ -510,7 +848,15 @@
       "supervisor": "доктор физико-математических наук, профессор А.Ю.Утешев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=9021",
       "work_url": "https://hdl.handle.net/11701/10959",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-20-37-087Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-20-37-087Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/10959",
+      "download_url": "https://dspace.spbu.ru/bitstreams/7d5899b0-96e0-42ca-8ea2-f20a271e5f16/download",
+      "download_path": "bitstreams/7d5899b0-96e0-42ca-8ea2-f20a271e5f16/download",
+      "pdf_path": "examples/pdf/9021_fedorova_darya_sergeevna_zadacha_lagranzha_ob_obeme_simpleksa.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/9021_fedorova_darya_sergeevna_zadacha_lagranzha_ob_obeme_simpleksa.txt",
+      "text_status": "extracted"
     },
     {
       "id": 31074,
@@ -522,7 +868,15 @@
       "supervisor": "доктор физико-математических наук, профессор А.Ю.Утешев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=31074",
       "work_url": "https://hdl.handle.net/11701/32301",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-20-37-087Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-20-37-087Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/32301",
+      "download_url": "https://dspace.spbu.ru/bitstreams/bc13a7f5-fd0e-48bf-909e-efeafc48c6ce/download",
+      "download_path": "bitstreams/bc13a7f5-fd0e-48bf-909e-efeafc48c6ce/download",
+      "pdf_path": "examples/pdf/31074_rogachev_yurii_vitalevich_vyyavlenie_priznakov_plagiata_v_ishodnyh_kodah_programmnyh_sistem.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/31074_rogachev_yurii_vitalevich_vyyavlenie_priznakov_plagiata_v_ishodnyh_kodah_programmnyh_sistem.txt",
+      "text_status": "extracted"
     },
     {
       "id": 35940,
@@ -534,7 +888,15 @@
       "supervisor": "доктор физико-математических наук, профессор А.Ю.Утешев",
       "view_url": "https://diploma.spbu.ru/gp/view?id=35940",
       "work_url": "https://hdl.handle.net/11701/40119",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-20-37-087Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-20-37-087Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/40119",
+      "download_url": "https://dspace.spbu.ru/bitstreams/f4bf9d0b-5a73-4fcc-874e-62e14476ec65/download",
+      "download_path": "bitstreams/f4bf9d0b-5a73-4fcc-874e-62e14476ec65/download",
+      "pdf_path": "examples/pdf/35940_peshne_kristina_andreevna_vizualizatsiya_shtatnoi_struktury_organizatsii_s_raspredeleniem_vzaimodeistviya_.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/35940_peshne_kristina_andreevna_vizualizatsiya_shtatnoi_struktury_organizatsii_s_raspredeleniem_vzaimodeistviya_.txt",
+      "text_status": "extracted"
     },
     {
       "id": 3853,
@@ -546,7 +908,17 @@
       "supervisor": "кандидат технических наук, доцент В.М. Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=3853",
       "work_url": "https://hdl.handle.net/11701/4516",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/4516",
+      "download_url": "https://dspace.spbu.ru/bitstreams/c012b019-5003-4628-9b03-a54ef4e397fe/download",
+      "download_path": "bitstreams/c012b019-5003-4628-9b03-a54ef4e397fe/download",
+      "pdf_path": "examples/pdf/3853_vasilev_pavel_sergeevich_raspoznavanie_tipov_izobrazhenii_dokumentov.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/3853_vasilev_pavel_sergeevich_raspoznavanie_tipov_izobrazhenii_dokumentov.txt",
+      "text_status": "extracted",
+      "download_source_name": "st013657.pdf",
+      "download_source_description": "Article"
     },
     {
       "id": 3904,
@@ -558,7 +930,15 @@
       "supervisor": "кандидат технических наук, доцент В.М. Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=3904",
       "work_url": "https://hdl.handle.net/11701/4022",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/4022",
+      "download_url": "https://dspace.spbu.ru/bitstreams/5f02e91c-d46f-4eab-b96d-c1dc7bc201eb/download",
+      "download_path": "bitstreams/5f02e91c-d46f-4eab-b96d-c1dc7bc201eb/download",
+      "pdf_path": "examples/pdf/3904_ivashechkin_aleksandr_pavlovich_metody_nahozhdeniya_osobyh_tochek_izobrazheniya_i_ih_deskriptorov.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/3904_ivashechkin_aleksandr_pavlovich_metody_nahozhdeniya_osobyh_tochek_izobrazheniya_i_ih_deskriptorov.txt",
+      "text_status": "extracted"
     },
     {
       "id": 3966,
@@ -570,7 +950,15 @@
       "supervisor": "кандидат технических наук, доцент В.М. Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=3966",
       "work_url": "https://hdl.handle.net/11701/4017",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/4017",
+      "download_url": "https://dspace.spbu.ru/bitstreams/7eef12ee-f6b7-419c-a848-0c67440072fa/download",
+      "download_path": "bitstreams/7eef12ee-f6b7-419c-a848-0c67440072fa/download",
+      "pdf_path": "examples/pdf/3966_matveev_vladimir_valerevich_kontrol_sohrannosti_lesomaterialov_pri_transportirovke_s_ispolzovaniem_kompyuter.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/3966_matveev_vladimir_valerevich_kontrol_sohrannosti_lesomaterialov_pri_transportirovke_s_ispolzovaniem_kompyuter.txt",
+      "text_status": "extracted"
     },
     {
       "id": 4008,
@@ -582,7 +970,15 @@
       "supervisor": "кандидат технических наук, доцент В.М. Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=4008",
       "work_url": "https://hdl.handle.net/11701/4292",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/4292",
+      "download_url": "https://dspace.spbu.ru/bitstreams/cf64562a-b90b-4686-9933-c6ecc9d036a5/download",
+      "download_path": "bitstreams/cf64562a-b90b-4686-9933-c6ecc9d036a5/download",
+      "pdf_path": "examples/pdf/4008_romashov_dmitrii_sergeevich_sistema_opredeleniya_muzykalnyh_predpochtenii.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/4008_romashov_dmitrii_sergeevich_sistema_opredeleniya_muzykalnyh_predpochtenii.txt",
+      "text_status": "extracted"
     },
     {
       "id": 4054,
@@ -594,7 +990,15 @@
       "supervisor": "кандидат технических наук, доцент В.М. Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=4054",
       "work_url": "https://hdl.handle.net/11701/4797",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/4797",
+      "download_url": "https://dspace.spbu.ru/bitstreams/f5041839-ee77-48ca-b9cc-ed1c26386db8/download",
+      "download_path": "bitstreams/f5041839-ee77-48ca-b9cc-ed1c26386db8/download",
+      "pdf_path": "examples/pdf/4054_faustov_bogdan_andreevich_poisk_pohozhih_izobrazhenii.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/4054_faustov_bogdan_andreevich_poisk_pohozhih_izobrazhenii.txt",
+      "text_status": "extracted"
     },
     {
       "id": 8803,
@@ -606,7 +1010,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=8803",
       "work_url": "https://hdl.handle.net/11701/10840",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/10840",
+      "download_url": "https://dspace.spbu.ru/bitstreams/4baedc35-a57b-4294-a639-bcc490bb1724/download",
+      "download_path": "bitstreams/4baedc35-a57b-4294-a639-bcc490bb1724/download",
+      "pdf_path": "examples/pdf/8803_glushkova_ekaterina_dmitrievna_avtomatizatsiya_formirovaniya_predstavleniya_elektronnyh_shem_tsifrovyh_ustroist.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/8803_glushkova_ekaterina_dmitrievna_avtomatizatsiya_formirovaniya_predstavleniya_elektronnyh_shem_tsifrovyh_ustroist.txt",
+      "text_status": "extracted"
     },
     {
       "id": 8843,
@@ -618,7 +1030,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=8843",
       "work_url": "https://hdl.handle.net/11701/11311",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/11311",
+      "download_url": "https://dspace.spbu.ru/bitstreams/26dcbd0a-2a31-4ff8-8e3f-ed16fe22d646/download",
+      "download_path": "bitstreams/26dcbd0a-2a31-4ff8-8e3f-ed16fe22d646/download",
+      "pdf_path": "examples/pdf/8843_zakuanova_margarita_rinatovna_3d_rekonstruktsiya_modeli_pomescheniya_po_ego_izobrazheniyam.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/8843_zakuanova_margarita_rinatovna_3d_rekonstruktsiya_modeli_pomescheniya_po_ego_izobrazheniyam.txt",
+      "text_status": "extracted"
     },
     {
       "id": 8858,
@@ -630,7 +1050,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=8858",
       "work_url": "https://hdl.handle.net/11701/11105",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/11105",
+      "download_url": "https://dspace.spbu.ru/bitstreams/19c7ed7d-0834-48b9-9497-557fb4af89d1/download",
+      "download_path": "bitstreams/19c7ed7d-0834-48b9-9497-557fb4af89d1/download",
+      "pdf_path": "examples/pdf/8858_kalinin_ilya_dmitrievich_vizualnaya_sistema_kontrolya_prohozhdeniya_sportsmenom_lyzhnogo_spuska.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/8858_kalinin_ilya_dmitrievich_vizualnaya_sistema_kontrolya_prohozhdeniya_sportsmenom_lyzhnogo_spuska.txt",
+      "text_status": "empty"
     },
     {
       "id": 8942,
@@ -642,7 +1070,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=8942",
       "work_url": "https://hdl.handle.net/11701/10523",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/10523",
+      "download_url": "https://dspace.spbu.ru/bitstreams/7156ed3c-d12e-4716-bef7-544b483e102f/download",
+      "download_path": "bitstreams/7156ed3c-d12e-4716-bef7-544b483e102f/download",
+      "pdf_path": "examples/pdf/8942_parshin_aleksei_andreevich_primenenie_veivlet_preobrazovaniya_v_poiske_osobyh_tochek_na_izobrazhenii.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/8942_parshin_aleksei_andreevich_primenenie_veivlet_preobrazovaniya_v_poiske_osobyh_tochek_na_izobrazhenii.txt",
+      "text_status": "empty"
     },
     {
       "id": 8945,
@@ -654,7 +1090,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=8945",
       "work_url": "https://hdl.handle.net/11701/11050",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/11050",
+      "download_url": "https://dspace.spbu.ru/bitstreams/b66e9212-f1aa-4b58-957d-d84c617489ea/download",
+      "download_path": "bitstreams/b66e9212-f1aa-4b58-957d-d84c617489ea/download",
+      "pdf_path": "examples/pdf/8945_penkrat_andrei_olegovich_postroenie_karty_glubiny_po_izobrazheniyam_stereopary.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/8945_penkrat_andrei_olegovich_postroenie_karty_glubiny_po_izobrazheniyam_stereopary.txt",
+      "text_status": "extracted"
     },
     {
       "id": 14469,
@@ -666,7 +1110,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=14469",
       "work_url": "https://hdl.handle.net/11701/13453",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/13453",
+      "download_url": "https://dspace.spbu.ru/bitstreams/57d3c66a-61fc-45a2-a2c8-a010cfa56c15/download",
+      "download_path": "bitstreams/57d3c66a-61fc-45a2-a2c8-a010cfa56c15/download",
+      "pdf_path": "examples/pdf/14469_minnegaliev_almaz_anisovich_segmentatsiya_geoinformatsionnyh_izobrazhenii.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/14469_minnegaliev_almaz_anisovich_segmentatsiya_geoinformatsionnyh_izobrazhenii.txt",
+      "text_status": "extracted"
     },
     {
       "id": 14540,
@@ -678,7 +1130,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=14540",
       "work_url": "https://hdl.handle.net/11701/13656",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/13656",
+      "download_url": "https://dspace.spbu.ru/bitstreams/3c1b8978-6317-47ab-89b1-9a0c32b01be5/download",
+      "download_path": "bitstreams/3c1b8978-6317-47ab-89b1-9a0c32b01be5/download",
+      "pdf_path": "examples/pdf/14540_surkov_nikandr_maksimovich_sozdanie_karty_relefov_mestnosti_po_sputnikovym_izobrazheniyam_na_platforme_andr.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/14540_surkov_nikandr_maksimovich_sozdanie_karty_relefov_mestnosti_po_sputnikovym_izobrazheniyam_na_platforme_andr.txt",
+      "text_status": "extracted"
     },
     {
       "id": 14586,
@@ -690,7 +1150,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=14586",
       "work_url": "https://hdl.handle.net/11701/13179",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/13179",
+      "download_url": "https://dspace.spbu.ru/bitstreams/52fb8299-cbb4-4e7b-8b37-49873bf04b12/download",
+      "download_path": "bitstreams/52fb8299-cbb4-4e7b-8b37-49873bf04b12/download",
+      "pdf_path": "examples/pdf/14586_ebral_aleksandr_vladimirovich_segmentatsiya_teksta_na_izobrazheniyah.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/14586_ebral_aleksandr_vladimirovich_segmentatsiya_teksta_na_izobrazheniyah.txt",
+      "text_status": "extracted"
     },
     {
       "id": 20677,
@@ -702,7 +1170,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=20677",
       "work_url": "https://hdl.handle.net/11701/25847",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/25847",
+      "download_url": "https://dspace.spbu.ru/bitstreams/d1a65224-87ea-4c37-a7d3-59db4537e2d4/download",
+      "download_path": "bitstreams/d1a65224-87ea-4c37-a7d3-59db4537e2d4/download",
+      "pdf_path": "examples/pdf/20677_astashenkova_lada_konstantinovna_segmentatsiya_izobrazhenii_chelovecheskih_lits.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/20677_astashenkova_lada_konstantinovna_segmentatsiya_izobrazhenii_chelovecheskih_lits.txt",
+      "text_status": "empty"
     },
     {
       "id": 20777,
@@ -714,7 +1190,13 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=20777",
       "work_url": "https://hdl.handle.net/11701/25942",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/25942",
+      "download_url": "",
+      "download_path": "",
+      "download_status": "missing",
+      "text_status": "missing",
+      "download_error": "fetch failed"
     },
     {
       "id": 20782,
@@ -726,7 +1208,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=20782",
       "work_url": "https://hdl.handle.net/11701/25949",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/25949",
+      "download_url": "https://dspace.spbu.ru/bitstreams/2868895f-48dc-4b13-904d-536c47631ac6/download",
+      "download_path": "bitstreams/2868895f-48dc-4b13-904d-536c47631ac6/download",
+      "pdf_path": "examples/pdf/20782_kuranova_irina_yurevna_restavratsiya_fotoizobrazhenii.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/20782_kuranova_irina_yurevna_restavratsiya_fotoizobrazhenii.txt",
+      "text_status": "extracted"
     },
     {
       "id": 20804,
@@ -738,7 +1228,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=20804",
       "work_url": "https://hdl.handle.net/11701/25966",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/25966",
+      "download_url": "https://dspace.spbu.ru/bitstreams/bd0de97f-ae37-4028-a9f6-15be8d7498bd/download",
+      "download_path": "bitstreams/bd0de97f-ae37-4028-a9f6-15be8d7498bd/download",
+      "pdf_path": "examples/pdf/20804_malevannyi_daniil_mihailovich_razrabotka_tehnologii_modelirovaniya_vzaimodeistviya_raspredelennyh_reestrov_i_p.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/20804_malevannyi_daniil_mihailovich_razrabotka_tehnologii_modelirovaniya_vzaimodeistviya_raspredelennyh_reestrov_i_p.txt",
+      "text_status": "extracted"
     },
     {
       "id": 20855,
@@ -750,7 +1248,13 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=20855",
       "work_url": "https://hdl.handle.net/11701/26006",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26006",
+      "download_url": "",
+      "download_path": "",
+      "download_status": "missing",
+      "text_status": "missing",
+      "download_error": "fetch failed"
     },
     {
       "id": 20865,
@@ -762,7 +1266,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=20865",
       "work_url": "https://hdl.handle.net/11701/25598",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/25598",
+      "download_url": "https://dspace.spbu.ru/bitstreams/983a4a95-9717-4a67-82c7-1941287cf968/download",
+      "download_path": "bitstreams/983a4a95-9717-4a67-82c7-1941287cf968/download",
+      "pdf_path": "examples/pdf/20865_selivanov_dmitrii_aleksandrovich_rekonstruktsiya_pervichnoi_vershiny_vzaimodeistviya_v_tsentralnom_detektore_juno.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/20865_selivanov_dmitrii_aleksandrovich_rekonstruktsiya_pervichnoi_vershiny_vzaimodeistviya_v_tsentralnom_detektore_juno.txt",
+      "text_status": "extracted"
     },
     {
       "id": 20889,
@@ -774,7 +1286,13 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=20889",
       "work_url": "https://hdl.handle.net/11701/26027",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26027",
+      "download_url": "",
+      "download_path": "",
+      "download_status": "missing",
+      "text_status": "missing",
+      "download_error": "fetch failed"
     },
     {
       "id": 20926,
@@ -786,7 +1304,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=20926",
       "work_url": "https://hdl.handle.net/11701/26053",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26053",
+      "download_url": "https://dspace.spbu.ru/bitstreams/b58d7f19-e3c8-4937-b5b5-ed370daf4273/download",
+      "download_path": "bitstreams/b58d7f19-e3c8-4937-b5b5-ed370daf4273/download",
+      "pdf_path": "examples/pdf/20926_shaleva_anna_sergeevna_razrabotka_sistemy_vzaimodeistviya_chelovek_mashina_po_fragmentam_ustnoi_russkoy.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/20926_shaleva_anna_sergeevna_razrabotka_sistemy_vzaimodeistviya_chelovek_mashina_po_fragmentam_ustnoi_russkoy.txt",
+      "text_status": "extracted"
     },
     {
       "id": 26090,
@@ -798,7 +1324,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=26090",
       "work_url": "https://hdl.handle.net/11701/26469",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26469",
+      "download_url": "https://dspace.spbu.ru/bitstreams/d48619f8-fbfd-4b38-8b95-59fd6a7dc28d/download",
+      "download_path": "bitstreams/d48619f8-fbfd-4b38-8b95-59fd6a7dc28d/download",
+      "pdf_path": "examples/pdf/26090_grishutin_vitalii_yurevich_prognozirovanie_vremennyh_ryadov_pri_nebolshih_obemah_ishodnyh_dannyh.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/26090_grishutin_vitalii_yurevich_prognozirovanie_vremennyh_ryadov_pri_nebolshih_obemah_ishodnyh_dannyh.txt",
+      "text_status": "extracted"
     },
     {
       "id": 26183,
@@ -810,7 +1344,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=26183",
       "work_url": "https://hdl.handle.net/11701/26458",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26458",
+      "download_url": "https://dspace.spbu.ru/bitstreams/656c7115-bc75-4b16-a03e-7d97c5b3ccac/download",
+      "download_path": "bitstreams/656c7115-bc75-4b16-a03e-7d97c5b3ccac/download",
+      "pdf_path": "examples/pdf/26183_mitrofanov_egor_vladimirovich_segmentatsiya_obektov_interesa_v_videopotoke.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/26183_mitrofanov_egor_vladimirovich_segmentatsiya_obektov_interesa_v_videopotoke.txt",
+      "text_status": "extracted"
     },
     {
       "id": 26205,
@@ -822,7 +1364,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=26205",
       "work_url": "https://hdl.handle.net/11701/26471",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26471",
+      "download_url": "https://dspace.spbu.ru/bitstreams/fd34015a-7c8a-4b4a-864a-d5817cee1345/download",
+      "download_path": "bitstreams/fd34015a-7c8a-4b4a-864a-d5817cee1345/download",
+      "pdf_path": "examples/pdf/26205_pleshkanov_nikita_vyacheslavovich_raspoznavanie_vnedrennyh_subtitrov_v_video_potoke.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/26205_pleshkanov_nikita_vyacheslavovich_raspoznavanie_vnedrennyh_subtitrov_v_video_potoke.txt",
+      "text_status": "extracted"
     },
     {
       "id": 26247,
@@ -834,7 +1384,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=26247",
       "work_url": "https://hdl.handle.net/11701/26485",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/26485",
+      "download_url": "https://dspace.spbu.ru/bitstreams/ed412a66-fe52-4428-b3e5-f4730de4f6ed/download",
+      "download_path": "bitstreams/ed412a66-fe52-4428-b3e5-f4730de4f6ed/download",
+      "pdf_path": "examples/pdf/26247_spiridonov_aleksandr_yurevich_lokalizatsiya_i_raspoznavanie_vnedrennyh_subtitrov_v_videopotoke.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/26247_spiridonov_aleksandr_yurevich_lokalizatsiya_i_raspoznavanie_vnedrennyh_subtitrov_v_videopotoke.txt",
+      "text_status": "extracted"
     },
     {
       "id": 31095,
@@ -846,7 +1404,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=31095",
       "work_url": "https://hdl.handle.net/11701/32402",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/32402",
+      "download_url": "https://dspace.spbu.ru/bitstreams/a6002fc1-e3bd-491e-a957-0cb1f1ec7c0d/download",
+      "download_path": "bitstreams/a6002fc1-e3bd-491e-a957-0cb1f1ec7c0d/download",
+      "pdf_path": "examples/pdf/31095_sermyagin_nikita_vladimirovich_otslezhivanie_prisutstviya_lyudei_v_videopotoke.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/31095_sermyagin_nikita_vladimirovich_otslezhivanie_prisutstviya_lyudei_v_videopotoke.txt",
+      "text_status": "extracted"
     },
     {
       "id": 31098,
@@ -858,7 +1424,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=31098",
       "work_url": "https://hdl.handle.net/11701/32484",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/32484",
+      "download_url": "https://dspace.spbu.ru/bitstreams/98490903-9d51-4c43-ba91-622beabf14d7/download",
+      "download_path": "bitstreams/98490903-9d51-4c43-ba91-622beabf14d7/download",
+      "pdf_path": "examples/pdf/31098_sokol_milena_denisovna_raspoznavanie_raka_grudi_neirosetevymi_metodami.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/31098_sokol_milena_denisovna_raspoznavanie_raka_grudi_neirosetevymi_metodami.txt",
+      "text_status": "extracted"
     },
     {
       "id": 41911,
@@ -870,7 +1444,15 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=41911",
       "work_url": "https://hdl.handle.net/11701/42773",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/42773",
+      "download_url": "https://dspace.spbu.ru/bitstreams/eb1ebf39-eec9-4a01-9375-d22361046e46/download",
+      "download_path": "bitstreams/eb1ebf39-eec9-4a01-9375-d22361046e46/download",
+      "pdf_path": "examples/pdf/41911_danilov_gleb_sergeevich_rekonstruktsiya_trehmernoi_modeli_po_odinochnomu_snimku.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/41911_danilov_gleb_sergeevich_rekonstruktsiya_trehmernoi_modeli_po_odinochnomu_snimku.txt",
+      "text_status": "extracted"
     },
     {
       "id": 47554,
@@ -882,7 +1464,27 @@
       "supervisor": "кандидат технических наук, доцент В.М.Гришкин",
       "view_url": "https://diploma.spbu.ru/gp/view?id=47554",
       "work_url": "https://hdl.handle.net/11701/46722",
-      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json"
+      "source_file": "query__dp15__status1__yearall__2026-04-22T15-22-06-622Z.json",
+      "hdl_url": "https://hdl.handle.net/11701/46722",
+      "download_url": "https://dspace.spbu.ru/bitstreams/00b346c3-3f6c-4101-9fb6-788a5e556ff4/download",
+      "download_path": "bitstreams/00b346c3-3f6c-4101-9fb6-788a5e556ff4/download",
+      "pdf_path": "examples/pdf/47554_moroz_egor_romanovich_raspoznavanie_izobrazhenii_matematicheskih_vyrazhenii.pdf",
+      "download_status": "downloaded",
+      "download_error": "fetch failed",
+      "txt_path": "examples/txt/47554_moroz_egor_romanovich_raspoznavanie_izobrazhenii_matematicheskih_vyrazhenii.txt",
+      "text_status": "extracted"
     }
-  ]
+  ],
+  "files_generated_at": "2026-04-22T16:39:00Z",
+  "download_summary": {
+    "downloaded": 68,
+    "failed": 0,
+    "missing": 4
+  },
+  "text_extraction_summary": {
+    "extracted": 60,
+    "empty": 8,
+    "failed": 0,
+    "missing": 4
+  }
 }

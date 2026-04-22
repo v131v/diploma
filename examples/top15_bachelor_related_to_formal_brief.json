@@ -1,0 +1,309 @@
+{
+  "generated_at": "2026-04-22T16:09:23.090Z",
+  "brief_file": "formal-brief.md",
+  "source_meta": "examples/meta.json",
+  "selection_method": "Restored bachelor top 15 based on the previous heuristic ranking and curated selection toward distributed systems, storage-adjacent infrastructure, databases, networks, virtualization, distributed registries, and system architecture.",
+  "top_k": 15,
+  "items": [
+    {
+      "rank": 1,
+      "id": 26088,
+      "student_name": "Грехнев Егор Олегович",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Автоматизация формирования транзакций и технологии хранения приватных ключей в блокчейне",
+      "year": "2020",
+      "supervisor": "В.В.Корхов",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=26088",
+      "work_url": "https://hdl.handle.net/11701/26457",
+      "pdf_path": "examples/pdf/26088_grehnev_egor_olegovich_avtomatizatsiya_formirovaniya_tranzaktsii_i_tehnologii_hraneniya_privatnyh_klyuc.pdf",
+      "txt_path": "examples/txt/26088_grehnev_egor_olegovich_avtomatizatsiya_formirovaniya_tranzaktsii_i_tehnologii_hraneniya_privatnyh_klyuc.txt",
+      "similarity_score": 21,
+      "matched_keywords": [
+        "хранен:10",
+        "блокчейн:5",
+        "приватных ключ:6"
+      ],
+      "why_close": "Полезно из-за прямого упоминания хранения и распределенной инфраструктуры блокчейна."
+    },
+    {
+      "rank": 2,
+      "id": 26039,
+      "student_name": "Абдуллин Дамир Назирович",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Разработка высоконагруженного сервиса для обработки событий и генерации реакций в приложении такси с микросервисной архитектурой",
+      "year": "2020",
+      "supervisor": "В.В.Корхов",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=26039",
+      "work_url": "https://hdl.handle.net/11701/26455",
+      "pdf_path": "examples/pdf/26039_abdullin_damir_nazirovich_razrabotka_vysokonagruzhennogo_servisa_dlya_obrabotki_sobytii_i_generatsii_reakt.pdf",
+      "txt_path": "examples/txt/26039_abdullin_damir_nazirovich_razrabotka_vysokonagruzhennogo_servisa_dlya_obrabotki_sobytii_i_generatsii_reakt.txt",
+      "similarity_score": 15,
+      "matched_keywords": [
+        "микросервис:6",
+        "сервис:4",
+        "архитектур:5"
+      ],
+      "why_close": "Близко по системной архитектуре, сервисной декомпозиции и работе с нагрузкой, хотя фокус не на storage."
+    },
+    {
+      "rank": 3,
+      "id": 20689,
+      "student_name": "Берлина Анастасия Владимировна",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Применение технологий распределенных реестров для отслеживания истории происхождения и владения активами",
+      "year": "2019",
+      "supervisor": "доктор философии (компьютерные науки) Корхов В.В.",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=20689",
+      "work_url": "https://hdl.handle.net/11701/25858",
+      "pdf_path": "examples/pdf/20689_berlina_anastasiya_vladimirovna_primenenie_tehnologii_raspredelennyh_reestrov_dlya_otslezhivaniya_istorii_proish.pdf",
+      "txt_path": "examples/txt/20689_berlina_anastasiya_vladimirovna_primenenie_tehnologii_raspredelennyh_reestrov_dlya_otslezhivaniya_istorii_proish.txt",
+      "similarity_score": 13,
+      "matched_keywords": [
+        "распределенн:8",
+        "реестр:5"
+      ],
+      "why_close": "Близко по теме распределенных реестров и отказоустойчивого распределенного хранения состояния."
+    },
+    {
+      "rank": 4,
+      "id": 20803,
+      "student_name": "Максудян Людмила Ареговна",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Реализация системы товарообмена на базе технологий распределенных реестров",
+      "year": "2019",
+      "supervisor": "доктор философии (компьютерные науки) Корхов В.В.",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=20803",
+      "work_url": "https://hdl.handle.net/11701/25965",
+      "pdf_path": "examples/pdf/20803_maksudyan_lyudmila_aregovna_realizatsiya_sistemy_tovaroobmena_na_baze_tehnologii_raspredelennyh_reestrov.pdf",
+      "txt_path": "examples/txt/20803_maksudyan_lyudmila_aregovna_realizatsiya_sistemy_tovaroobmena_na_baze_tehnologii_raspredelennyh_reestrov.txt",
+      "similarity_score": 13,
+      "matched_keywords": [
+        "распределенн:8",
+        "реестр:5"
+      ],
+      "why_close": "Похожа на предыдущую по использованию распределенного реестра как хранилища согласованного состояния."
+    },
+    {
+      "rank": 5,
+      "id": 47546,
+      "student_name": "Матюхин Александр Юрьевич",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Использование современных Web-технологий для виртуализации платформы вычислений на основе GPU",
+      "year": "2024",
+      "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=47546",
+      "work_url": "https://hdl.handle.net/11701/45947",
+      "pdf_path": "examples/pdf/47546_matyuhin_aleksandr_yurevich_ispolzovanie_sovremennyh_web_tehnologii_dlya_virtualizatsii_platformy_vychisleni.pdf",
+      "txt_path": "examples/txt/47546_matyuhin_aleksandr_yurevich_ispolzovanie_sovremennyh_web_tehnologii_dlya_virtualizatsii_platformy_vychisleni.txt",
+      "similarity_score": 12,
+      "matched_keywords": [
+        "виртуализ:5",
+        "вычисл:5",
+        "gpu:2"
+      ],
+      "why_close": "Близко по инфраструктурной тематике и виртуализации вычислительной платформы."
+    },
+    {
+      "rank": 6,
+      "id": 47521,
+      "student_name": "Кравцов Тимур Тихонович",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Исследование самонастраивающихся распределенных систем управления базами данных",
+      "year": "2024",
+      "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=47521",
+      "work_url": "https://hdl.handle.net/11701/46058",
+      "pdf_path": "examples/pdf/47521_kravtsov_timur_tihonovich_issledovanie_samonastraivayuschihsya_raspredelennyh_sistem_upravleniya_bazami_da.pdf",
+      "txt_path": "examples/txt/47521_kravtsov_timur_tihonovich_issledovanie_samonastraivayuschihsya_raspredelennyh_sistem_upravleniya_bazami_da.txt",
+      "similarity_score": 10,
+      "matched_keywords": [
+        "распределенн:8",
+        "данных:2"
+      ],
+      "why_close": "Самая близкая бакалаврская тема: распределенные системы, управление, БД и адаптация поведения системы прямо перекликаются с брифом про динамическое управление схемами хранения."
+    },
+    {
+      "rank": 7,
+      "id": 35807,
+      "student_name": "Бадмаев Ананда Аюрович",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Разработка и реализация модуля ядра Linux для эффективного выделения памяти под объекты малого размера",
+      "year": "2022",
+      "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=35807",
+      "work_url": "https://hdl.handle.net/11701/39732",
+      "pdf_path": "examples/pdf/35807_badmaev_ananda_ayurovich_razrabotka_i_realizatsiya_modulya_yadra_linux_dlya_effektivnogo_vydeleniya_pamya.pdf",
+      "txt_path": "examples/txt/35807_badmaev_ananda_ayurovich_razrabotka_i_realizatsiya_modulya_yadra_linux_dlya_effektivnogo_vydeleniya_pamya.txt",
+      "similarity_score": 10,
+      "matched_keywords": [
+        "linux:6",
+        "памят:4"
+      ],
+      "why_close": "Релевантно как системная инфраструктурная работа про ресурсы, производительность и низкоуровневые издержки."
+    },
+    {
+      "rank": 8,
+      "id": 8940,
+      "student_name": "Панкратов Станислав Сергеевич",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Децентрализованная система аутентификации",
+      "year": "2017",
+      "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=8940",
+      "work_url": "https://hdl.handle.net/11701/10541",
+      "pdf_path": "examples/pdf/8940_pankratov_stanislav_sergeevich_detsentralizovannaya_sistema_autentifikatsii.pdf",
+      "txt_path": "examples/txt/8940_pankratov_stanislav_sergeevich_detsentralizovannaya_sistema_autentifikatsii.txt",
+      "similarity_score": 9,
+      "matched_keywords": [
+        "децентрализ:6",
+        "аутентификац:3"
+      ],
+      "why_close": "Релевантно как распределенная системная тема, хотя не про хранение напрямую."
+    },
+    {
+      "rank": 9,
+      "id": 35931,
+      "student_name": "Неумоина Елизавета Петровна",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Разработка серверной части ПО для задач найма и обучения сотрудников с использованием многомодульной архитектуры",
+      "year": "2022",
+      "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=35931",
+      "work_url": "https://hdl.handle.net/11701/40303",
+      "pdf_path": "examples/pdf/35931_neumoina_elizaveta_petrovna_razrabotka_servernoi_chasti_po_dlya_zadach_naima_i_obucheniya_sotrudnikov_s_ispo.pdf",
+      "txt_path": "examples/txt/35931_neumoina_elizaveta_petrovna_razrabotka_servernoi_chasti_po_dlya_zadach_naima_i_obucheniya_sotrudnikov_s_ispo.txt",
+      "similarity_score": 8,
+      "matched_keywords": [
+        "архитектур:5",
+        "серверн:3"
+      ],
+      "why_close": "Полезна как пример серверной архитектуры и модульной организации системы."
+    },
+    {
+      "rank": 10,
+      "id": 35860,
+      "student_name": "Жаворонков Владислав Олегович",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Анализ протокола QUIC для использования в современных веб-приложениях",
+      "year": "2022",
+      "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=35860",
+      "work_url": "https://hdl.handle.net/11701/40095",
+      "pdf_path": "examples/pdf/35860_zhavoronkov_vladislav_olegovich_analiz_protokola_quic_dlya_ispolzovaniya_v_sovremennyh_veb_prilozheniyah.pdf",
+      "txt_path": "examples/txt/35860_zhavoronkov_vladislav_olegovich_analiz_protokola_quic_dlya_ispolzovaniya_v_sovremennyh_veb_prilozheniyah.txt",
+      "similarity_score": 7,
+      "matched_keywords": [
+        "quic:4",
+        "протокол:3"
+      ],
+      "why_close": "Пересекается с сетевой частью распределенных систем и накладными расходами коммуникации."
+    },
+    {
+      "rank": 11,
+      "id": 8847,
+      "student_name": "Зинатов Рустам Раисович",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Сравнительный анализ движков для работы с BigData",
+      "year": "2017",
+      "supervisor": "доктор технических наук, доцент А.Б.Дегтярев",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=8847",
+      "work_url": "https://hdl.handle.net/11701/11233",
+      "pdf_path": "examples/pdf/8847_zinatov_rustam_raisovich_sravnitelnyi_analiz_dvizhkov_dlya_raboty_s_bigdata.pdf",
+      "txt_path": "examples/txt/8847_zinatov_rustam_raisovich_sravnitelnyi_analiz_dvizhkov_dlya_raboty_s_bigdata.txt",
+      "similarity_score": 7,
+      "matched_keywords": [
+        "bigdata:7"
+      ],
+      "why_close": "Полезно по работе с данными в масштабе и по сравнению платформ, что соседствует с темой распределенного хранения."
+    },
+    {
+      "rank": 12,
+      "id": 4026,
+      "student_name": "Свешникова Светлана Юрьевна",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Разработка инструментария для работы с данными реанализа гидрометеорологических данных с использованием параллельных примитивов функционального программирования",
+      "year": "2016",
+      "supervisor": "доктор технических наук, доцент А.Б. Дегтярев",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=4026",
+      "work_url": "https://hdl.handle.net/11701/4412",
+      "pdf_path": "examples/pdf/4026_sveshnikova_svetlana_yurevna_razrabotka_instrumentariya_dlya_raboty_s_dannymi_reanaliza_gidrometeorologichesk.pdf",
+      "txt_path": "examples/txt/4026_sveshnikova_svetlana_yurevna_razrabotka_instrumentariya_dlya_raboty_s_dannymi_reanaliza_gidrometeorologichesk.txt",
+      "similarity_score": 6,
+      "matched_keywords": [
+        "данных:2",
+        "параллельн:4"
+      ],
+      "why_close": "Релевантно по обработке данных и параллельному исполнению, пусть и дальше от хранения."
+    },
+    {
+      "rank": 13,
+      "id": 26126,
+      "student_name": "Карпий Павел Евгеньевич",
+      "qualification": "Бакалавр",
+      "program": "01.03.02 Прикладная математика и информатика",
+      "thesis_title": "Разработка блокчейн сети для тестирования экономической модели",
+      "year": "2020",
+      "supervisor": "доктор философии (компьютерные науки) В.В.Корхов",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=26126",
+      "work_url": "https://hdl.handle.net/11701/26498",
+      "pdf_path": "examples/pdf/26126_karpii_pavel_evgenevich_razrabotka_blokchein_seti_dlya_testirovaniya_ekonomicheskoi_modeli.pdf",
+      "txt_path": "examples/txt/26126_karpii_pavel_evgenevich_razrabotka_blokchein_seti_dlya_testirovaniya_ekonomicheskoi_modeli.txt",
+      "similarity_score": 5,
+      "matched_keywords": [
+        "блокчейн:5"
+      ],
+      "why_close": "Релевантно по проектированию распределенной сети и инфраструктуры узлов."
+    },
+    {
+      "rank": 14,
+      "id": 4013,
+      "student_name": "Рыжкова Елизавета Евгеньевна",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Разработка автоматизированной школьной системы оценки результатов качества образования на платформе Microsoft Azure",
+      "year": "2016",
+      "supervisor": "доктор философии (компьютерные науки) В.В. Корхов",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=4013",
+      "work_url": "https://hdl.handle.net/11701/4044",
+      "pdf_path": "examples/pdf/4013_ryzhkova_elizaveta_evgenevna_razrabotka_avtomatizirovannoi_shkolnoi_sistemy_otsenki_rezultatov_kachestva_obra.pdf",
+      "txt_path": "examples/txt/4013_ryzhkova_elizaveta_evgenevna_razrabotka_avtomatizirovannoi_shkolnoi_sistemy_otsenki_rezultatov_kachestva_obra.txt",
+      "similarity_score": 4,
+      "matched_keywords": [
+        "azure:4"
+      ],
+      "why_close": "Интересна как облачная платформенная работа, близкая к инфраструктурному контексту."
+    },
+    {
+      "rank": 15,
+      "id": 3822,
+      "student_name": "Базарнов Глеб Сергеевич",
+      "qualification": "Бакалавр",
+      "program": "02.03.02 Фундаментальная информатика и информационные технологии",
+      "thesis_title": "Разработка системы поиска по базе документов",
+      "year": "2016",
+      "supervisor": "доктор философии (компьютерные науки) В.В. Корхов",
+      "view_url": "https://diploma.spbu.ru/gp/view?id=3822",
+      "work_url": "https://hdl.handle.net/11701/4039",
+      "pdf_path": "examples/pdf/3822_bazarnov_gleb_sergeevich_razrabotka_sistemy_poiska_po_baze_dokumentov.pdf",
+      "txt_path": "examples/txt/3822_bazarnov_gleb_sergeevich_razrabotka_sistemy_poiska_po_baze_dokumentov.txt",
+      "similarity_score": 4,
+      "matched_keywords": [
+        "поиск:2",
+        "документ:2"
+      ],
+      "why_close": "Попадает в выборку как тема про систему работы с документами и данными, хотя по смыслу ближе всех остальных уже слабее."
+    }
+  ]
+}
