@@ -4,7 +4,7 @@
 
 Формат:
 
-- `design_01.md` ... `design_14.md` — сами варианты
+- `design_01.md` ... `design_NN.md` — сами варианты
 - `reviews/design_01.md` ... — sidecar review reports
 - `selection-log.md` — журнал генерации subsets, score и отборов
 - `rubric.md` — зафиксированная рубрика оценки
@@ -12,8 +12,9 @@
 Основные правила:
 
 - каждый вариант обязан учитывать весь корпус `conspects/*.md`;
-- вариант может работать либо в режиме `accent subset`, либо в режиме `full-corpus synthesis`;
+- вариант может работать в режиме `accent subset`, `full-corpus synthesis` или `study-plan-driven`;
 - в режиме `accent subset` подмножество влияет только на акценты и должно включать не менее `30%` корпуса;
 - в режиме `full-corpus synthesis` выделенного subset нет, но дизайн обязан явно показывать синтез всего корпуса без размытия архитектурных решений;
+- в режиме `study-plan-driven` дизайн тоже использует весь корпус, но его каркас и приоритеты должны следовать reading clusters из `study-plan.md`;
 - reviewer выставляет findings и score по фиксированной рубрике;
 - в следующий раунд проходят варианты по score и tie-break rules.

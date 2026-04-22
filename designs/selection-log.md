@@ -102,3 +102,29 @@
 - notes:
   - `design_15` - единственный вариант в режиме `full-corpus synthesis`; все предыдущие конкурсные дизайны строились в режиме `accent_subset`.
   - tie-break rules не менялись; их не пришлось применять против текущего top-5, потому что `design_15` вошёл по более высокому score.
+
+### Post-Competition Round: `design_16`
+
+- status: study_plan_driven_completed
+- mode:
+  - `design_16`: `study-plan-driven`
+- review_chain:
+  - `design_16`: `85`, `revise`, `Critical 0 / Major 2 / Minor 2`
+  - `design_16_round2`: `93`, `pass`, `Critical 0 / Major 0 / Minor 2`
+- ranking_update:
+  - `design_16` сравнен с текущим top-5 и reserve pool по той же рубрике из `rubric.md`
+  - по score `93` и при отсутствии `critical/major` он входит в новый top-5
+  - weakest finalist `design_02` смещается в reserve pool
+- updated_top_5:
+  - `design_15`
+  - `design_16`
+  - `design_10`
+  - `design_01`
+  - `design_03`
+- reserve_pool:
+  - `design_02`
+  - `design_06`
+  - `design_08`
+- notes:
+  - `design_16` - первый вариант в режиме `study-plan-driven`; он использует весь корпус, но его архитектурный каркас и evaluation lens задаются reading clusters из `study-plan.md`.
+  - tie-break rules не менялись; их не пришлось применять против текущего top-5, потому что `design_16` вошёл по более высокому score.
