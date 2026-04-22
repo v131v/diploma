@@ -19,6 +19,75 @@
     "removed_non_bachelor": 48
   },
   "total": 72,
+  "struct_markdown_index": [
+    {
+      "id": 3822,
+      "path": "examples/structs/3822_bazarnov_gleb_sergeevich_razrabotka_sistemy_poiska_po_baze_dokumentov.md"
+    },
+    {
+      "id": 4013,
+      "path": "examples/structs/4013_ryzhkova_elizaveta_evgenevna_razrabotka_avtomatizirovannoi_shkolnoi_sistemy_otsenki_rezultatov_kachestva_obra.md"
+    },
+    {
+      "id": 4026,
+      "path": "examples/structs/4026_sveshnikova_svetlana_yurevna_razrabotka_instrumentariya_dlya_raboty_s_dannymi_reanaliza_gidrometeorologichesk.md"
+    },
+    {
+      "id": 8847,
+      "path": "examples/structs/8847_zinatov_rustam_raisovich_sravnitelnyi_analiz_dvizhkov_dlya_raboty_s_bigdata.md"
+    },
+    {
+      "id": 8940,
+      "path": "examples/structs/8940_pankratov_stanislav_sergeevich_detsentralizovannaya_sistema_autentifikatsii.md"
+    },
+    {
+      "id": 20689,
+      "path": "examples/structs/20689_berlina_anastasiya_vladimirovna_primenenie_tehnologii_raspredelennyh_reestrov_dlya_otslezhivaniya_istorii_proish.md"
+    },
+    {
+      "id": 20803,
+      "path": "examples/structs/20803_maksudyan_lyudmila_aregovna_realizatsiya_sistemy_tovaroobmena_na_baze_tehnologii_raspredelennyh_reestrov.md"
+    },
+    {
+      "id": 26039,
+      "path": "examples/structs/26039_abdullin_damir_nazirovich_razrabotka_vysokonagruzhennogo_servisa_dlya_obrabotki_sobytii_i_generatsii_reakt.md"
+    },
+    {
+      "id": 26088,
+      "path": "examples/structs/26088_grehnev_egor_olegovich_avtomatizatsiya_formirovaniya_tranzaktsii_i_tehnologii_hraneniya_privatnyh_klyuc.md"
+    },
+    {
+      "id": 26126,
+      "path": "examples/structs/26126_karpii_pavel_evgenevich_razrabotka_blokchein_seti_dlya_testirovaniya_ekonomicheskoi_modeli.md"
+    },
+    {
+      "id": 35807,
+      "path": "examples/structs/35807_badmaev_ananda_ayurovich_razrabotka_i_realizatsiya_modulya_yadra_linux_dlya_effektivnogo_vydeleniya_pamya.md"
+    },
+    {
+      "id": 35860,
+      "path": "examples/structs/35860_zhavoronkov_vladislav_olegovich_analiz_protokola_quic_dlya_ispolzovaniya_v_sovremennyh_veb_prilozheniyah.md"
+    },
+    {
+      "id": 35931,
+      "path": "examples/structs/35931_neumoina_elizaveta_petrovna_razrabotka_servernoi_chasti_po_dlya_zadach_naima_i_obucheniya_sotrudnikov_s_ispo.md"
+    },
+    {
+      "id": 47521,
+      "path": "examples/structs/47521_kravtsov_timur_tihonovich_issledovanie_samonastraivayuschihsya_raspredelennyh_sistem_upravleniya_bazami_da.md"
+    },
+    {
+      "id": 47546,
+      "path": "examples/structs/47546_matyuhin_aleksandr_yurevich_ispolzovanie_sovremennyh_web_tehnologii_dlya_virtualizatsii_platformy_vychisleni.md"
+    }
+  ],
+  "analysis_markdown": [
+    {
+      "slug": "vkr_common_pattern_analysis",
+      "path": "examples/structs/vkr_common_pattern_analysis.md",
+      "description": "Общий паттерн структуры ВКР, извлеченный по summaries из examples/structs."
+    }
+  ],
   "items": [
     {
       "id": 3822,
@@ -38,6 +107,7 @@
       "download_status": "downloaded",
       "download_error": "fetch failed",
       "txt_path": "examples/txt/3822_bazarnov_gleb_sergeevich_razrabotka_sistemy_poiska_po_baze_dokumentov.txt",
+      "struct_summary_path": "examples/structs/3822_bazarnov_gleb_sergeevich_razrabotka_sistemy_poiska_po_baze_dokumentov.md",
       "text_status": "empty"
     },
     {
@@ -118,6 +188,7 @@
       "download_status": "downloaded",
       "download_error": "",
       "txt_path": "examples/txt/20689_berlina_anastasiya_vladimirovna_primenenie_tehnologii_raspredelennyh_reestrov_dlya_otslezhivaniya_istorii_proish.txt",
+      "struct_summary_path": "examples/structs/20689_berlina_anastasiya_vladimirovna_primenenie_tehnologii_raspredelennyh_reestrov_dlya_otslezhivaniya_istorii_proish.md",
       "text_status": "extracted",
       "download_source_name": "download",
       "download_source_description": "first_html_bitstream_match"
@@ -160,6 +231,7 @@
       "download_status": "downloaded",
       "download_error": "",
       "txt_path": "examples/txt/26039_abdullin_damir_nazirovich_razrabotka_vysokonagruzhennogo_servisa_dlya_obrabotki_sobytii_i_generatsii_reakt.txt",
+      "struct_summary_path": "examples/structs/26039_abdullin_damir_nazirovich_razrabotka_vysokonagruzhennogo_servisa_dlya_obrabotki_sobytii_i_generatsii_reakt.md",
       "text_status": "extracted",
       "download_source_name": "download",
       "download_source_description": "manual_first_bitstream_confirmed"
@@ -182,6 +254,7 @@
       "download_status": "downloaded",
       "download_error": "",
       "txt_path": "examples/txt/26088_grehnev_egor_olegovich_avtomatizatsiya_formirovaniya_tranzaktsii_i_tehnologii_hraneniya_privatnyh_klyuc.txt",
+      "struct_summary_path": "examples/structs/26088_grehnev_egor_olegovich_avtomatizatsiya_formirovaniya_tranzaktsii_i_tehnologii_hraneniya_privatnyh_klyuc.md",
       "text_status": "extracted",
       "download_source_name": "download",
       "download_source_description": "manual_first_bitstream_confirmed"
@@ -224,6 +297,7 @@
       "download_status": "downloaded",
       "download_error": "",
       "txt_path": "examples/txt/26126_karpii_pavel_evgenevich_razrabotka_blokchein_seti_dlya_testirovaniya_ekonomicheskoi_modeli.txt",
+      "struct_summary_path": "examples/structs/26126_karpii_pavel_evgenevich_razrabotka_blokchein_seti_dlya_testirovaniya_ekonomicheskoi_modeli.md",
       "text_status": "extracted",
       "download_source_name": "download",
       "download_source_description": "first_html_bitstream_match"
@@ -286,6 +360,7 @@
       "download_status": "downloaded",
       "download_error": "",
       "txt_path": "examples/txt/35860_zhavoronkov_vladislav_olegovich_analiz_protokola_quic_dlya_ispolzovaniya_v_sovremennyh_veb_prilozheniyah.txt",
+      "struct_summary_path": "examples/structs/35860_zhavoronkov_vladislav_olegovich_analiz_protokola_quic_dlya_ispolzovaniya_v_sovremennyh_veb_prilozheniyah.md",
       "text_status": "extracted",
       "download_source_name": "download",
       "download_source_description": "manual_first_bitstream_confirmed"
@@ -308,6 +383,7 @@
       "download_status": "downloaded",
       "download_error": "fetch failed",
       "txt_path": "examples/txt/4013_ryzhkova_elizaveta_evgenevna_razrabotka_avtomatizirovannoi_shkolnoi_sistemy_otsenki_rezultatov_kachestva_obra.txt",
+      "struct_summary_path": "examples/structs/4013_ryzhkova_elizaveta_evgenevna_razrabotka_avtomatizirovannoi_shkolnoi_sistemy_otsenki_rezultatov_kachestva_obra.md",
       "text_status": "extracted"
     },
     {
@@ -348,6 +424,7 @@
       "download_status": "downloaded",
       "download_error": "",
       "txt_path": "examples/txt/8940_pankratov_stanislav_sergeevich_detsentralizovannaya_sistema_autentifikatsii.txt",
+      "struct_summary_path": "examples/structs/8940_pankratov_stanislav_sergeevich_detsentralizovannaya_sistema_autentifikatsii.md",
       "text_status": "extracted",
       "download_source_name": "download",
       "download_source_description": "first_html_bitstream_match"
@@ -450,6 +527,7 @@
       "download_status": "downloaded",
       "download_error": "",
       "txt_path": "examples/txt/20803_maksudyan_lyudmila_aregovna_realizatsiya_sistemy_tovaroobmena_na_baze_tehnologii_raspredelennyh_reestrov.txt",
+      "struct_summary_path": "examples/structs/20803_maksudyan_lyudmila_aregovna_realizatsiya_sistemy_tovaroobmena_na_baze_tehnologii_raspredelennyh_reestrov.md",
       "text_status": "extracted",
       "download_source_name": "download",
       "download_source_description": "first_html_bitstream_match"
@@ -532,6 +610,7 @@
       "download_status": "downloaded",
       "download_error": "fetch failed",
       "txt_path": "examples/txt/35931_neumoina_elizaveta_petrovna_razrabotka_servernoi_chasti_po_dlya_zadach_naima_i_obucheniya_sotrudnikov_s_ispo.txt",
+      "struct_summary_path": "examples/structs/35931_neumoina_elizaveta_petrovna_razrabotka_servernoi_chasti_po_dlya_zadach_naima_i_obucheniya_sotrudnikov_s_ispo.md",
       "text_status": "extracted"
     },
     {
@@ -552,6 +631,7 @@
       "download_status": "downloaded",
       "download_error": "",
       "txt_path": "examples/txt/47521_kravtsov_timur_tihonovich_issledovanie_samonastraivayuschihsya_raspredelennyh_sistem_upravleniya_bazami_da.txt",
+      "struct_summary_path": "examples/structs/47521_kravtsov_timur_tihonovich_issledovanie_samonastraivayuschihsya_raspredelennyh_sistem_upravleniya_bazami_da.md",
       "text_status": "extracted",
       "download_source_name": "download",
       "download_source_description": "manual_first_bitstream_confirmed"
@@ -592,6 +672,7 @@
       "download_status": "downloaded",
       "download_error": "",
       "txt_path": "examples/txt/4026_sveshnikova_svetlana_yurevna_razrabotka_instrumentariya_dlya_raboty_s_dannymi_reanaliza_gidrometeorologichesk.txt",
+      "struct_summary_path": "examples/structs/4026_sveshnikova_svetlana_yurevna_razrabotka_instrumentariya_dlya_raboty_s_dannymi_reanaliza_gidrometeorologichesk.md",
       "text_status": "extracted",
       "download_source_name": "download",
       "download_source_description": "first_html_bitstream_match"
@@ -634,6 +715,7 @@
       "download_status": "downloaded",
       "download_error": "",
       "txt_path": "examples/txt/8847_zinatov_rustam_raisovich_sravnitelnyi_analiz_dvizhkov_dlya_raboty_s_bigdata.txt",
+      "struct_summary_path": "examples/structs/8847_zinatov_rustam_raisovich_sravnitelnyi_analiz_dvizhkov_dlya_raboty_s_bigdata.md",
       "text_status": "extracted",
       "download_source_name": "download",
       "download_source_description": "first_html_bitstream_match"
@@ -816,6 +898,7 @@
       "download_status": "downloaded",
       "download_error": "fetch failed",
       "txt_path": "examples/txt/35807_badmaev_ananda_ayurovich_razrabotka_i_realizatsiya_modulya_yadra_linux_dlya_effektivnogo_vydeleniya_pamya.txt",
+      "struct_summary_path": "examples/structs/35807_badmaev_ananda_ayurovich_razrabotka_i_realizatsiya_modulya_yadra_linux_dlya_effektivnogo_vydeleniya_pamya.md",
       "text_status": "extracted"
     },
     {
@@ -836,6 +919,7 @@
       "download_status": "downloaded",
       "download_error": "fetch failed",
       "txt_path": "examples/txt/47546_matyuhin_aleksandr_yurevich_ispolzovanie_sovremennyh_web_tehnologii_dlya_virtualizatsii_platformy_vychisleni.txt",
+      "struct_summary_path": "examples/structs/47546_matyuhin_aleksandr_yurevich_ispolzovanie_sovremennyh_web_tehnologii_dlya_virtualizatsii_platformy_vychisleni.md",
       "text_status": "extracted"
     },
     {

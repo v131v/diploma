@@ -16,8 +16,8 @@
 * [nir.pdf](./nir.pdf) - НИР
 * [nir.txt](./nir.txt) - извлеченный текст НИР
 * [sources/meta.json](./sources/meta.json) - каталог источников
-* [conspects/meta.json](./conspects/meta.json) - мета-информация по конспектам
-* [examples/meta.json](./examples/meta.json) - единый корпус бакалаврских ВКР без дублей, с путями к PDF и TXT
+* [conspects/meta.json](./conspects/meta.json) - мета-информация по конспектам, включая пути к `conspects/*.md`
+* [examples/meta.json](./examples/meta.json) - единый корпус бакалаврских ВКР без дублей, с путями к PDF/TXT и ссылками на `examples/structs/*.md`
 * [examples/top15_bachelor_related_to_formal_brief.json](./examples/top15_bachelor_related_to_formal_brief.json) - curated top 15 бакалаврских ВКР по близости к теме диплома
 
 Локальные агенты и workflow:
@@ -41,6 +41,8 @@
 
 `designs/` - варианты архитектуры дипломной системы и их review.
 
+* основной каталог: [designs/README.md](./designs/README.md)
+
 `examples/` - примеры и корпус ВКР.
 
 * [examples/scrape_spbu_links.js](./examples/scrape_spbu_links.js) - локальный скрипт для скачивания PDF/TXT по переданному JSON с `items[]`, по умолчанию по `top15`
@@ -48,7 +50,7 @@
 * [examples/page_ex.html](./examples/page_ex.html) - пример HTML страницы списка
 * [examples/vew_ex.html](./examples/vew_ex.html) - пример HTML страницы карточки
 * [examples/dspace_ex.html](./examples/dspace_ex.html) - пример DSpace-страницы по `hdl.handle.net`
-* [examples/meta.json](./examples/meta.json) - основной рабочий meta.json: сначала корпус ВКР, затем тот же корпус с путями к PDF/TXT
+* [examples/meta.json](./examples/meta.json) - основной рабочий meta.json: корпус ВКР, пути к PDF/TXT и ссылки на структурные summaries и обзорный анализ по `examples/structs/*.md`
 * [examples/top15_bachelor_related_to_formal_brief.json](./examples/top15_bachelor_related_to_formal_brief.json) - отдельная curated-выборка top 15
 * `examples/pdf/` - скачанные PDF ВКР
 * `examples/txt/` - извлеченные текстовые версии PDF
@@ -63,7 +65,7 @@
 Для `meta.json` в разделах проекта используется единая идея:
 
 * `sources/meta.json` - мета-информация по литературе
-* `conspects/meta.json` - мета-информация по конспектам
-* `examples/meta.json` - мета-информация по собранным ВКР и локальным артефактам
+* `conspects/meta.json` - мета-информация по конспектам и путям к `conspects/*.md`
+* `examples/meta.json` - мета-информация по собранным ВКР, локальным артефактам и summaries в `examples/structs/`
 
 Старые промежуточные query-выгрузки и временные top-списки в репозитории не хранятся: в рабочей структуре остаются только актуальные сводные артефакты.
