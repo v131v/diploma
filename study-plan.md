@@ -20,7 +20,7 @@
 План ниже синхронизирован с текущим состоянием проекта:
 
 - в [sources/meta.json](./sources/meta.json) сейчас `27` источников;
-- в `conspects/` уже есть `18` готовых конспектов;
+- в `conspects/` сейчас `27` готовых конспектов, то есть корпус закрыт полностью;
 - в `designs/` уже идёт архитектурная фаза, поэтому чтение теперь должно не только закрывать пробелы в литературе, но и направлять следующие design-итерации.
 
 ## 2. Текущее состояние
@@ -28,15 +28,17 @@
 Что уже хорошо закрыто:
 
 - базовый корпус по `replication`, `RS`, `LRC`, hybrid redundancy и `replication -> EC transition`;
-- системные опоры для темы диплома: `Morph`, `HSM`, `ELECT`, `ER-Store`, `HyRES`, `Zebra`, `HeART`, `EC-Store`, `f4`;
+- системные опоры для темы диплома: `Morph`, `HSM`, `ELECT`, `ER-Store`, `HyRES`, `Zebra`, `HeART`, `EC-Store`, `f4`, `PACEMAKER`, `Tiger`, `Cocytus`;
 - теоретическая база по дешёвой перекодировке: `Convertible Codes`, `LRCC`, practical wide `LRC`;
-- benchmark vocabulary и часть evaluation methodology.
+- policy-level и workload-aware слой: `CBase-EC`, `GreenHDFS`, `Janus`, `HaRD`;
+- benchmark vocabulary и evaluation methodology: `benchmarking_ec_object_storage_fgcs_2025` + `plank_fast_2009`.
 
 Что всё ещё остаётся узким:
 
 - мало end-to-end работ, где в одном месте соединены `temperature classification`, выбор схемы избыточности и безопасное исполнение переходов;
-- блок orchestration и transition safety всё ещё тоньше, чем блоки по самим storage codes;
-- evaluation papers есть, но они слабее по числу и влиянию, чем systems/design корпус.
+- блок orchestration и transition safety всё ещё тоньше и более разрознен, чем блоки по самим storage codes;
+- evaluation framing уже закрыт лучше, но по-прежнему слабее по числу и влиянию, чем systems/design корпус;
+- после закрытия корпуса главный дефицит уже не в отсутствии отдельных papers, а в synthesis между reading clusters.
 
 Почему `study-plan` всё ещё нужен после появления `designs/`:
 
@@ -170,17 +172,25 @@
 
 Как использовать этот план после чтения:
 
-1. Для каждого источника из ядра подготовить или обновить конспект, если он ещё не покрыт достаточно глубоко.
-2. Для system papers отдельно проверять, что в конспекте хорошо восстановлены architecture, data flow и transition orchestration.
-3. Для каждого reading cluster собрать короткий synthesis:
+1. Для каждого reading cluster собрать короткий synthesis:
    - `core pipeline drivers`
    - `transition constraints`
    - `orchestration/safety constraints`
    - `evaluation drivers`
-4. Перед созданием нового design-варианта явно фиксировать, какой reading cluster играет роль:
+2. Для system papers из ядра и orchestration-блока отдельно свести общую architectural matrix:
+   - какой `operational mapping` использует paper;
+   - какая у него `policy unit` и `execution unit`;
+   - где принимается решение о transition;
+   - какие safety gates и rollback semantics реально описаны.
+3. Перед созданием нового design-варианта явно фиксировать, какой reading cluster играет роль:
    - core architectural driver;
    - constraints provider;
    - evaluation lens.
+4. Для финального design loop проверять не только rubric-score, но и `NIR-match`: насколько новый вариант сохраняет тему, pipeline redundancy states, temperature framing, transition logic и реалистичную границу prototype/simulator из [formal-brief.md](./formal-brief.md) и [nir.txt](./nir.txt).
+5. После фиксации нового design-варианта выпускать sidecar-артефакты:
+   - диаграммы;
+   - словарик;
+   - короткий comparison memo против сильнейших предыдущих вариантов.
 
 Как reading clusters должны влиять на design phase:
 
@@ -191,5 +201,5 @@
 Практический смысл:
 
 - `study-plan.md` не выбирает архитектуру за нас;
-- он задаёт приоритеты чтения, из которых потом должны вытекать design choices;
+- теперь он задаёт не только приоритеты чтения, но и порядок synthesis, из которого должны вытекать design choices;
 - если новый design не может показать, какие reading clusters на него реально повлияли, значит связь между литературой и архитектурой слишком слабая.

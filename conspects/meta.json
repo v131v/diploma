@@ -106,5 +106,59 @@
     "source_id": "benchmarking_ec_object_storage_fgcs_2025",
     "conspect_path": "conspects/benchmarking_ec_object_storage_fgcs_2025.md",
     "use_in_diploma": "Источник для experimental section и выбора benchmark-метрик в object storage: upload/download/delete/waiting time, fault tolerance, fragment size и testbed design."
+  },
+  {
+    "id": "conspect_tpds17_ear_2017",
+    "source_id": "tpds17_ear_2017",
+    "conspect_path": "conspects/tpds17_ear_2017.md",
+    "use_in_diploma": "Базовый системный источник по transition-aware replica placement при переходе replication -> erasure coding; полезен для разделов о стоимости cross-rack encoding, availability после конверсии и компромиссе между fault tolerance и network overhead."
+  },
+  {
+    "id": "conspect_cbase_ec_electronics_2021",
+    "source_id": "cbase_ec_electronics_2021",
+    "conspect_path": "conspects/cbase_ec_electronics_2021.md",
+    "use_in_diploma": "Практический baseline для раздела про temperature-aware hybrid redundancy в DDBMS: даёт архитектуру двусторонних переходов 3-replicas <-> LRC/EC, формулу температуры и измеримый компромисс throughput/storage efficiency."
+  },
+  {
+    "id": "conspect_pacemaker_osdi_2020",
+    "source_id": "pacemaker_osdi_2020",
+    "conspect_path": "conspects/pacemaker_osdi_2020.md",
+    "use_in_diploma": "Базовый системный источник для разделов про orchestration переходов между схемами избыточности и контроль transition IO в гибридной temperature-aware системе replication + EC."
+  },
+  {
+    "id": "conspect_cocytus_fast_2016",
+    "source_id": "cocytus_fast_2016",
+    "conspect_path": "conspects/cocytus_fast_2016.md",
+    "use_in_diploma": "Сильный practical baseline по hybrid replication + EC вне файловых систем; полезен для related work, ограничений гибридных схем при metadata-heavy и update-heavy workloads и архитектуры online recovery."
+  },
+  {
+    "id": "conspect_tiger_osdi_2022",
+    "source_id": "tiger_osdi_2022",
+    "conspect_path": "conspects/tiger_osdi_2022.md",
+    "use_in_diploma": "Современный системный источник по disk-adaptive redundancy без жёстких placement restrictions; полезен для блока system-state-aware redundancy, safety-first transitions и control-plane ограничений adaptive redundancy."
+  },
+  {
+    "id": "conspect_greenhdfs_hotpower_2010",
+    "source_id": "greenhdfs_hotpower_2010",
+    "conspect_path": "conspects/greenhdfs_hotpower_2010.md",
+    "use_in_diploma": "Классический practical baseline по temperature-driven placement и migration в HDFS-подобной системе; полезен для policy-level переходов между hot/cold зонами и operational framing реальных migration actions."
+  },
+  {
+    "id": "conspect_janus_atc_2013",
+    "source_id": "janus_atc_2013",
+    "conspect_path": "conspects/janus_atc_2013.md",
+    "use_in_diploma": "Production-source по workload-aware tiering и cacheability-driven allocation; полезен как policy/orchestration baseline для распределения быстрого tier и modelling operational constraints миграций."
+  },
+  {
+    "id": "conspect_hard_jbigdata_2019",
+    "source_id": "hard_jbigdata_2019",
+    "conspect_path": "conspects/hard_jbigdata_2019.md",
+    "use_in_diploma": "Практический источник по безопасному снижению replication factor в гетерогенном HDFS-кластере; полезен для блока practical transitions, locality/network effects и policy-логики уменьшения избыточности."
+  },
+  {
+    "id": "conspect_plank_fast_2009",
+    "source_id": "plank_fast_2009",
+    "conspect_path": "conspects/plank_fast_2009.md",
+    "use_in_diploma": "Точечный benchmark source для methodology evaluation; полезен для выбора метрик кодирования/декодирования, tuning parameters и отделения coding cost от I/O noise в experimental section."
   }
 ]
