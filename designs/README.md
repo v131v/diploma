@@ -14,6 +14,9 @@
 - [finalists.md](./finalists.md)
 - [selection-log.md](./selection-log.md)
 - [rubric.md](./rubric.md)
+- [design_17_glossary.md](./design_17_glossary.md)
+- [design_17_diagrams.md](./design_17_diagrams.md)
+- [design_17_implementation.md](./design_17_implementation.md)
 - [design_16_glossary.md](./design_16_glossary.md)
 - [design_16_diagrams.md](./design_16_diagrams.md)
 
@@ -35,6 +38,7 @@
 - [design_14.md](./design_14.md)
 - [design_15.md](./design_15.md)
 - [design_16.md](./design_16.md)
+- [design_17.md](./design_17.md)
 
 Review reports:
 
@@ -63,6 +67,8 @@ Review reports:
 - [reviews/design_15_round3.md](./reviews/design_15_round3.md)
 - [reviews/design_16.md](./reviews/design_16.md)
 - [reviews/design_16_round2.md](./reviews/design_16_round2.md)
+- [reviews/design_17.md](./reviews/design_17.md)
+- [reviews/design_17_comparison.md](./reviews/design_17_comparison.md)
 
 Основные правила:
 

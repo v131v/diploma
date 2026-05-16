@@ -128,3 +128,31 @@
 - notes:
   - `design_16` - первый вариант в режиме `study-plan-driven`; он использует весь корпус, но его архитектурный каркас и evaluation lens задаются reading clusters из `study-plan.md`.
   - tie-break rules не менялись; их не пришлось применять против текущего top-5, потому что `design_16` вошёл по более высокому score.
+
+### Post-Competition Round: `design_17`
+
+- status: nir_aligned_study_plan_completed
+- mode:
+  - `design_17`: `study-plan-driven`
+- review_chain:
+  - `design_17`: `94`, `pass`, `Critical 0 / Major 0 / Minor 2`
+- ranking_update:
+  - `design_17` сравнен с текущим top-5 и reserve pool по той же рубрике из `rubric.md`
+  - по score `94` и при отсутствии `critical/major` он входит в новый top-5
+  - при сравнении с `design_15` tie-break оставляет `design_15` выше: у обоих `94` и `0/0`, но у `design_15` выше балл за опору на конспекты (`19/20` против `18/20`)
+  - weakest finalist `design_03` смещается в reserve pool
+- updated_top_5:
+  - `design_15`
+  - `design_17`
+  - `design_16`
+  - `design_10`
+  - `design_01`
+- reserve_pool:
+  - `design_03`
+  - `design_02`
+  - `design_06`
+  - `design_08`
+- notes:
+  - `design_17` - второй `study-plan-driven` финалист, но первый, который целенаправленно оптимизируется под `NIR-match` при сохранении pass-level engineering rigor.
+  - reviewer отдельно зафиксировал, что `design_17` не хуже `design_16` по `NIR-match`, а фактически лучше.
+  - tie-break rules применены против `design_15`, поэтому при равном score `94` `design_15` остаётся первым, а `design_17` занимает второе место.
