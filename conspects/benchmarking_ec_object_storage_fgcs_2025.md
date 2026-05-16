@@ -7,21 +7,68 @@
 - Тип: systematic review
 - Ссылка: https://www.sciencedirect.com/science/article/abs/pii/S0167739X24004862
 
-## 2. Краткая суть источника
-Источник совмещает systematic review и benchmark-эксперименты по erasure coding в object storage. Авторы сравнивают несколько RS-конфигураций в OpenStack Swift, измеряют upload, download, delete и waiting time и дополняют это оценкой fault tolerance через SimEDC. Для диплома это полезно как ориентир по метрикам, testbed design и тому, как обосновывать компромисс между временем и надёжностью.
+## 2. Зачем этот источник нужен для диплома
+Источник нужен как `benchmarking baseline` для оценки EC в объектном хранилище, а не как дизайн новой гибридной системы. Он полезен для диплома по трем практическим причинам:
+- даёт набор метрик для экспериментов: `upload/download/delete time`, `waiting time`, показатели fault tolerance;
+- показывает воспроизводимый контур эксперимента: `OpenStack Swift` + `local/remote testbed` + `SimEDC` + два датасета;
+- фиксирует компромисс между time efficiency и отказоустойчивостью при разных RS-конфигурациях.
 
-## 3. Проблема и мотивация
-- Авторы исходят из того, что replication дорога по объёму хранения, а EC уменьшает storage overhead, но требует аккуратной оценки time efficiency и fault tolerance.
-- Им важно показать, что в object storage нельзя ограничиваться только storage savings, потому что практическая цена EC проявляется в upload/download/delete latency.
-- Они прямо фиксируют исследовательский пробел: в работах по EC много внимания уделяют storage efficiency и repair, но меньше внимания уделяют benchmark-постановке именно для object storage.
-- Для них benchmark нужен как способ сравнить схемы хранения на одинаковых данных и в одинаковом testbed'е, а не по разрозненным экспериментам.
+## 3. Карта статьи
+| Раздел статьи | Что внутри | Зачем важно для конспекта |
+|---|---|---|
+| `1. Introduction` | Мотивация EC в DSS, акцент на time efficiency, заявленные contributions | Формулирует исследовательский фокус статьи |
+| `2. Related Work` (`2.1`-`2.4`) | Обзор работ по storage systems, replication/deduplication, erasure coding и OpenStack Swift | Показывает, где авторы видят research gap |
+| `3. Background` (`3.1`-`3.3`) | OpenStack Swift, RS в Swift, SimEDC | Даёт технический минимум для понимания методики |
+| `4. Methodology` (`4.1`-`4.4`) | Выбор EC-техники, сборка testbed, выбор датасетов, pipeline анализа | Центральный раздел с экспериментальным дизайном |
+| `5. Dataset` | Описание `MCSD-100` и использования `COCO-17` | Объясняет состав и типы данных для benchmark |
+| `6. Experimental Evaluation` (`6.1`-`6.5`) | Setup, результаты по upload/download/delete, waiting time, SimEDC и scenario-based test | Основные численные и сравнительные результаты |
+| `7. Experimental Findings` | Интерпретация trade-off, сравнение с related work, ограничения | Сводит результаты и границы применимости |
+| `8. Conclusion and Future Work` | Итоги и направления future work | Готовые формулировки для ограничений и продолжения исследований |
 
-## 4. Основная идея / метод
-- Авторы выбирают OpenStack Swift как объектное хранилище и оценивают несколько RS-схем: `RS(5+3)`, `RS(7+5)`, `RS(10+4)`.
-- Логика работы состоит из четырёх шагов: выбор EC-метода, построение testbed, подбор datasets и запуск экспериментов с последующим анализом данных.
-- Для проверки отказоустойчивости используется SimEDC, который даёт метрики вроде probability of data loss, repair efficiency и single-chunk repair ratio.
-- Для сравнения добавлены собственный набор данных `MCSD-100` и benchmark-набор `COCO-17`.
-- В related work авторы сопоставляют работы по cost analysis, repair, storage efficiency, availability и fault tolerance.
+## 4. Подробный конспект по разделам
+### 4.1. Introduction
+- Авторы обосновывают выбор EC как альтернативы replication в контексте storage overhead и fault tolerance.
+- Основной акцент: для object storage важна не только экономия хранения, но и time efficiency операций I/O.
+- Явно заявлен пробел: в обзоре литературы авторы не находят достаточного фокуса на benchmark time efficiency EC в терминах I/O-операций.
+- Заявленные вклады: замеры `RS(5+3)`, `RS(7+5)`, `RS(10+4)` в Swift, анализ fault tolerance через SimEDC, использование `MCSD-100` и `COCO-17`.
+
+### 4.2. Related Work (Section 2)
+- Обзор сгруппирован по темам: storage systems, replication/deduplication, erasure coding.
+- Авторы сопоставляют существующие работы по cost, repair, storage efficiency, availability и fault tolerance.
+- На этом фоне формируют собственную задачу: сравнивать EC-схемы через измеримые I/O-метрики в object storage testbed.
+
+### 4.3. Background (Section 3)
+- `OpenStack Swift` описан как среда объектного хранения, где данные сегментируются и распределяются по узлам вместе с избыточностью.
+- `Reed-Solomon` выбран как целевая EC-техника для экспериментов в Swift.
+- `SimEDC` описан как дискретно-событийный симулятор для reliability-метрик (включая вероятность потери данных и эффективность repair).
+
+### 4.4. Methodology (Section 4)
+- Workflow статьи: выбор EC-техники -> сборка testbed -> выбор датасетов -> запуск и анализ экспериментов.
+- Используются два окружения: `local testbed` и `remote testbed`.
+- Для Swift задаются EC policies и rings, затем создаются контейнеры под соответствующие схемы.
+- Для I/O-оценки выполняются upload/download/delete и фиксируется время.
+- SimEDC добавлен как отдельный контур для оценки fault tolerance.
+
+### 4.5. Dataset (Section 5)
+- `MCSD-100`: собственный набор из 100 файлов разных типов (text/audio/image/video).
+- `COCO-17`: внешний benchmark dataset; в экспериментах используется поднабор изображений.
+- Датасеты нужны для сравнения поведения схем на разной размерности и типах файлов.
+
+### 4.6. Experimental Evaluation (Section 6)
+- `6.1`: описаны аппаратные параметры local/remote setup и скриптовый pipeline работы через Swift API.
+- `6.2`: показаны сравнения upload/download/delete для `5+3`, `7+5`, `10+4` на разных диапазонах размеров.
+- `6.3`: отдельно обсуждается waiting time и его рост с размером файлов.
+- `6.4`: приведены результаты SimEDC по fault tolerance.
+- `6.5`: добавлен scenario-based тест для проверки поведения при сбоях/потерях узлов и восстановления.
+
+### 4.7. Experimental Findings (Section 7)
+- Подчёркнут trade-off: при росте фрагментации (больше data+parity fragments) time efficiency ухудшается.
+- Время ожидания растёт с размером файлов.
+- Есть сравнительный блок с related work и отдельный блок ограничений исследования (включая ограничения testbed/simulator интеграции).
+
+### 4.8. Conclusion and Future Work (Section 8)
+- Итог статьи: рост фрагментации и размеров данных увеличивает processing/waiting time.
+- Авторы предлагают направления future work: более масштабируемый testbed, работа с более крупными файлами, дополнительные подходы для повышения time efficiency.
 
 ## 5. Архитектура и устройство системы / метода
 - Это не system paper в строгом смысле, поэтому здесь важно честно описывать не production-архитектуру, а benchmarking framework статьи.
@@ -47,24 +94,25 @@
   - не описывает отдельный scheduling subsystem;
   - архитектурная ценность работы состоит именно в воспроизводимом benchmark pipeline, а не в новом storage protocol.
 
-## 6. Ключевые результаты и что полезно для диплома
-- В тексте прямо показано, что с ростом числа фрагментов растёт время upload и download.
-- Более высокая фрагментация ведёт к худшей time efficiency, потому что upload и download становятся медленнее.
-- Авторы показывают компромисс между временем выполнения и отказоустойчивостью: оценка EC в object storage не сводится только к одному показателю.
-- В conclusion они пишут, что рост размера data fragment увеличивает processing time и waiting time, то есть делает систему медленнее на больших файлах.
-- Для будущих работ они отдельно указывают направления: масштабируемость на большие файлы, более robust testbed и дальнейшая работа над time efficiency.
-- Для диплома это хороший источник для `experimental section`: он задаёт набор метрик `upload/download/delete/waiting time`, `fault tolerance`, `fragment size`.
-- Он полезен для обоснования, почему диплом нельзя оценивать только по storage overhead или только по числу реплик.
-- Из него можно взять структуру benchmark-постановки: `OpenStack Swift`, `local/remote server`, `RS policies`, `SimEDC`, `custom dataset`.
-- Он помогает обосновать, что для гибридной системы важны не только переходы между схемами, но и измеримость этих переходов в реальном или симулированном testbed.
-- Для related work он полезен как систематический обзор benchmark-практик в object storage и как источник формулировок про latency trade-off.
+## 6. Сквозные выводы по статье
+- Статья подтверждает практический trade-off: более высокая фрагментация в выбранных RS-конфигурациях сопровождается ростом времени операций, прежде всего upload/download.
+- Время ожидания увеличивается вместе с размером файлов, что авторы отдельно связывают с time efficiency системы.
+- Оценка EC в object storage у авторов многокритериальная: I/O-время + fault tolerance (через SimEDC), а не только storage overhead.
+- Работа методически сильнее как benchmark framework, чем как источник новой алгоритмики управления избыточностью.
+- Ограничения зафиксированы самими авторами: сложности интеграции testbed и simulator, а также необходимость более масштабного testbed и дальнейших исследований по time efficiency.
 
-## 7. Ограничения источника
-- Это систематический обзор с benchmark-экспериментами, а не источник новой temperature-aware политики или гибридной replication + EC архитектуры.
-- Авторы прямо отмечают, что не смогли интегрировать testbed с симулятором, поэтому полноценная симулированная проверка fault tolerance остаётся ограниченной.
-- В тексте есть артефакты верстки и OCR, особенно в первой половине PDF, поэтому отдельные фразы приходится нормализовать.
-- Локальный PDF является preprint-версией с тремя авторами; на ScienceDirect final article странице указан дополнительный автор, поэтому для библиографического списка нужно сверить итоговую публикацию отдельно.
-- Работа не даёт универсального control plane для выбора EC-политики, а только показывает, как измерять её последствия.
+## 7. Что использовать в дипломе
+- Что paper даёт напрямую:
+  - набор метрик для экспериментов (`upload/download/delete`, `waiting time`, fault tolerance);
+  - структуру benchmark-постановки (`Swift` + `local/remote` + `RS policies` + `SimEDC` + два датасета);
+  - подтверждение, что выбор схемы избыточности нельзя обосновывать только storage efficiency.
+- Что является нашей интерпретацией применимости:
+  - использование этой рамки как baseline для проверки гибридной системы `replication + EC` с температурной политикой;
+  - перенос идеи многокритериальной оценки на сценарии переходов между схемами избыточности.
+- Роль источника в дипломе:
+  - `baseline` и `practical system paper` для experimental section;
+  - `related work` по методике benchmark EC в object storage;
+  - не источник готового control plane для temperature-aware оркестрации.
 
 ## 8. Полезные цитаты
 - "As data volumes continue to rapidly increase, the time efficiency of the EC method becomes crucial in ensuring optimal system performance."

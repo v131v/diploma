@@ -10,19 +10,89 @@
 ## 2. Зачем этот источник нужен для диплома
 Статья полезна как practical baseline для случая, когда cold tier в дипломе строится на wide `LRC` с большим blocklength и низким storage overhead. Она помогает обосновать, что при выборе схемы хранения важны не только distance и overhead, но и форма local repair groups, coefficients, random-failure durability, `MTTDL` и deployment constraints. Это источник про design choices и placement robustness wide LRC, а не про temperature-aware switching между replication, EC и LRC.
 
-## 3. Проблема и мотивация
-- В больших storage clusters storage overhead становится критичным, поэтому wide codes с большим `k` рассматриваются как способ уменьшить избыточность без возврата к replication.
-- Wide MDS-коды экономят место, но слишком дороги по `reconstruction IO`, `degraded reads`, unavailability и tail latency.
-- LRC уменьшают стоимость восстановления, но для широких stripes появляются новые проблемы: больше simultaneous failures, выше чувствительность к placement и сложнее deployment.
-- Авторы показывают, что reliability зависит не только от algebraic properties кода, но и от maintenance events, layout и того, как local groups соотносятся с реальными failure patterns.
-- Мотивация paper усиливается trace-данными из Google storage clusters: из 278 unavailable stripes Uniform Cauchy LRC восстановил 92 stripe до restoration, тогда как deployed code не восстановил ни одной.
+## 3. Карта статьи
+| Раздел paper | Что внутри | Роль в контексте диплома |
+|---|---|---|
+| 1. Introduction | Постановка проблемы wide LRC, ключевые вкладки, пример с 278 unavailable stripes и `33%` recovery ratio для Uniform Cauchy LRC в симуляции. | Даёт high-level мотивацию: для cold-tier недостаточно смотреть только на overhead и distance. |
+| 2. Background | Базовые понятия про large-scale clusters, erasure coding, реконструкции и LRC. | Нормализует терминологию для сравнения replication/EC/LRC в дипломе. |
+| 3. Motivation for studying wide LRCs | Почему снижение overhead критично; почему wide MDS дороги по восстановлению; почему LRC практично важны. | Поддерживает обоснование перехода к более экономным схемам в холодном слое. |
+| 4. Practical challenges of wide LRCs | Риски wide LRC: больше multi-failure событий, сложность MR-LRC при `F256`, недостаточность узких метрик, deployment constraints. | Полезно как список реальных ограничений для проектирования redundancy policy. |
+| 5. Definitions | Формальные определения: distance, locality, local groups, MR-LRC, ADRC/ARC, Cauchy matrix. | Теоретическая база для корректного описания кодов в дипломе. |
+| 6. (n,k,r,p)-Optimal Cauchy LRCs | Конструкция distance-optimal LRC на базе Cauchy MDS; теоремы про distance `r+2`. | Baseline конструкции, от которой удобно сравнивать practical-эвристики. |
+| 7. (n,k,r,p)-Uniform Cauchy LRCs | Эвристическая модификация с более равномерными local groups и меньшей locality. | Прямо полезно для аргумента, что «структура локальных групп» влияет на практическую надёжность. |
+| 8. Experiments and analysis | Сравнение `Azure-LRC`, `Azure-LRC+1`, `Optimal Cauchy`, `Uniform Cauchy` по ADRC/ARC, random failures, близости к MR-LRC, MTTDL. | Главный эмпирический блок, который можно использовать как practical evidence в related work. |
+| 9. Maintenance-robust deployment | Размещение stripe-блоков по maintenance zones; условия maintenance-robust и maintenance-robust-efficient deployment. | Важный мост к системной части диплома: надежность зависит от оркестрации размещения, а не только от формулы кода. |
+| 10. Related Work | Срез литературы по LRC, distance-optimal и MR-LRC, wide-code practice. | Источник для сопоставления с другими подходами и формулировки novelty диплома. |
+| 11. Conclusion | Итог: reliability зависит от коэффициентов, структуры local groups и deployment. | Готовая формулировка практического вывода для cold-tier design. |
+| Appendix A | Доказательства и расширения ограничений параметров для Optimal Cauchy LRC. | Полезно при проверке формальной корректности, но не как системный дизайн. |
 
-## 4. Основная идея / метод
-- Авторы сравнивают четыре конструкции wide LRC: `Azure-LRC`, `Azure-LRC+1`, `Optimal Cauchy LRC` и `Uniform Cauchy LRC`.
-- `Optimal Cauchy LRC` строится из `(k+r+1, k)` Cauchy MDS code; при условиях из paper эта конструкция имеет distance `r + 2` и является distance-optimal.
-- `Uniform Cauchy LRC` получается как эвристическая модификация `Optimal Cauchy LRC`: local parity groups делаются более равномерными и покрывают не только data blocks, но и global parities. Авторы подают её как practically better design, а не как конструкцию с доказанной оптимальностью по distance.
-- Для корректного apples-to-apples сравнения авторы фиксируют `n`, `k`, `r` и `p` для всех схем; в версии `Azure-LRC+1` одна local parity, защищавшая data blocks, заменяется на local parity для global parities, чтобы сравнение не смешивало разные уровни redundancy.
-- Оценка делается не только по distance, но и по `ADRC`, `ARC1`, `ARC2`, recoverability under random erasures, близости к гипотетическому `MR-LRC`, `MTTDL` и сценариям `maintenance-robust` / `maintenance-robust-efficient` deployment.
+## 4. Подробный конспект по разделам
+### 4.1 Section 1: Introduction
+- Авторы рассматривают wide LRC как следующий шаг после более узких схем, чтобы снизить storage overhead при exascale-объёмах.
+- Ключевой тезис: practical reliability wide LRC зависит от набора design choices, а не только от distance.
+- Из введения: на наборе из 278 unavailable stripes (4 Google clusters) симуляция Uniform Cauchy LRC восстановила 92 stripes до restoration (`33%`), тогда как deployed wide LRC не восстановил ни одной из этих 278 до restoration.
+- Заявленные вклады: practical metrics reliability, простая distance-optimal конструкция (`Optimal Cauchy`), эвристическая конструкция (`Uniform Cauchy`), и анализ maintenance-robust deployment.
+
+### 4.2 Section 2: Background
+- Даётся контекст крупных кластеров и стандартного reconstruction pipeline: обнаружение under-redundant stripes, timeout, постановка в очередь на восстановление с приоритизацией.
+- Формализуется разница между MDS и LRC в терминах reconstruction cost: у MDS восстановление одного блока требует чтения `k`, а LRC стремится уменьшить это через local groups.
+- Подчёркивается, что LRC добавляет локальные паритеты поверх глобальной MDS-части и потому обычно не MDS в строгом смысле.
+- Вводится роль MR-LRC как верхней планки recoverability для фиксированной структуры нулей/ненулей генераторной матрицы.
+
+### 4.3 Section 3: Motivation for Studying Wide LRCs
+- Экономическая мотивация: overhead даже `1.4x–1.5x` становится дорогим на масштабе exabytes; стремление к схемам с overhead < `20%`.
+- Wide MDS помогают по overhead, но ухудшают reconstruction I/O, degraded reads и чувствительность к stragglers.
+- На реальных наблюдениях (в paper: >1.5 млн дисков, 6 месяцев) около `99.2%` stripes с отказами имеют single-failure, что делает LRC привлекательными.
+- При этом авторы фокусируются именно на wide LRC как компромиссе: меньше overhead, но новые reliability-вызовы.
+
+### 4.4 Section 4: Practical Challenges of Wide LRCs
+- Для wide stripes выше вероятность множественных одновременных отказов (в т.ч. из-за maintenance и из-за очередей реконструкции); это видно на trace для кодов ширины около 50 и 80.
+- В практичном диапазоне параметров (`q=256`, `25<=n<=150`, rate >= `0.85`) построение явных MR-LRC остаётся трудной задачей.
+- Авторы утверждают, что классических метрик (distance, базовый repair cost) недостаточно для wide LRC; нужны дополнительные измерения recoverability за пределами гарантированного distance.
+- Отдельно поднимается проблема deployment: размещение блоков по fault/maintenance domains само влияет на recoverability.
+
+### 4.5 Section 5: Definitions
+- Собраны определения, которыми дальше оперирует статья: linear code, distance, LRC, generalized Singleton bound, local repair group, MDS, Cauchy matrix.
+- Введены practical метрики `ADRC`, `ARC1`, `ARC2`, а также формализация MR-LRC.
+- Через пример матрицы (Figure 3) показывается связь «строки генераторной матрицы <-> data/global/local parity blocks».
+- Этот раздел делает последующий анализ сравнимым между разными конструкциями.
+
+### 4.6 Section 6: (n,k,r,p)-Optimal Cauchy LRCs
+- Конструкция строится из генераторной матрицы `(k+r+1, k)` Cauchy MDS: последняя Cauchy-строка разбивается на `p` частей и комбинируется с первыми `r` Cauchy-строками.
+- Получается код с `n = k + r + p` и locality `l = k/p + r` (при используемых в разделе условиях).
+- Авторы доказывают distance ровно `r+2`; при оговоренных ограничениях параметров код distance-optimal относительно generalized Singleton bound.
+- Практический смысл раздела: получить явный и простой baseline distance-optimal wide LRC в нужном параметрическом режиме.
+
+### 4.7 Section 7: (n,k,r,p)-Uniform Cauchy LRCs
+- Это модификация предыдущей конструкции: local parity checks распределяются более равномерно по `k+r` (data + global parity) блокам.
+- Цель не теоретическая оптимальность distance, а улучшение practical-поведения (locality/repair profile и recoverability на случайных отказах).
+- Для этой конструкции locality становится ниже, чем у Optimal Cauchy, за счёт иной структуры local groups.
+- Раздел прямо фиксирует границу: это heuristic design choice, а не доказательство «лучше по всем формальным критериям».
+
+### 4.8 Section 8: Experiments and Analysis
+- Сравниваются четыре семейства: `Azure-LRC`, модифицированный для честного сравнения `Azure-LRC+1`, `Optimal Cauchy`, `Uniform Cauchy`.
+- Параметры сравнения фиксированы (`n,k,r,p`) для apples-to-apples; рассматриваются широкие схемы от `24-of-28` до `96-of-105` (rate >= `0.85`).
+- По Table 2: `Uniform Cauchy` обычно лучший по ARC/случайным отказам/MTTDL и чуть хуже лучшего ADRC (в paper указано «<9% worse» по ADRC относительно лучшего).
+- По random-failure экспериментам есть важное исключение: для `48-of-55` наилучший recoverability ratio показывает `Optimal Cauchy`.
+- Отдельный результат: с выбранными Cauchy-коэффициентами конструкции `Azure-LRC+1`/`Optimal`/`Uniform` оказываются очень близки к гипотетическому MR-LRC в соответствующем тесте (>99%).
+
+### 4.9 Section 9: Maintenance-Robust Deployment
+- Вводится понятие `maintenance zone` как минимальной единицы совместного обслуживания.
+- `Maintenance-robust deployment`: отказ/обслуживание одной зоны не должен делать stripe unrecoverable.
+- `Maintenance-robust-efficient deployment`: дополнительно желательно, чтобы в зоне был максимум один блок из local group, тогда degraded reads во время maintenance чаще остаются локальными.
+- Ключевой инженерный вывод: даже хороший код может дать плохую практическую надёжность при неудачном placement; deployment-ограничения должны учитываться вместе с code design.
+
+### 4.10 Section 10: Related Work
+- Обзор включает классические LRC-практики (`Azure`, `Facebook/Xorbas`), distance-optimal constructions, MR-LRC и работы по wide codes.
+- Авторы позиционируют свой вклад как practical evaluation + design/deployment insights именно для wide LRC.
+
+### 4.11 Section 11: Conclusion
+- Главный итог статьи: на реальную reliability wide LRC одновременно влияют коэффициенты генераторной матрицы, форма local groups и deployment по maintenance zones.
+- Uniform Cauchy предлагается как practically strong вариант в исследованных сценариях, но в статье аккуратно сохранены исключения и ограничения.
+
+### 4.12 Appendix A
+- Содержит доказательства утверждений о distance-optimality для Optimal Cauchy и обсуждение ослабления части ограничений.
+- Важен как формальное подкрепление раздела 6, но не добавляет runtime-архитектуру storage-системы.
 
 ## 5. Архитектура и устройство системы / метода
 - Это не system paper в смысле runtime-архитектуры; здесь архитектура = структура кода, local repair groups и placement model.

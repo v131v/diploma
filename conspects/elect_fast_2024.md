@@ -12,19 +12,64 @@
 - Для каких разделов диплома полезен: постановка задачи, архитектура гибридного хранения, hotness-aware policy, related work по hybrid replication + EC, раздел про degraded reads и recovery cost
 - Какой главный вопрос диплома помогает закрыть: как встроить erasure coding в уже работающий LSM-tree KV store так, чтобы горячие данные остались на replication, а менее горячие SSTables можно было выборочно перевести в EC и cold tier
 
-## 3. Проблема и мотивация
-- Практические KV workload'ы сильно скошены: малая доля ключей часто читается, а большая часть редко используется.
-- Репликация хорошо работает для hot tier, но слишком дорога по storage overhead.
-- Erasure coding заметно экономит место, но ухудшает access performance и reconstruction cost.
-- В LSM-tree системах проблема усложняется тем, что access pattern меняется по уровням SSTables, а не только по отдельным ключам.
+## 3. Карта статьи
+| Раздел статьи | Что внутри | Зачем для диплома |
+|---|---|---|
+| Abstract | Постановка проблемы: в hot tier репликация дорога по месту; идея ELECT как гибрид `replication + EC` на базе LSM-tree. | Краткая формулировка вклада и целевого trade-off. |
+| 1. Introduction | Мотивация для edge-cloud tiering, конфликт storage overhead vs performance, вклад ELECT. | Обоснование, почему гибридная избыточность нужна практически. |
+| 2. Background | Устройство distributed KV stores (Cassandra), LSM-tree, основы RS erasure coding и цена реконструкции. | Базовая терминология и модель, на которые можно опираться в дипломе. |
+| 3. Design Considerations | Пять проектных вопросов (гранулярность, on/off write path, skew/hotness, cold-tier overhead, tunability). | Систематизация дизайн-решений для гибридной системы. |
+| 4. ELECT Design | Ключевой дизайн: redundancy transitioning, parity-node selection, cross-SSTable encoding, удаление secondary replicas, hotness-aware offloading, параметр `α`. | Центральный архитектурный baseline для перехода `replication -> EC`. |
+| 5. Implementation | Реализация в Cassandra 4.1.0 (Java), около 27K LOC изменений, degraded reads/writes и recovery. | Практическая реализуемость, инженерная цена интеграции. |
+| 6. Evaluation | Методология и эксперименты: storage savings, throughput/latency, recovery, sensitivity по `α` и параметрам кодирования. | Численные ориентиры для сравнения в дипломе. |
+| 7. Related Work | Сопоставление с работами по EC в KV/LSM, cache/CDN, hybrid redundancy. | Материал для related work и позиционирования собственного подхода. |
+| 8. Conclusions | Итог: ELECT снижает storage overhead при близкой normal-path производительности, но с ценой degraded reads/recovery. | Готовая формулировка ограничений и границ применимости. |
 
-## 4. Основная идея / метод
-- ELECT построен поверх Cassandra и использует LSM-tree как основу для redundancy transitioning.
-- Гранулярность переключения выбрана на уровне SSTables, а не отдельных KV-пар или целых объектов.
-- Система сначала пишет данные с replication, а затем в фоне выбирает SSTables последнего уровня LSM-tree для cross-SSTable RS-encoding; после этого вторичные реплики удаляются.
-- Hotness-aware policy учитывает две характеристики SSTable: access frequency и lifetime; больший приоритет на encoding получают SSTables с меньшей частотой доступа и большей lifetime.
-- Offloading в cold tier применяется только к уже erasure-coded SSTables; при этом в cold tier уходит только data component, а metadata component остаётся в hot tier.
-- Для баланса между экономией и производительностью вводится один настраиваемый параметр storage saving target `α`, который определяет, сколько SSTables нужно закодировать и при необходимости вынести в cold tier.
+## 4. Подробный конспект по разделам
+### 4.1 Abstract и §1 Introduction
+- Авторы рассматривают storage tiering для KV-нагрузок со скошенным доступом: малый hot-набор и большой cold-набор.
+- Репликация удобна для latency/availability, но даёт высокий storage overhead в hot tier (особенно в edge-сценариях).
+- ELECT предлагает гибрид: горячие данные остаются на replication, менее горячие переводятся в erasure coding, часть может offload'иться в cold tier.
+
+### 4.2 §2 Background
+- Описан Cassandra-подобный distributed KV store: consistent hashing, replication group, primary/secondary replicas.
+- Внутреннее хранение через LSM-tree: MemTable, WAL, SSTables по уровням, compaction, чтение по уровням.
+- Для EC используется RS-кодирование `(n, k)`; выигрыш по месту сопровождается удорожанием degraded reads и recovery.
+
+### 4.3 §3 Design Considerations
+- Q1: гранулярность кодирования. Выбран cross-encoding на уровне SSTables, чтобы не раздувать metadata small-key self-encoding'ом.
+- Q2: encoding на write path или в фоне. Выбран offline background transitioning: сначала replication, затем фоновое кодирование.
+- Q3: как учесть skew. По наблюдениям авторов, большая доля SSTables в последнем уровне LSM редко читается; EC применяют выборочно туда.
+- Q4: как не «сломать» latency cold tier. Offload делается для менее горячих SSTables, чтобы минимизировать частые возвраты данных из cloud.
+- Q5: tunable trade-off. Введён параметр `α` (storage saving target) для управления глубиной перехода и offload.
+
+### 4.4 §4 ELECT Design
+- §4.1 Redundancy transitioning: процесс разбит на 4 шага: `LSM-tree management -> parity node selection -> cross-SSTable encoding -> secondary replica removal`.
+- §4.1.1: в каждом узле реплики разнесены по `R` LSM-trees (1 primary + `R-1` secondary), чтобы управлять удалением secondary replicas после кодирования.
+- §4.1.2: parity nodes выбираются детерминированно по hash ring без центрального координатора; coding groups строятся по последовательным узлам.
+- §4.1.3: leader parity node собирает `k` data SSTables, создаёт `n-k` parity SSTables, формирует `ECMeta` (hash, size, node id, position).
+- §4.1.4: secondary replica removal удаляет только безопасно покрытые версии KV по key list + timestamp, чтобы не удалить более новые данные при асинхронных compaction.
+- §4.2 Hotness awareness: приоритет кодирования/offload задаётся по `access frequency` и `lifetime` SSTable.
+- §4.3 Балансировка через `α`: сначала увеличивают долю EC, затем offload parity, затем (если нужно) offload data SSTables.
+
+### 4.5 §5 Implementation
+- ELECT реализован в Java как модификация Cassandra v4.1.0; в статье указано около `27K` строк изменений.
+- Добавлены: redundancy transitioning, hotness monitoring, data offloading, full-node recovery, degraded reads/writes.
+- Ограничения явно зафиксированы: нет incremental recovery для отдельных SSTables; нет verification reads для EC KV pairs; нет полной поддержки dynamic topology changes.
+
+### 4.6 §6 Evaluation
+- Эксперименты в edge-cloud окружении (Alibaba Cloud), сравнение с vanilla Cassandra.
+- Основные результаты: значимая экономия хранилища при близкой normal-path производительности; scan-intensive workload ускоряется.
+- Цена подхода проявляется в degraded reads и full-node recovery, где retrieval/decoding увеличивают задержку и стоимость восстановления.
+- Sensitivity-анализ показывает, что рост `α` увеличивает экономию, но ухудшает доступ в degraded/частично offloaded режимах.
+
+### 4.7 §7 Related Work
+- ELECT позиционируется относительно работ по EC для KV stores, а также подходов к tiering/caching/CDN.
+- Отличие акцентируется на LSM-aware переходе `replication -> EC` и сочетании hotness-aware selection с практической интеграцией в Cassandra.
+
+### 4.8 §8 Conclusions
+- Вывод статьи: гибридная избыточность в LSM-tree KV store практична при селективном EC для менее горячих SSTables.
+- Главный компромисс: снижение storage overhead vs рост degraded-read/recovery издержек.
 
 ## 5. Архитектура и устройство системы / метода
 - ELECT реализован поверх Cassandra v4.1.0 на Java и вносит около `27 K` строк модификаций; hot tier расположен на edge nodes, а cold tier в эксперименте представлен Alibaba OSS.

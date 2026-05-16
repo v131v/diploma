@@ -8,7 +8,7 @@
 - Ссылка: https://doi.org/10.1155/2021/9910942
 - Исходный файл: `sources/files/Scientific Programming - 2021 - Li - ER‐Store  A Hybrid Storage Mechanism with Erasure Coding and Replication in.pdf`
 
-## 2. Зачем источник нужен для диплома
+## 2. Зачем этот источник нужен для диплома
 - Роль источника: `practical system paper` и baseline по hybrid storage в распределённой БД.
 - Для каких разделов диплома полезен: постановка проблемы, архитектура системы, temperature-aware policy, experimental baseline и related work.
 - Главный вопрос, который он помогает закрыть: как связать температуру данных с выбором между replication и EC так, чтобы не убить update path и сохранить приемлемый access performance.
