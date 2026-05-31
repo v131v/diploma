@@ -1,0 +1,168 @@
+% Основной файл ВКР (рекомендуемый старт)
+% Сборка: latexmk -pdf main.tex
+\documentclass[a4paper,14pt]{extarticle}
+
+% Шаблон оформления (поля/интервал/заголовки)
+\usepackage{spbudiploma_tempora}
+
+% Часто используемые пакеты (минимальный набор)
+\usepackage{amsmath,amssymb}
+\usepackage[pdftex]{graphicx}
+\usepackage{csquotes}
+\usepackage{longtable}
+\usepackage{placeins}
+\usepackage{tikz}
+\usepackage{float}
+\usepackage[ruled,vlined]{algorithm2e}
+\usepackage{caption}
+\usepackage{url}
+\urlstyle{same}
+\usetikzlibrary{arrows.meta,positioning,fit,calc,matrix}
+\usetikzlibrary{matrix}
+
+% Библиография по ГОСТ (biblatex + biber)
+% Основной вариант: biblatex-gost (style=gost-numeric).
+% Если biblatex-gost не установлен, используем fallback style=numeric.
+\IfFileExists{gost-numeric.bbx}{
+  \usepackage[
+    backend=biber,
+    style=gost-numeric,
+    hyperref=true,
+    language=auto,
+    autolang=other,
+    sorting=none
+  ]{biblatex}
+}{
+  \usepackage[
+    backend=biber,
+    style=numeric,
+    hyperref=true,
+    sorting=none
+  ]{biblatex}
+  \typeout{WARNING: biblatex-gost not found; using style=numeric. Install biblatex-gost for GOST formatting.}
+}
+\addbibresource{references.bib}
+
+% Черновик структуры ВКР:
+%
+% Введение
+% - актуальность распределённого отказоустойчивого хранения;
+% - проблема выбора между репликацией и erasure coding;
+% - идея адаптивного изменения схемы хранения;
+% - цель работы;
+% - задачи работы;
+% - ограничения постановки: append-only, background recoding, без фонового repair
+%   в базовой версии.
+%
+% Обзор литературы
+% - репликация в распределённых системах хранения;
+% - erasure coding и коды Рида--Соломона;
+% - LRC и локальное восстановление;
+% - convertible codes;
+% - LRCC как расширение convertible codes на LRC;
+% - Morph и lifecycle-aware storage;
+% - выводы по обзору литературы.
+%
+% Глава 1. Теоретические основы адаптивного кодирования данных
+% 1.1 Модель распределённого хранения и отказов
+%     - объекты, фрагменты, узлы и домены отказа;
+%     - append-only постановка и чтение уже записанных данных.
+% 1.2 Репликация и глобальная избыточность
+%     - репликация как частный случай избыточности;
+%     - коды Рида--Соломона и global parity.
+% 1.3 Локально восстанавливаемые коды
+%     - local parity, local group и local repair;
+%     - зачем локальность нужна при одиночных отказах.
+% 1.4 Конвертируемые коды и LRCC
+%     - переходы между схемами и стоимость конверсии;
+%     - LRCC как locally repairable convertible codes: LRC на базе модели
+%       конверсии, а не просто ещё один вариант LRC;
+%     - Morph упоминается внутри этого подраздела как практическое применение
+%       LRCC/convertible codes, а не как источник новой теории LRCC.
+% 1.5 Гибридная схема Hy(r, LRCC(d,l,g))
+%     - единое состояние для реплик, local parity и global parity;
+%     - условие устойчивости к трём отказам.
+% 1.6 Чтение при отказах и ожидаемая стоимость чтения
+%     - normal read, degraded read и background repair;
+%     - E[io] через вероятности числа отказов.
+% 1.7 Температура данных и функция полезности перехода
+%     - EWMA-модель температуры;
+%     - pressure по месту и expected read IO;
+%     - score transition как уменьшение pressure на единицу работы.
+%
+% Глава 2. Архитектура предлагаемого решения
+% - общая схема системы;
+% - модель объекта, stripe, scheme и chunk;
+% - placement policy и anti-affinity;
+% - локализация parity и placement slots;
+% - recoder и допустимые переходы между схемами;
+% - degraded read path;
+% - локальные планировщики;
+% - глобальный планировщик;
+% - функция полезности перехода;
+% - обработка конфликтов и ограничение фоновых переходов.
+%
+% Глава 3. Реализация системы
+% - хранилище метаданных объектов и схем;
+% - представление физических чанков и ссылок на них;
+% - реализация LRCC parity;
+% - реализация RS/Vandermonde global parity над GF(2^8);
+% - реализация degraded read для 1--3 отказов;
+% - реализация переходов replica <-> parity;
+% - реализация temperature pipeline;
+% - реализация local/global planner loop;
+% - механизм фоновых delayed transitions;
+% - набор поддерживаемых сценариев работы.
+%
+% Глава 4. Анализ экспериментов
+% - цель и постановка экспериментов;
+% - метрики и baseline-сценарии;
+% - холодные данные;
+% - длительная запись и фоновые переходы;
+% - неравномерная температура данных;
+% - чтения при отказах;
+% - смешанный жизненный цикл;
+% - выводы по экспериментам.
+%
+% Глава 5. Ограничения и направления дальнейшего развития
+% - ограничения текущей реализации;
+% - background repair engine;
+% - merge/split схем;
+% - более точная модель latency, bandwidth и fanout;
+% - масштабирование planner ownership;
+% - проверка на реальных production traces;
+% - возможность интеграции с существующими storage systems.
+%
+% Заключение
+% - выполненные результаты;
+% - соответствие цели и задачам;
+% - основные выводы;
+% - что выносится на защиту.
+
+\begin{document}
+
+% 1) Титульный лист
+\input{titlepage.tex}
+
+
+% 2) Оглавление
+\tableofcontents
+\pagebreak
+
+% 3) Основной текст
+\input{sections/introduction.tex}
+\input{sections/review.tex}
+\input{sections/theory.tex}
+\input{sections/solution.tex}
+\input{sections/implementation.tex}
+\input{sections/experiments.tex}
+\input{sections/conclusion.tex}
+
+% 4) Список литературы
+\printbibliography[heading=bibintoc,title={Список литературы}]
+
+% 5) Приложения (пример)
+% \appendix
+% \input{sections/appendix_a.tex}
+
+\end{document}

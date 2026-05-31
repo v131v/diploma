@@ -1,0 +1,196 @@
+\newcommand{\ArchitectureComponentDiagram}{
+\begin{figure}[ht]
+\begin{center}
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    component/.style={draw, rounded corners, align=center, minimum width=2.9cm, minimum height=0.9cm, fill=gray!8},
+    store/.style={draw, rounded corners, align=center, minimum width=3.1cm, minimum height=0.9cm, fill=blue!7},
+    planner/.style={draw, rounded corners, align=center, minimum width=3.3cm, minimum height=0.9cm, fill=green!8},
+    dataedge/.style={-{Latex[length=2mm]}, thick},
+    controledge/.style={-{Latex[length=2mm]}, dashed, thick},
+    backgroundedge/.style={-{Latex[length=2mm]}, dotted, thick}
+]
+    \node[component] (api) at (0,7.0) {API\\\texttt{read}, \texttt{append}};
+    \node[component] (reader) at (-6.2,5.45) {Reader};
+    \node[store] (metadata) at (0,5.45) {Metadata\\objects, extents, schemes};
+    \node[component] (appender) at (6.2,5.45) {Appender};
+    \node[component] (degraded) at (-6.2,3.55) {Degraded\\Read Engine};
+    \node[store] (datanodes) at (0,3.55) {Data Nodes\\chunks};
+    \node[component] (allocator) at (6.2,3.55) {Allocator\\space, slots};
+    \node[planner] (global) at (-4.0,0.65) {GlobalPlanner\\metrics routing\\admission};
+    \node[planner] (local) at (1.2,0.65) {LocalPlanner\\temperature, candidate\\in-flight};
+    \node[component] (recoder) at (6.2,0.65) {Recoder\\execute transition};
+
+    \draw[dataedge] (api) -- (reader);
+    \draw[dataedge] (api) -- (appender);
+    \draw[controledge] (reader) -- (metadata);
+    \draw[controledge] (appender) -- (metadata);
+    \draw[dataedge] (reader) -- (datanodes);
+    \draw[dataedge] (reader) -- (degraded);
+    \draw[dataedge] (degraded) -- (datanodes);
+    \draw[dataedge] (appender) -- (datanodes);
+    \draw[controledge] (appender) -- (allocator);
+    \draw[backgroundedge] (reader.south west) -- ++(-1.0,-1.05)
+        |- node[pos=0.35, left, font=\scriptsize, align=center, fill=white, inner sep=1pt]
+        {счётчики чтения\\маршрутизация температуры} (global.west);
+    \draw[backgroundedge] (appender.east) -- ++(1.25,0)
+        -- node[pos=0.45, right, font=\scriptsize, fill=white, inner sep=1pt] {метрики дозаписи} ++(0,-6.0)
+        -| (global.south);
+    \draw[backgroundedge] (global.east) to[out=35,in=145] (local.west);
+    \draw[backgroundedge] (local.west) to[out=-145,in=-35] (global.east);
+    \draw[backgroundedge] (local) -- (recoder);
+    \draw[dataedge] (recoder.north west) -- (datanodes.south east);
+    \draw[controledge] (recoder.north) -- (allocator.south);
+
+    \node[draw, align=left, rounded corners, fill=white] (legend) at (-6.2,-1.55) {
+        \tikz{\draw[dataedge] (0,0) -- (0.6,0);} пользовательские данные\\
+        \tikz{\draw[controledge] (0,0) -- (0.6,0);} метаданные и размещение\\
+        \tikz{\draw[backgroundedge] (0,0) -- (0.6,0);} фоновое планирование
+    };
+\end{tikzpicture}%
+}
+\caption{\label{fig:architecture-components}
+Компоненты системы и основные взаимодействия между ними.}
+\end{center}
+\end{figure}
+}
+
+\newcommand{\SlotPlacementArtifacts}{
+\begin{table}[ht]
+\begin{center}
+\caption{\label{tab:slot-placement-example}
+Пример слотов размещения для двух объектов.}
+\resizebox{\textwidth}{!}{%
+\begin{tabular}{|p{0.12\textwidth}|p{0.22\textwidth}|p{0.22\textwidth}|p{0.15\textwidth}|p{0.18\textwidth}|}
+\hline
+Слот & Узлы данных объекта 1 & Узлы данных объекта 2 & Маска слота & Узлы локализованной избыточности \\
+\hline
+слот 1 & узлы 1--6 & узлы 1, 3, 6--9 & 0001 & 25--27 \\
+\hline
+слот 2 & узлы 7--12 & узлы 2, 5, 10, 13--15 & 0010 & 25--27 \\
+\hline
+слот 3 & узлы 13--18 & узлы 4, 11, 12, 16--18 & 0100 & 25--27 \\
+\hline
+слот 4 & узлы 19--24 & узлы 19--24 & 1000 & 25--27 \\
+\hline
+\end{tabular}%
+}
+\end{center}
+\end{table}
+
+\begin{figure}[ht]
+\begin{center}
+\resizebox{0.82\textwidth}{!}{%
+\begin{tikzpicture}[
+    slot/.style={draw, rounded corners, align=center, minimum width=2.4cm, minimum height=0.8cm, fill=gray!8},
+    edge/.style={-{Latex[length=2mm]}, thick}
+]
+    \node[slot] (root) at (0,3.2) {1111\\наибольшая полоса};
+    \node[slot] (left) at (-3.3,1.7) {0011\\соседние слоты 1--2};
+    \node[slot] (right) at (3.3,1.7) {1100\\соседние слоты 3--4};
+    \node[slot] (s1) at (-4.8,0) {0001\\слот 1};
+    \node[slot] (s2) at (-1.8,0) {0010\\слот 2};
+    \node[slot] (s3) at (1.8,0) {0100\\слот 3};
+    \node[slot] (s4) at (4.8,0) {1000\\слот 4};
+
+    \draw[edge] (root) -- (left);
+    \draw[edge] (root) -- (right);
+    \draw[edge] (left) -- (s1);
+    \draw[edge] (left) -- (s2);
+    \draw[edge] (right) -- (s3);
+    \draw[edge] (right) -- (s4);
+\end{tikzpicture}%
+}
+\caption{\label{fig:slot-tree}
+Дерево слотов, ограничивающее допустимые объединения и разделения схем.}
+\end{center}
+\end{figure}
+
+Табл.~\ref{tab:slot-placement-example} и рис.~\ref{fig:slot-tree} показывают
+идею слотов размещения. Слоты задаются отдельно для каждого объекта: один и тот
+же номер слота у разных объектов может соответствовать разным наборам узлов.
+Они нужны не только для уменьшения пространства поиска, но и для того, чтобы
+при объединении схем не накапливать широкие полосы, пересекающиеся по одним и
+тем же узлам данных. Объединение схем разрешается только для масок, совместимых
+по дереву соседних блоков, то есть для соседних поддеревьев одного уровня,
+например \(0001\) и \(0010\) или \(0011\) и \(1100\). У таких пар размещение
+пользовательских блоков контролируемо непересекающееся, поэтому объединение не
+создаёт новую схему с избыточной концентрацией блоков на одних доменах отказа.
+}
+
+\newcommand{\TransitionGraphArtifact}{
+\begin{figure}[ht]
+\begin{center}
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    state/.style={draw, rounded corners, align=center, minimum width=2.2cm, minimum height=0.9cm, fill=gray!8, font=\small},
+    generic/.style={draw, rounded corners, align=center, minimum width=2.35cm, minimum height=0.9cm, fill=blue!7, font=\small},
+    swap/.style={<->, >=Latex, thick},
+    transform/.style={<->, >=Latex, dashed, thick},
+    note/.style={align=center, font=\small}
+]
+    \node[state] (a) at (-5.4,2.4) {\(Hy(3,d,0,0)\)\\реплики};
+    \node[state] (b) at (-1.8,2.4) {\(Hy(2,d,1,0)\)\\локальный проверочный блок};
+    \node[state] (c) at (1.8,2.4) {\(Hy(1,d,1,1)\)\\LRCC};
+    \node[state] (d) at (5.4,2.4) {\(Hy(0,d,1,2)\)\\LRCC};
+
+    \draw[swap] (a) -- (b);
+    \draw[swap] (b) -- (c);
+    \draw[swap] (c) -- (d);
+    \node[note] at (0,3.45) {реплика \(\leftrightarrow\) проверочный блок};
+
+    \node[generic] (l1) at (-4.1,0) {\(Hy(r,d,2l,g)\)};
+    \node[generic] (l2) at (0,0) {\(Hy(r,d,l,g)\)};
+    \node[generic] (w) at (4.1,0) {\(Hy(r,2d,2l,g)\)};
+
+    \draw[transform] (l1) -- (l2);
+    \draw[transform] (l2) -- (w);
+    \node[note] at (-2.15,0.9) {разделение/объединение\\локальных групп};
+    \node[note] at (2.15,0.9) {разделение/объединение\\полос};
+\end{tikzpicture}%
+}
+\caption{\label{fig:transition-graph}
+Семейства допустимых переходов между схемами хранения; запись
+\(Hy(r,d,l,g)\) сокращает \(Hy(r,LRCC(d,l,g))\).}
+\end{center}
+\end{figure}
+}
+
+\newcommand{\PlannerArtifacts}{
+\begin{figure}[ht]
+\begin{center}
+\resizebox{\textwidth}{!}{%
+\begin{tikzpicture}[
+    component/.style={draw, rounded corners, align=center, text width=2.85cm, minimum height=0.9cm, fill=gray!8, font=\small},
+    data/.style={draw, rounded corners, align=center, text width=2.85cm, minimum height=0.9cm, fill=blue!7, font=\small},
+    datawide/.style={draw, rounded corners, align=center, text width=4.0cm, minimum height=0.9cm, fill=blue!7, font=\small},
+    edge/.style={-{Latex[length=2mm]}, thick},
+    bidir/.style={<->, >=Latex, thick}
+]
+    \node[component] (lp) at (-3.6,4.4) {LocalPlanner};
+    \node[datawide] (unary) at (-6.1,2.75) {одиночные переходы\\реплика/проверочный блок, изменение \(l\), разделение};
+    \node[data] (mergep) at (-0.15,2.75) {пары объединения\\совместимые слоты};
+    \node[component] (best) at (-3.25,1.05) {лучший кандидат};
+    \node[component] (inflight) at (-6.1,-0.55) {переходы в исполнении};
+    \node[component] (recoder) at (-0.15,-0.55) {Recoder};
+    \node[component] (gp) at (3.7,4.4) {GlobalPlanner};
+    \node[data] (virtual) at (3.7,2.65) {виртуальное состояние\\после допуска};
+
+    \draw[edge] (lp.south west) -- (unary.north);
+    \draw[edge] (lp.south east) -- (mergep.north west);
+    \draw[edge] (unary.south) -- (best.west);
+    \draw[edge] (mergep.south) -- (best.east);
+    \draw[edge] (lp.east) to[out=20,in=160]
+        node[above, font=\scriptsize, fill=white, inner sep=1pt] {кандидат} (gp.west);
+    \draw[edge] (gp.west) to[out=-160,in=-20]
+        node[below, font=\scriptsize, fill=white, inner sep=1pt] {допуск} (lp.east);
+    \draw[bidir] (gp) -- (virtual);
+    \draw[edge] (best) -- node[left, font=\scriptsize, fill=white, inner sep=1pt] {учёт} (inflight);
+    \draw[edge] (best) -- node[right, font=\scriptsize, fill=white, inner sep=1pt] {запуск} (recoder);
+\end{tikzpicture}%
+}
+\caption{\label{fig:planner-scheme}
+Схема взаимодействия локальных и глобального планировщиков.}
+\end{center}
+\end{figure}
+}
